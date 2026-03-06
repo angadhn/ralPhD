@@ -1,0 +1,6 @@
+.DS_Store
+HANDOFF.md
+plans/
+.obsidian/
+__pycache__/
+iteration_count

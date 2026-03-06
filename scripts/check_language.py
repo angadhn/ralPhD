@@ -1,0 +1,329 @@
+#!/usr/bin/env python3
+"""
+check_language.py — Structural LLM-speak detector for LaTeX documents.
+
+Checks for structural patterns that indicate machine-generated writing:
+1. Paragraphs with zero inline citations (factual claims need sources)
+2. Low sentence length variance (uniform sentence length = LLM pattern)
+3. Stock framing patterns (known LLM structural tics)
+4. Citation-free generalizations ("It is well known that...")
+5. Excessive balanced clauses ("While X, Y" patterns)
+
+Usage:
+  python scripts/check_language.py report.tex
+  python scripts/check_language.py --strict report.tex    # Fail on warnings too
+  python scripts/check_language.py --verbose report.tex   # Show passing checks too
+
+Exit code 0 = pass, 1 = fail (errors found), 2 = warnings only
+"""
+
+import argparse
+import re
+import sys
+from pathlib import Path
+import statistics
+
+
+# ── LaTeX text extraction ────────────────────────────────────────
+
+def strip_latex_commands(text: str) -> str:
+    """Remove LaTeX commands but keep text content."""
+    # Remove comments
+    text = re.sub(r'%.*$', '', text, flags=re.MULTILINE)
+    # Remove \begin{...} and \end{...}
+    text = re.sub(r'\\(begin|end)\{[^}]*\}', '', text)
+    # Remove figure/table environments entirely (they're not prose)
+    text = re.sub(r'\\begin\{(figure|table|equation|align|tabular|longtable)\*?\}.*?\\end\{\1\*?\}',
+                  '', text, flags=re.DOTALL)
+    # Keep \cite{} markers for citation counting
+    # Remove other commands but keep their text arguments
+    text = re.sub(r'\\(?!cite)[a-zA-Z]+\*?(?:\[[^\]]*\])*\{([^}]*)\}', r'\1', text)
+    # Remove remaining bare commands
+    text = re.sub(r'\\[a-zA-Z]+\*?', '', text)
+    # Remove braces
+    text = re.sub(r'[{}]', '', text)
+    # Clean up whitespace
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
+def extract_body(latex_content: str) -> str:
+    """Extract content between \\begin{document} and \\end{document}."""
+    match = re.search(r'\\begin\{document\}(.*?)\\end\{document\}', latex_content, re.DOTALL)
+    if match:
+        return match.group(1)
+    return latex_content
+
+
+def split_sections(body: str) -> list:
+    """Split body into sections, returning (section_name, content) pairs."""
+    pattern = r'\\(?:section|subsection|subsubsection)\{([^}]*)\}'
+    parts = re.split(pattern, body)
+    sections = []
+    if parts[0].strip():
+        sections.append(("Preamble", parts[0]))
+    for i in range(1, len(parts), 2):
+        name = parts[i] if i < len(parts) else "Unknown"
+        content = parts[i + 1] if i + 1 < len(parts) else ""
+        sections.append((name, content))
+    return sections
+
+
+def split_paragraphs(text: str) -> list:
+    """Split text into paragraphs (separated by blank lines)."""
+    paras = re.split(r'\n\s*\n', text)
+    return [p.strip() for p in paras if p.strip() and len(p.strip()) > 50]
+
+
+def split_sentences(text: str) -> list:
+    """Split text into sentences (simple heuristic)."""
+    # Remove citations for sentence splitting
+    clean = re.sub(r'\\cite\{[^}]*\}', '', text)
+    clean = re.sub(r'~', ' ', clean)
+    # Split on sentence-ending punctuation
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', clean)
+    return [s.strip() for s in sentences if len(s.strip()) > 10]
+
+
+# ── Checks ───────────────────────────────────────────────────────
+
+STOCK_FRAMINGS = [
+    (r'[Ii]n recent years,?\s+there has been', "Stock framing: 'In recent years, there has been...'"),
+    (r'[Ii]t is well known that', "Stock framing: 'It is well known that...'"),
+    (r'[Tt]his represents a promising', "Stock framing: 'This represents a promising...'"),
+    (r'[Ff]urther research is needed to', "Stock framing: 'Further research is needed to...'"),
+    (r'plays a crucial role in', "Stock framing: 'plays a crucial role in...'"),
+    (r'has attracted significant attention', "Stock framing: 'has attracted significant attention'"),
+    (r'offers? a compelling alternative', "Stock framing: 'offers a compelling alternative'"),
+    (r'remains? an active area of research', "Stock framing: 'remains an active area of research'"),
+    (r'address(?:es|ing)? critical limitations?', "Stock framing: 'addresses critical limitations'"),
+    (r'paving the way for', "Stock framing: 'paving the way for...'"),
+    (r'[Tt]here (?:has been|is) (?:a )?growing interest', "Stock framing: 'There is growing interest...'"),
+    (r'[Rr]ecent advances have (?:made|shown|demonstrated)', "Stock framing: 'Recent advances have...'"),
+    (r'has (?:gained|received) (?:considerable|significant|increasing) attention',
+     "Stock framing: 'has gained considerable attention'"),
+    (r'represents? a paradigm shift', "Stock framing: 'represents a paradigm shift'"),
+    (r'[Ii]t is (?:worth noting|important to note) that', "Stock framing: 'It is worth noting that...'"),
+    (r'has (?:emerged|become) as a (?:key|critical|vital|important)', "Stock framing: 'has emerged as a key...'"),
+]
+
+BALANCED_CLAUSE_PATTERNS = [
+    r'[Ww]hile\s+[^,]{10,},\s+[^.]{10,}\.',
+    r'[Aa]lthough\s+[^,]{10,},\s+[^.]{10,}\.',
+    r'[Oo]n (?:the )?one hand[^.]*[Oo]n the other hand',
+]
+
+
+def check_citation_density(paragraphs: list, section_name: str) -> list:
+    """Check that paragraphs containing factual claims have inline citations."""
+    issues = []
+    for i, para in enumerate(paragraphs):
+        # Skip very short paragraphs and non-prose content
+        if len(para) < 100:
+            continue
+        # Skip paragraphs that are mainly lists or tables
+        if para.count('\\item') > 2 or para.count('&') > 3:
+            continue
+
+        cite_count = len(re.findall(r'\\cite\{[^}]*\}', para))
+        if cite_count == 0:
+            # Check if this paragraph actually makes factual claims
+            # (has declarative sentences, not just definitions or introductions)
+            sentences = split_sentences(strip_latex_commands(para))
+            if len(sentences) >= 2:
+                issues.append({
+                    "type": "error",
+                    "check": "citation_density",
+                    "section": section_name,
+                    "paragraph": i + 1,
+                    "message": f"Paragraph {i+1} in '{section_name}' has {len(sentences)} sentences but zero citations",
+                    "preview": para[:120].replace('\n', ' ') + "...",
+                })
+    return issues
+
+
+def check_sentence_length_variance(paragraphs: list, section_name: str) -> list:
+    """Check that sentence lengths within paragraphs vary enough."""
+    issues = []
+    for i, para in enumerate(paragraphs):
+        clean_para = strip_latex_commands(para)
+        sentences = split_sentences(clean_para)
+        if len(sentences) < 3:
+            continue
+
+        word_counts = [len(s.split()) for s in sentences]
+        try:
+            stdev = statistics.stdev(word_counts)
+            mean = statistics.mean(word_counts)
+        except statistics.StatisticsError:
+            continue
+
+        # Threshold: stdev should be at least 30% of mean for natural variation
+        if mean > 0 and stdev / mean < 0.25:
+            issues.append({
+                "type": "warning",
+                "check": "sentence_variance",
+                "section": section_name,
+                "paragraph": i + 1,
+                "message": f"Low sentence length variance in '{section_name}' paragraph {i+1}: "
+                           f"mean={mean:.1f} words, stdev={stdev:.1f} (ratio={stdev/mean:.2f}, want >=0.25)",
+                "lengths": word_counts,
+            })
+    return issues
+
+
+def check_stock_framings(text: str, section_name: str) -> list:
+    """Check for known LLM stock framing patterns."""
+    issues = []
+    for pattern, description in STOCK_FRAMINGS:
+        matches = list(re.finditer(pattern, text))
+        for match in matches:
+            # Find approximate line number
+            line_num = text[:match.start()].count('\n') + 1
+            issues.append({
+                "type": "warning",
+                "check": "stock_framing",
+                "section": section_name,
+                "line": line_num,
+                "message": f"{description} (line ~{line_num} in '{section_name}')",
+                "match": match.group(0),
+            })
+    return issues
+
+
+def check_balanced_clauses(text: str, section_name: str) -> list:
+    """Check for excessive While X, Y / Although X, Y balanced clauses."""
+    issues = []
+    total_matches = 0
+    for pattern in BALANCED_CLAUSE_PATTERNS:
+        matches = re.findall(pattern, text)
+        total_matches += len(matches)
+
+    if total_matches > 2:
+        issues.append({
+            "type": "warning",
+            "check": "balanced_clauses",
+            "section": section_name,
+            "message": f"Section '{section_name}' has {total_matches} balanced 'While/Although X, Y' clauses "
+                       f"(max 2 recommended)",
+        })
+    return issues
+
+
+def check_citation_free_generalizations(text: str, section_name: str) -> list:
+    """Check for generalizations that should have citations."""
+    patterns = [
+        (r'[Ii]t is (?:well )?known that [^.]*\.', "Citation-free generalization: 'It is known that...'"),
+        (r'[Ss]tudies have shown that [^.]*\.', "Citation-free generalization: 'Studies have shown...'"),
+        (r'[Rr]esearch(?:ers)? ha(?:s|ve) demonstrated [^.]*\.',
+         "Citation-free generalization: 'Research has demonstrated...'"),
+        (r'[Ss]everal (?:studies|papers|works|authors) [^.]*\.',
+         "Citation-free generalization: 'Several studies...'"),
+        (r'[Aa]s (?:many|several|numerous) (?:studies|researchers) have (?:shown|noted|observed)',
+         "Citation-free generalization: 'As many studies have shown...'"),
+    ]
+
+    issues = []
+    for pattern, description in patterns:
+        for match in re.finditer(pattern, text):
+            # Check if there's a \cite nearby (within 20 chars after the match)
+            end_pos = match.end()
+            nearby = text[max(0, match.start() - 10):min(len(text), end_pos + 30)]
+            if '\\cite' not in nearby:
+                line_num = text[:match.start()].count('\n') + 1
+                issues.append({
+                    "type": "error",
+                    "check": "citation_free_generalization",
+                    "section": section_name,
+                    "line": line_num,
+                    "message": f"{description} without citation (line ~{line_num} in '{section_name}')",
+                    "match": match.group(0)[:80],
+                })
+    return issues
+
+
+# ── Main ─────────────────────────────────────────────────────────
+
+def check_file(filepath: str, strict: bool = False, verbose: bool = False) -> bool:
+    """Run all checks on a LaTeX file. Returns True if pass."""
+    path = Path(filepath)
+    if not path.exists():
+        print(f"Error: {filepath} not found", file=sys.stderr)
+        return False
+
+    content = path.read_text(encoding="utf-8")
+    body = extract_body(content)
+    sections = split_sections(body)
+
+    all_issues = []
+
+    for section_name, section_content in sections:
+        paragraphs = split_paragraphs(section_content)
+
+        all_issues.extend(check_citation_density(paragraphs, section_name))
+        all_issues.extend(check_sentence_length_variance(paragraphs, section_name))
+        all_issues.extend(check_stock_framings(section_content, section_name))
+        all_issues.extend(check_balanced_clauses(section_content, section_name))
+        all_issues.extend(check_citation_free_generalizations(section_content, section_name))
+
+    errors = [i for i in all_issues if i["type"] == "error"]
+    warnings = [i for i in all_issues if i["type"] == "warning"]
+
+    # Print results
+    if errors:
+        print(f"\n{'='*60}")
+        print(f"ERRORS ({len(errors)}):")
+        print(f"{'='*60}")
+        for issue in errors:
+            print(f"  [{issue['check']}] {issue['message']}")
+            if 'preview' in issue:
+                print(f"    Preview: {issue['preview']}")
+            if 'match' in issue:
+                print(f"    Match: \"{issue['match']}\"")
+
+    if warnings:
+        print(f"\n{'='*60}")
+        print(f"WARNINGS ({len(warnings)}):")
+        print(f"{'='*60}")
+        for issue in warnings:
+            print(f"  [{issue['check']}] {issue['message']}")
+            if 'lengths' in issue:
+                print(f"    Sentence lengths: {issue['lengths']}")
+            if 'match' in issue:
+                print(f"    Match: \"{issue['match']}\"")
+
+    if not errors and not warnings:
+        print(f"\nAll checks passed for {filepath}")
+
+    # Summary
+    print(f"\n{'='*60}")
+    print(f"Summary: {len(errors)} errors, {len(warnings)} warnings")
+    print(f"{'='*60}")
+
+    if errors:
+        print("FAIL: Fix errors before committing.")
+        return False
+    elif warnings and strict:
+        print("FAIL (strict mode): Fix warnings before committing.")
+        return False
+    elif warnings:
+        print("PASS with warnings. Consider fixing before committing.")
+        return True
+    else:
+        print("PASS")
+        return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Structural LLM-speak detector for LaTeX")
+    parser.add_argument("file", help="LaTeX file to check")
+    parser.add_argument("--strict", action="store_true", help="Fail on warnings too")
+    parser.add_argument("--verbose", action="store_true", help="Show passing checks")
+    args = parser.parse_args()
+
+    passed = check_file(args.file, strict=args.strict, verbose=args.verbose)
+    sys.exit(0 if passed else 1)
+
+
+if __name__ == "__main__":
+    main()
