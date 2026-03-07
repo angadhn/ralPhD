@@ -239,23 +239,17 @@ while true; do
         if .is_error then "  Result: ERROR — \(.result)"
         else
           "  Result: success (\(.num_turns) turns, \(.duration_ms/1000 | floor)s)" +
-          (if .model_usage then
-            (.model_usage | to_entries[] |
-              "\n  Model: \(.key)" +
-              "\n    input: \(.value.input_tokens // 0) | cache_create: \(.value.cache_creation_input_tokens // 0) | cache_read: \(.value.cache_read_input_tokens // 0) | output: \(.value.output_tokens // 0)")
-          else "" end) +
-          (if .cost_usd then "\n  Cost: $\(.cost_usd)" else "" end)
+          (.modelUsage // {} | to_entries[] |
+            "\n  Model: \(.key)" +
+            "\n    input: \(.value.inputTokens // 0) | cache_create: \(.value.cacheCreationInputTokens // 0) | cache_read: \(.value.cacheReadInputTokens // 0) | output: \(.value.outputTokens // 0)") +
+          (if .total_cost_usd then "\n  Cost: $\(.total_cost_usd)" else "" end)
         end
       ' /tmp/ralph-output.json 2>/dev/null || echo "  (could not parse output JSON)"
 
       # Persist usage data to logs/usage.jsonl
-      # Extract agent name from checkpoint.md Next Task line (last word = agent)
-      AGENT_NAME=$(grep "^## Next Task\|^Next Task\|uses .*/agents/" checkpoint.md 2>/dev/null \
-        | sed 's/.*agents\///' | sed 's/\.md.*//' | head -1)
-      if [ -z "$AGENT_NAME" ]; then
-        # Fallback: last word of the Next Task line
-        AGENT_NAME=$(awk '/Next Task/{print $NF}' checkpoint.md 2>/dev/null | head -1)
-      fi
+      # Extract agent name from checkpoint.md "**Last agent:**" field
+      AGENT_NAME=$(grep '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null \
+        | sed 's/\*\*Last agent:\*\* *//' | tr -d '[:space:]' | head -1)
       AGENT_NAME="${AGENT_NAME:-unknown}"
       mkdir -p "$(dirname "$USAGE_LOG")"
       jq -c --arg iter "$ITERATION" --arg agent "$AGENT_NAME" --arg mode "$LOOP_MODE" \
@@ -264,15 +258,14 @@ while true; do
           {iteration: ($iter|tonumber), timestamp: $ts, agent: $agent, loop_mode: $mode,
            error: true, message: .result}
         else
-          (.model_usage // {} | to_entries | map(.value) | add // {}) as $u |
           {iteration: ($iter|tonumber), timestamp: $ts, agent: $agent, loop_mode: $mode,
-           model: (.model_usage // {} | keys[0] // "unknown"),
+           model: (.modelUsage // {} | keys[0] // "unknown"),
            num_turns: .num_turns, duration_ms: .duration_ms,
-           input_tokens: ($u.input_tokens // 0),
-           cache_read_input_tokens: ($u.cache_read_input_tokens // 0),
-           cache_creation_input_tokens: ($u.cache_creation_input_tokens // 0),
-           output_tokens: ($u.output_tokens // 0),
-           cost_usd: .cost_usd}
+           input_tokens: .usage.input_tokens,
+           cache_read_input_tokens: .usage.cache_read_input_tokens,
+           cache_creation_input_tokens: .usage.cache_creation_input_tokens,
+           output_tokens: .usage.output_tokens,
+           cost_usd: .total_cost_usd}
         end
       ' /tmp/ralph-output.json >> "$USAGE_LOG" 2>/dev/null \
         && echo "  Usage logged to $USAGE_LOG" \
@@ -300,12 +293,32 @@ while true; do
     MONITOR_PID=$!
 
     CLAUDE_MODEL="${CLAUDE_MODEL:-claude-opus-4-6}"
-    echo "$PROMPT" | claude --model "$CLAUDE_MODEL" --dangerously-skip-permissions
+    SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+    echo "$PROMPT" | claude --model "$CLAUDE_MODEL" --session-id "$SESSION_ID" --dangerously-skip-permissions
     EXIT_CODE=$?
 
     kill "$MONITOR_PID" 2>/dev/null || true
     wait "$MONITOR_PID" 2>/dev/null || true
     MONITOR_PID=""
+
+    # Log interactive session usage
+    AGENT_NAME=$(grep '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null \
+      | sed 's/\*\*Last agent:\*\* *//' | tr -d '[:space:]' | head -1)
+    AGENT_NAME="${AGENT_NAME:-unknown}"
+    PROJECT_DIR=$(echo "$PWD" | tr '/' '-' | sed 's/^-//')
+    SESSION_FILE="$HOME/.claude/projects/${PROJECT_DIR}/${SESSION_ID}.jsonl"
+    if [ -f "$SESSION_FILE" ]; then
+      mkdir -p "$(dirname "$USAGE_LOG")"
+      python3 scripts/extract_session_usage.py "$SESSION_FILE" \
+        | jq -c --arg iter "$ITERATION" --arg agent "$AGENT_NAME" --arg mode "$LOOP_MODE" \
+            --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '. + {iteration: ($iter|tonumber), timestamp: $ts, agent: $agent, loop_mode: $mode}' \
+        >> "$USAGE_LOG" 2>/dev/null \
+        && echo "  Usage logged to $USAGE_LOG" \
+        || echo "  (could not log usage data)"
+    else
+      echo "  (session file not found — usage not logged)"
+    fi
 
     # Human review checkpoint
     if [ -f "HUMAN_REVIEW_NEEDED.md" ]; then

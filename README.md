@@ -108,6 +108,12 @@ Every 5th iteration, the loop triggers a reflection. Claude reads its recent pro
 
 Full reflections go to `ai-generated-outputs/reflections/reflection-iter-N.md`. A summary line goes to `CHANGELOG.md` and `checkpoint.md`.
 
+## Usage tracking
+
+Every iteration logs token usage and cost to `logs/usage.jsonl`. In headless mode (`-p`), usage is extracted from Claude's `--output-format json` output. In interactive mode, usage is extracted from the session JSONL file via `scripts/extract_session_usage.py`.
+
+Run `python3 scripts/usage_report.py` to see a summary of token usage and costs across all iterations.
+
 ## Structure
 
 ```
@@ -134,13 +140,17 @@ Full reflections go to `ai-generated-outputs/reflections/reflection-iter-N.md`. 
 │   ├── publication-requirements.md # Target publication specs
 │   ├── reflection-template.md  # Reflection instructions
 │   └── *-output-format.md      # Output templates per agent
+├── logs/
+│   └── usage.jsonl             # Per-iteration token usage + cost
 ├── scripts/
 │   ├── citation_tools.py       # BibTeX lookup + lint
 │   ├── check_language.py       # LLM-speak detector
 │   ├── check_journal.py        # Journal compliance linter
 │   ├── check_figure.py         # Figure spec linter
 │   ├── extract_figure.py       # Figure extraction from PDFs
-│   └── pdf_metadata.py         # PDF metadata reader
+│   ├── pdf_metadata.py         # PDF metadata reader
+│   ├── usage_report.py         # Token usage + cost summary
+│   └── extract_session_usage.py # Interactive session usage extractor
 └── ai-generated-outputs/
     └── reflections/            # Full reflection files
 ```
