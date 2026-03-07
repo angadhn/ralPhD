@@ -5,7 +5,7 @@ Ask the user for their research goal if not already stated.
 Read `.claude/agents/README.md` and the agent files. Do the right agents
 exist for this task, or does the session suggest new ones are needed?
 
-Read `checkpoint.md` and `implementation-plan.md` if they exist.
+Read `IFP-Launch-Sequence/checkpoint.md` and `IFP-Launch-Sequence/implementation-plan.md` if they exist.
 
 Develop the implementation plan through conversation — ask questions,
 propose structure, refine based on feedback.
