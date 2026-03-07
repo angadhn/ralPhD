@@ -27,6 +27,7 @@ YIELD_FILE="/tmp/ralph-yield"
 POLL_INTERVAL=5
 STATUSLINE_LOG="/tmp/ralph-statusline-log"
 BACKOFF=60
+USAGE_LOG="logs/usage.jsonl"
 
 # --- Persistent iteration counter ---
 COUNTER_FILE="iteration_count"
@@ -246,6 +247,36 @@ while true; do
           (if .cost_usd then "\n  Cost: $\(.cost_usd)" else "" end)
         end
       ' /tmp/ralph-output.json 2>/dev/null || echo "  (could not parse output JSON)"
+
+      # Persist usage data to logs/usage.jsonl
+      # Extract agent name from checkpoint.md Next Task line (last word = agent)
+      AGENT_NAME=$(grep "^## Next Task\|^Next Task\|uses .*/agents/" checkpoint.md 2>/dev/null \
+        | sed 's/.*agents\///' | sed 's/\.md.*//' | head -1)
+      if [ -z "$AGENT_NAME" ]; then
+        # Fallback: last word of the Next Task line
+        AGENT_NAME=$(awk '/Next Task/{print $NF}' checkpoint.md 2>/dev/null | head -1)
+      fi
+      AGENT_NAME="${AGENT_NAME:-unknown}"
+      mkdir -p "$(dirname "$USAGE_LOG")"
+      jq -c --arg iter "$ITERATION" --arg agent "$AGENT_NAME" --arg mode "$LOOP_MODE" \
+        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+        if .is_error then
+          {iteration: ($iter|tonumber), timestamp: $ts, agent: $agent, loop_mode: $mode,
+           error: true, message: .result}
+        else
+          (.model_usage // {} | to_entries | map(.value) | add // {}) as $u |
+          {iteration: ($iter|tonumber), timestamp: $ts, agent: $agent, loop_mode: $mode,
+           model: (.model_usage // {} | keys[0] // "unknown"),
+           num_turns: .num_turns, duration_ms: .duration_ms,
+           input_tokens: ($u.input_tokens // 0),
+           cache_read_input_tokens: ($u.cache_read_input_tokens // 0),
+           cache_creation_input_tokens: ($u.cache_creation_input_tokens // 0),
+           output_tokens: ($u.output_tokens // 0),
+           cost_usd: .cost_usd}
+        end
+      ' /tmp/ralph-output.json >> "$USAGE_LOG" 2>/dev/null \
+        && echo "  Usage logged to $USAGE_LOG" \
+        || echo "  (could not log usage data)"
     fi
 
     # Human review checkpoint

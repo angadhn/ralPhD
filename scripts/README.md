@@ -16,3 +16,4 @@ LLMs are slow, expensive, and unreliable at enforcing rules a regex or API call 
 | `extract_figure.py` | Figure extraction from PDFs | deep-reader (reference figures) |
 | `check_figure.py` | DPI, dimensions, color mode, file size | figure-stylist, critic (figure compliance) |
 | `check_journal.py` | Word count, page estimate, required bib fields | critic (journal compliance) |
+| `usage_report.py` | Token usage and cost reporting from `logs/usage.jsonl` | operator (manual) |
