@@ -1,6 +1,6 @@
 # Build-Mode Dispatcher
 
-Study IFP-Launch-Sequence/checkpoint.md and IFP-Launch-Sequence/implementation-plan.md.
+Study checkpoint.md and implementation-plan.md.
 Pick the highest-priority task to do.
 
 The last word in the task name is the agent.
