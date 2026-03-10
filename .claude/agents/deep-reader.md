@@ -11,7 +11,13 @@ Deep reader — reads PDFs to extract quantitative findings, contradictions, and
 
 ## Operational Guardrails
 
-### Context Thresholds (graduated, mandatory)
+### Pre-estimate (mandatory)
+
+Budget ~5-6% per 5-page chunk read, ~10% for writing notes synthesis, ~5% for report.tex generation. Reading plan from `pdf_metadata` gives page count — divide by 5 to estimate chunks needed.
+
+Before each major step: estimate cost (see above), check remaining context (`cat /tmp/ralph-context-pct 2>/dev/null || echo 0`). If estimated cost > remaining headroom to threshold, yield — commit outputs and exit. A fresh iteration will continue from checkpoint.
+
+### Context Thresholds (graduated, safety net)
 
 | Context % | Action |
 |-----------|--------|

@@ -36,6 +36,7 @@ Produces actionable review items. Each mode **appends** its labeled section to `
 - **Priority order (survey):** (1) skim all reports, (2) flag contradictions, (3) deep-read flagged sections, (4) scan Figure Opportunities, (5) write figure_proposals.md, (6) write HUMAN_REVIEW_NEEDED.md
 - **Priority order (style check):** (1) read section, (2) run check_language.py, (3) check claim calibration against writing-style.md, (4) append results to HUMAN_REVIEW_NEEDED.md
 - **Context check:** After reading all inputs, check context. If >35%, write outputs from notes without re-reading inputs.
+- **Go/no-go:** Before each major step: estimate cost (see Pre-estimate above), check remaining context (`cat /tmp/ralph-context-pct`). If estimated cost > remaining headroom to threshold, yield — commit outputs and exit. A fresh iteration will continue from checkpoint.
 - **Append-only HUMAN_REVIEW_NEEDED.md:** Each mode appends a labeled section header (e.g., `## Style Check — Section 2.1`). Never overwrite or reformat existing content.
 
 ## Output Format
