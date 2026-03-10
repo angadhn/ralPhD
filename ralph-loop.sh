@@ -81,16 +81,88 @@ detect_agent() {
   echo "${next_task##* }" | tr -d '[:space:]'
 }
 
+estimate_input_cost() {
+  # Estimate context % that reading input files will consume for a given agent.
+  # Uses file sizes on disk: ~4 bytes/token, ~200k tokens = 100% context.
+  # Returns integer percentage via stdout.
+  local agent_name=$1
+  local thread=""
+  local total_bytes=0
+
+  # Resolve thread from checkpoint.md
+  thread=$(grep '^\*\*Thread:\*\*\|^Thread:' checkpoint.md 2>/dev/null \
+    | head -1 | sed 's/.*: *//' | sed 's/\*//g' | tr -d '[:space:]')
+
+  if [ -z "$thread" ] || [ "$thread" = "<thread-name>" ]; then
+    echo 0
+    return
+  fi
+
+  local base="AI-generated-outputs/$thread"
+
+  # Per-agent input files that can grow large
+  case "$agent_name" in
+    deep-reader)
+      for f in "$base/deep-analysis/notes.md" \
+               "$base/scout-corpus/scored_papers.md"; do
+        [ -f "$f" ] && total_bytes=$(( total_bytes + $(wc -c < "$f") ))
+      done
+      ;;
+    paper-writer)
+      for f in "$base/deep-analysis/notes.md" \
+               "$base/deep-analysis/report.tex" \
+               "$base/deep-analysis/section_map.md" \
+               "$base/writing/outline.md"; do
+        [ -f "$f" ] && total_bytes=$(( total_bytes + $(wc -c < "$f") ))
+      done
+      ;;
+    research-coder)
+      for f in "$base/deep-analysis/notes.md" \
+               "$base/critic-review/figure_proposals.md"; do
+        [ -f "$f" ] && total_bytes=$(( total_bytes + $(wc -c < "$f") ))
+      done
+      ;;
+    critic)
+      for f in "$base/deep-analysis/report.tex" \
+               "$base/deep-analysis/notes.md"; do
+        [ -f "$f" ] && total_bytes=$(( total_bytes + $(wc -c < "$f") ))
+      done
+      ;;
+    *)
+      # scout, figure-stylist, unknown — minimal file inputs
+      echo 0
+      return
+      ;;
+  esac
+
+  # ~4 bytes per token, ~200k tokens = 100% context → 800k bytes = 100%
+  # pct = total_bytes * 100 / 800000
+  local input_pct=$(( total_bytes * 100 / 800000 ))
+  echo "$input_pct"
+}
+
 compute_budget_info() {
   local agent_name=$1
   local pct=${2:-0}
   local headroom=$(( CONTEXT_THRESHOLD - pct ))
   local max_step=0
   local recommendation="PROCEED"
+  local input_cost=0
 
   # Look up max_step from context-budgets.json
   if [ -f "context-budgets.json" ] && command -v jq &>/dev/null; then
     max_step=$(jq -r --arg a "$agent_name" '.[$a].max_step // 0' context-budgets.json 2>/dev/null || echo 0)
+  fi
+
+  # Estimate input file cost and adjust max_step if inputs are larger than expected
+  input_cost=$(estimate_input_cost "$agent_name")
+  if [ "$input_cost" -gt 0 ]; then
+    local static_read_cost
+    static_read_cost=$(jq -r --arg a "$agent_name" '.[$a].steps.read_inputs // .[$a].steps.read_chunk // 0' context-budgets.json 2>/dev/null || echo 0)
+    # If actual input cost exceeds the static estimate, inflate max_step by the difference
+    if [ "$input_cost" -gt "$static_read_cost" ]; then
+      max_step=$(( max_step + input_cost - static_read_cost ))
+    fi
   fi
 
   # Recommendation logic
@@ -116,6 +188,7 @@ context_pct=$pct
 threshold=$CONTEXT_THRESHOLD
 headroom=$headroom
 max_step_cost=$max_step
+input_file_cost=$input_cost
 recommendation=$recommendation
 BUDGETEOF
 }
