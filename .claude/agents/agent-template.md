@@ -7,7 +7,6 @@
 
 <!-- List ONLY what this agent needs. Every item should justify its context cost. -->
 - `checkpoint.md` — current state (Knowledge State table + Next Task)
-- `reasoning-notes.md` — grep for your phase and upstream phases only; do NOT read the whole file
 - `<input-file-1>` — <why this agent needs it>
 - `<input-file-2>` — <why this agent needs it>
 
@@ -52,17 +51,15 @@ AI-generated-outputs/<thread>/<phase-NN-name>/
 ## Workflow
 
 1. Read `checkpoint.md` — determine current task from Knowledge State + Next Task
-2. Read `reasoning-notes.md` — grep for `## Phase <N>` headers relevant to your work
-3. <Step 3>
+2. <Step 2>
 4. <Step 4>
 ...
-N-3. Append to `reasoning-notes.md` under `## Phase <N> — <name>` with key decisions and rationale
 N-2. Write `AI-generated-outputs/<thread>/<phase-NN-name>/phase-summary.md` (~10 lines: what was accomplished, key decisions, what passes to next phase, issues/partial work)
 N-1. Update `checkpoint.md` — replace Knowledge State section with current phase's table, update Next Task
-N. Commit all outputs: phase outputs, phase-summary.md, reasoning-notes.md, checkpoint.md
+N. Commit all outputs: phase outputs, phase-summary.md, checkpoint.md
 
 ## Ralph Loop Yield Protocol
 
 - Check `/tmp/ralph-context-pct` before <when — e.g., every Read call, every major step>
 - If `[ -f /tmp/ralph-yield ]`: <what to save before exiting>
-- Before exiting: commit <critical files>, reasoning-notes.md, checkpoint.md
+- Before exiting: commit <critical files>, checkpoint.md
