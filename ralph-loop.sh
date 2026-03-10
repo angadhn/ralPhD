@@ -24,6 +24,7 @@ fi
 CONTEXT_THRESHOLD=55
 CTX_FILE="/tmp/ralph-context-pct"
 YIELD_FILE="/tmp/ralph-yield"
+BUDGET_FILE="/tmp/ralph-budget-info"
 POLL_INTERVAL=5
 STATUSLINE_LOG="/tmp/ralph-statusline-log"
 BACKOFF=60
@@ -51,7 +52,7 @@ cleanup() {
   [ -n "$JSONL_MONITOR_PID" ] && kill "$JSONL_MONITOR_PID" 2>/dev/null || true
   [ -n "$MONITOR_PID" ] && kill "$MONITOR_PID" 2>/dev/null || true
   [ -n "$CLAUDE_PID" ] && kill "$CLAUDE_PID" 2>/dev/null || true
-  rm -f "$YIELD_FILE" "$CTX_FILE"
+  rm -f "$YIELD_FILE" "$CTX_FILE" "$BUDGET_FILE"
 }
 
 handle_interrupt() {
@@ -73,10 +74,57 @@ trap 'handle_interrupt' INT
 
 HEARTBEAT_INTERVAL=90  # seconds between heartbeat prints
 
+detect_agent() {
+  local next_task
+  next_task=$(grep -i '^\*\*Next Task\|^Next Task\|^## Next' checkpoint.md 2>/dev/null \
+    | head -1 | sed 's/.*: *//' | sed 's/\*//g')
+  echo "${next_task##* }" | tr -d '[:space:]'
+}
+
+compute_budget_info() {
+  local agent_name=$1
+  local pct=${2:-0}
+  local headroom=$(( CONTEXT_THRESHOLD - pct ))
+  local max_step=0
+  local recommendation="PROCEED"
+
+  # Look up max_step from context-budgets.json
+  if [ -f "context-budgets.json" ] && command -v jq &>/dev/null; then
+    max_step=$(jq -r --arg a "$agent_name" '.[$a].max_step // 0' context-budgets.json 2>/dev/null || echo 0)
+  fi
+
+  # Recommendation logic
+  if [ "$max_step" -gt 0 ]; then
+    local caution_threshold=$(( max_step * 3 / 2 ))  # max_step * 1.5 (integer math)
+    if [ "$headroom" -le "$max_step" ]; then
+      recommendation="YIELD"
+      # Also trigger the yield file as safety net
+      if [ ! -f "$YIELD_FILE" ]; then
+        touch "$YIELD_FILE"
+      fi
+    elif [ "$headroom" -le "$caution_threshold" ]; then
+      recommendation="CAUTION"
+    else
+      recommendation="PROCEED"
+    fi
+  fi
+
+  # Write budget info file
+  cat > "$BUDGET_FILE" <<BUDGETEOF
+agent=$agent_name
+context_pct=$pct
+threshold=$CONTEXT_THRESHOLD
+headroom=$headroom
+max_step_cost=$max_step
+recommendation=$recommendation
+BUDGETEOF
+}
+
 monitor_context() {
   local pid=$1
   local iter_start=$2
   local ignore_until=$3
+  local agent_name=${4:-unknown}
   local last_heartbeat=$iter_start
   local ticks=0
   while kill -0 "$pid" 2>/dev/null; do
@@ -91,6 +139,12 @@ monitor_context() {
       fi
       if [ "$file_time" -ge "$iter_start" ]; then
         pct=$(cat "$CTX_FILE" 2>/dev/null | tr -d '[:space:]')
+
+        # Update budget info on every tick
+        if [ -n "$pct" ] 2>/dev/null; then
+          compute_budget_info "$agent_name" "$pct"
+        fi
+
         if [ -n "$pct" ] && [ "$pct" -ge "$CONTEXT_THRESHOLD" ] 2>/dev/null; then
           if [ ! -f "$YIELD_FILE" ]; then
             echo ""
@@ -106,7 +160,14 @@ monitor_context() {
           local secs=$(( elapsed % 60 ))
           local changed
           changed=$(git diff --stat --no-color 2>/dev/null | tail -1 | sed 's/^ *//' || echo "")
+          local rec=""
+          if [ -f "$BUDGET_FILE" ]; then
+            rec=$(grep '^recommendation=' "$BUDGET_FILE" 2>/dev/null | cut -d= -f2)
+          fi
           printf "  [%dm%02ds] context: %s%%" "$mins" "$secs" "$pct"
+          if [ -n "$rec" ]; then
+            printf " [%s]" "$rec"
+          fi
           if [ -n "$changed" ]; then
             printf " | %s" "$changed"
           fi
@@ -136,7 +197,7 @@ while true; do
   ITERATION=$((ITERATION + 1))
   echo "$ITERATION" > "$COUNTER_FILE"
   echo "=== Iteration $ITERATION ==="
-  rm -f "$CTX_FILE" "$YIELD_FILE"
+  rm -f "$CTX_FILE" "$YIELD_FILE" "$BUDGET_FILE"
   sleep 3  # let any dying statusline process finish writing, then clear again
   rm -f "$CTX_FILE"
 
@@ -158,6 +219,14 @@ while true; do
   if [ "$ITERATION" -gt 0 ] && [ $(( ITERATION % 5 )) -eq 0 ]; then
     touch /tmp/ralph-reflect
     echo "  Reflection iteration (mod 5)"
+  fi
+
+  # --- Detect agent for budget computation ---
+  CURRENT_AGENT=$(detect_agent)
+  if [ -n "$CURRENT_AGENT" ] && [ "$CURRENT_AGENT" != "" ]; then
+    echo "  Agent detected: $CURRENT_AGENT"
+  else
+    CURRENT_AGENT="unknown"
   fi
 
   # --- Build prompt ---
@@ -214,7 +283,7 @@ while true; do
       sleep 2
     done
 
-    monitor_context "$CLAUDE_PID" "$ITER_START" "$IGNORE_UNTIL" &
+    monitor_context "$CLAUDE_PID" "$ITER_START" "$IGNORE_UNTIL" "$CURRENT_AGENT" &
     MONITOR_PID=$!
 
     wait "$CLAUDE_PID" 2>/dev/null
@@ -289,7 +358,7 @@ while true; do
     # Interactive: claude gets the terminal, monitor runs in background
     # Start a subshell monitor that will print starting context + watch threshold
     # Use the same monitor_context function (runs in background)
-    monitor_context "$$" "$ITER_START" "$IGNORE_UNTIL" &
+    monitor_context "$$" "$ITER_START" "$IGNORE_UNTIL" "$CURRENT_AGENT" &
     MONITOR_PID=$!
 
     CLAUDE_MODEL="${CLAUDE_MODEL:-claude-opus-4-6}"

@@ -15,7 +15,8 @@ Deep reader — reads PDFs to extract quantitative findings, contradictions, and
 
 Budget ~5-6% per 5-page chunk read, ~10% for writing notes synthesis, ~5% for report.tex generation. Reading plan from `pdf_metadata` gives page count — divide by 5 to estimate chunks needed.
 
-Before each major step: estimate cost (see above), check remaining context (`cat /tmp/ralph-context-pct 2>/dev/null || echo 0`). If estimated cost > remaining headroom to threshold, yield — commit outputs and exit. A fresh iteration will continue from checkpoint.
+- **Yield check:** Before each major step, read `/tmp/ralph-budget-info`. Follow the recommendation (PROCEED/CAUTION/YIELD).
+- **Incremental commit:** After each major step (each 5-page chunk's notes written, notes synthesis, report.tex), commit all modified output files immediately (`git add <outputs> && git commit`). This caps work loss to one step if context is exhausted.
 
 ### Context Thresholds (graduated, safety net)
 

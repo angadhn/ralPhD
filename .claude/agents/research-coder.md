@@ -20,7 +20,8 @@ Research coder — writes and runs code for simulations, data analysis, and figu
 - **Pre-estimate:** Budget ~5% for reading inputs, ~10% for writing scripts, ~10% for running + reading output, ~15% for writing summaries.
 - **Priority order:** (1) understand what's requested, (2) write code, (3) run code, (4) assess results, (5) write outputs
 - **Context check:** Before each major step, check context. If >35%, write outputs from what's available.
-- **Go/no-go:** Before each major step: estimate cost (see Pre-estimate above), check remaining context (`cat /tmp/ralph-context-pct`). If estimated cost > remaining headroom to threshold, yield — commit outputs and exit. A fresh iteration will continue from checkpoint.
+- **Yield check:** Before each major step, read `/tmp/ralph-budget-info`. Follow the recommendation (PROCEED/CAUTION/YIELD).
+- **Incremental commit:** After each major step (script written, script run + output saved, summary written), commit all modified output files immediately (`git add <outputs> && git commit`). This caps work loss to one step if context is exhausted.
 - **Data integrity:** Never modify source data files. All outputs go to designated output directories.
 - **Flag surprises:** If results are scientifically unexpected (order-of-magnitude differences, sign reversals, null results where effects were expected), flag explicitly in output with `[UNEXPECTED]` tag and reasoning about possible causes.
 

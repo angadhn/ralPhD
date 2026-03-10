@@ -36,7 +36,8 @@ Maintains voice consistency and cross-reference coherence in both modes.
 - **Revise mode: preserve existing voice.** Match the tone and style of the original manuscript.
 - **Large sections split:** If a section has >5 subsections, split across iterations.
 - **Pre-estimate:** Check outline/revision plan for subsection count and word target. Budget ~3-5% context per subsection written, ~5% for reading inputs, ~5% for commit gates.
-- **Go/no-go:** Before each major step: estimate cost (see Pre-estimate above), check remaining context (`cat /tmp/ralph-context-pct`). If estimated cost > remaining headroom to threshold, yield — commit outputs and exit. A fresh iteration will continue from checkpoint.
+- **Yield check:** Before each major step, read `/tmp/ralph-budget-info`. Follow the recommendation (PROCEED/CAUTION/YIELD).
+- **Incremental commit:** After each major step (each subsection written, commit gates passed), commit all modified output files immediately (`git add <outputs> && git commit`). This caps work loss to one step if context is exhausted.
 - **Duplicate DOI check:** Before citing a paper, check `cited_tracker.jsonl`. If already discussed in a prior section, write "As discussed in Section N.M..." instead of re-explaining.
 - **Commit gates after each section:**
   - `python scripts/citation_tools.py lint --bib-dir references/ --output verification_report.md`

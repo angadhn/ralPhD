@@ -18,8 +18,8 @@ Produces compact summaries with scored paper lists, not full reports.
 
 - **Pre-estimate:** Target 10-15 papers (corpus building) or 5-10 papers per gap (gap fill). A-grade downloads first. Budget ~2-3% per paper searched+scored, ~5% for citation verification, ~3% per PDF download, ~5% for writing summary.
 - **Priority order:** (1) search + score, (2) verify citations, (3) download A-grade PDFs, (4) write summary
-- **Context check:** Before each major step, run `cat /tmp/ralph-context-pct 2>/dev/null || echo 0`. If approaching threshold, finish scoring and skip downloads.
-- **Go/no-go:** Before each major step: estimate cost (see Pre-estimate above), check remaining context. If estimated cost > remaining headroom to threshold, yield — commit outputs and exit. A fresh iteration will continue from checkpoint.
+- **Yield check:** Before each major step, read `/tmp/ralph-budget-info`. Follow the recommendation (PROCEED/CAUTION/YIELD).
+- **Incremental commit:** After each major step (batch of papers scored, citations verified, each PDF downloaded, summary written), commit all modified output files immediately (`git add <outputs> && git commit`). This caps work loss to one step if context is exhausted.
 - **Never sacrifice scoring rigor for paper count.** 8 well-scored papers beat 15 vaguely graded ones.
 
 ## Output Format

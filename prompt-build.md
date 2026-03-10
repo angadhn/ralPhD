@@ -14,7 +14,8 @@ One iteration = one agent = one task.
 IMPORTANT:
 - if /tmp/ralph-reflect exists, read specs/reflection-template.md and complete the reflection BEFORE starting the task
 - if /tmp/ralph-yield exists, save state to checkpoint.md and exit immediately
-- before each major step (searching, writing, compiling), check your context budget: `cat /tmp/ralph-context-pct 2>/dev/null || echo 0`. If within 5% of threshold, estimate whether the next step fits: searching costs ~5-10%, writing a report costs ~15-20%, compiling+gates costs ~5%. If the next step won't fit, update checkpoint.md with what you've done so far and exit. A fresh session continues from your checkpoint.
+- before each major step, check `/tmp/ralph-budget-info`. If recommendation is YIELD, update checkpoint.md and exit. If CAUTION, finish current step only.
+- after each major step, commit all modified files immediately. Do not wait until the end. If the process dies, only the current step's work is lost.
 - after the task, run the agent's commit gates
 - update implementation-plan.md when the task is done
 - when checks pass, commit all modified files

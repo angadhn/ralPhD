@@ -47,7 +47,8 @@ Full Round 1 / Round 2 templates: see `specs/figure-stylist-output-format.md` (r
 
 - **One figure per iteration.** Review one figure, commit, yield.
 - **Pre-estimate:** ~10% context budget total. Budget ~3% for reading figure + script, ~5% for writing feedback, ~2% for checkpoint update.
-- **Go/no-go:** Before each major step: estimate cost (see Pre-estimate above), check remaining context (`cat /tmp/ralph-context-pct`). If estimated cost > remaining headroom to threshold, yield — commit outputs and exit. A fresh iteration will continue from checkpoint.
+- **Yield check:** Before each major step, read `/tmp/ralph-budget-info`. Follow the recommendation (PROCEED/CAUTION/YIELD).
+- **Incremental commit:** After each major step (feedback written, checkpoint updated), commit all modified output files immediately (`git add <outputs> && git commit`). This caps work loss to one step if context is exhausted.
 - **Two-round convergence.** Round 1: full checklist, REVISE if needed. Round 2: always approves (notes remaining issues for human).
 
 ## Ralph Loop Yield Protocol
