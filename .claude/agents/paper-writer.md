@@ -39,9 +39,7 @@ Maintains voice consistency and cross-reference coherence in both modes.
 - **Yield check:** Before each major step, read `/tmp/ralph-budget-info`. Follow the recommendation (PROCEED/CAUTION/YIELD).
 - **Incremental commit:** After each major step (each subsection written, commit gates passed), commit all modified output files immediately (`git add <outputs> && git commit`). This caps work loss to one step if context is exhausted.
 - **Duplicate DOI check:** Before citing a paper, check `cited_tracker.jsonl`. If already discussed in a prior section, write "As discussed in Section N.M..." instead of re-explaining.
-- **Commit gates after each section:**
-  - `python scripts/citation_tools.py lint --bib-dir references/ --output verification_report.md`
-  - `python scripts/check_language.py <section-file>`
+- **Commit gates after each section:** Run check_language and citation_lint on the section before committing.
 
 ## Output per Iteration
 
@@ -91,9 +89,7 @@ Full `outline.md` template: see `specs/paper-writer-output-format.md` (read at s
    - Cross-references to other sections where relevant
    - Place figures per outline *(write mode)*
    - Apply only approved changes, preserve paragraph structure where possible *(revise mode)*
-8. Run commit gates on the section:
-   - `python scripts/citation_tools.py lint --bib-dir references/ --output verification_report.md`
-   - `python scripts/check_language.py sections/XX-*.tex`
+8. Run commit gates on the section before committing.
 9. Update `references/cited_tracker.jsonl` with DOIs cited in this section
 10. Update `checkpoint.md` — set Next Task to `STYLE-CHECK critic` (triggers style review of this section)
 11. Commit all outputs. Yield — critic runs style check before next section.
