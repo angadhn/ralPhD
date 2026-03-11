@@ -692,7 +692,7 @@ while true; do
       --run-tag "${RUN_TAG:-}" \
       2>/dev/null || echo "  (eval capture skipped)"
     # Human review checkpoint
-    if [ -f "HUMAN_REVIEW_NEEDED.md" ]; then
+    if [ -f "HUMAN_REVIEW_NEEDED.md" ] && ! diff -q "HUMAN_REVIEW_NEEDED.md" "$RALPH_HOME/templates/HUMAN_REVIEW_NEEDED.md" >/dev/null 2>&1; then
       echo ""
       echo "╔══════════════════════════════════════════════╗"
       echo "║  HUMAN REVIEW REQUESTED                     ║"
@@ -747,7 +747,7 @@ while true; do
       --run-tag "${RUN_TAG:-}" \
       2>/dev/null || echo "  (eval capture skipped)"
     # Human review checkpoint
-    if [ -f "HUMAN_REVIEW_NEEDED.md" ]; then
+    if [ -f "HUMAN_REVIEW_NEEDED.md" ] && ! diff -q "HUMAN_REVIEW_NEEDED.md" "$RALPH_HOME/templates/HUMAN_REVIEW_NEEDED.md" >/dev/null 2>&1; then
       echo ""
       echo "╔══════════════════════════════════════════════╗"
       echo "║  HUMAN REVIEW REQUESTED                     ║"
