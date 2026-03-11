@@ -3,7 +3,7 @@
 **Thread:** howler-port
 **Last updated:** 2026-03-11
 **Last agent:** research-coder
-**Status:** Phase 2 in progress — tasks 4-6 done, tasks 7-8 remain
+**Status:** Phase 2 in progress — tasks 4-7 done, task 8 remains
 
 ## Knowledge State
 
@@ -15,7 +15,7 @@
 | 4. editor agent | done | .claude/agents/editor.md — substantiated editing, section-by-section, pre/post diagnostics |
 | 5. editor output format spec | done | specs/editor-output-format.md — change_log.md structure, 6 justification categories, commit gates, minimal edit principle |
 | 6. coherence-reviewer agent | done | .claude/agents/coherence-reviewer.md — 4 checks: promise-delivery, terminology, contradictions, novelty claims. Read-only on .tex, skim-first approach. |
-| 7. coherence-reviewer output format | pending | specs/coherence-reviewer-output-format.md |
+| 7. coherence-reviewer output format | done | specs/coherence-reviewer-output-format.md — coherence_review.md template, 3 severity levels, verdict logic, commit gates |
 | 8. paper-writer REVIEW-EDITS mode | pending | Update paper-writer.md |
 | 9-14. Analysis agents | pending | provocateur, synthesizer, triage |
 | 15-16. Critic update | pending | FIGURE-PROPOSAL mode |
@@ -24,8 +24,8 @@
 
 ## Last Reflection
 
-Iteration 6: Created .claude/agents/coherence-reviewer.md — defines a read-only manuscript consistency checker with four ordered checks (promise-delivery alignment, terminology consistency, internal contradictions, novelty claims vs related work). Uses check_claims + check_language tools. Skim-first approach with deep-read-on-flag. Output is coherence_review.md report. Agent was already registered in tools/__init__.py from task 2.
+Iteration 7: Created specs/coherence-reviewer-output-format.md — defines coherence_review.md template with all four check sections, three severity levels (CRITICAL/MODERATE/MINOR), verdict logic (COHERENT only if zero critical + zero moderate), promise-delivery table, term/acronym registries, contradiction format with quoted text, novelty claims cross-check table. Includes commit gates and partial report format for yield scenarios.
 
 ## Next Task
 
-7. Create `specs/coherence-reviewer-output-format.md` — research-coder
+8. Update `.claude/agents/paper-writer.md` — add REVIEW-EDITS mode — research-coder
