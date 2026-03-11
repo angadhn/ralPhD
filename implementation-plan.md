@@ -21,7 +21,7 @@ Interview decisions and full rationale are in this session's transcript.
 - [x] 5. Create `specs/editor-output-format.md` — what editor's checkpoint output looks like (sections edited, changes summary, unresolved concerns). Follow pattern from existing output format specs. — **research-coder**
 - [x] 6. Create `.claude/agents/coherence-reviewer.md` — runs after all editing passes. Checks: promise-delivery alignment (intro vs results), terminology consistency, internal contradictions, novelty claims vs related work. Tools: `_ESSENTIALS` + `check_claims`, `check_language`. — **research-coder**
 - [x] 7. Create `specs/coherence-reviewer-output-format.md` — output format for coherence reviews. — **research-coder**
-- [ ] 8. Update `.claude/agents/paper-writer.md` — add REVIEW-EDITS mode: after editor makes changes, paper-writer receives a git diff and accepts/reverts changes with reasoning. Add to existing mode detection in the prompt. — **research-coder**
+- [x] 8. Update `.claude/agents/paper-writer.md` — add REVIEW-EDITS mode: after editor makes changes, paper-writer receives a git diff and accepts/reverts changes with reasoning. Add to existing mode detection in the prompt. — **research-coder**
 
 ## Phase 3: Analysis Agents
 <!-- gate -->

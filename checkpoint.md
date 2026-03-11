@@ -3,7 +3,7 @@
 **Thread:** howler-port
 **Last updated:** 2026-03-11
 **Last agent:** research-coder
-**Status:** Phase 2 in progress — tasks 4-7 done, task 8 remains
+**Status:** Phase 2 complete — awaiting human review before Phase 3
 
 ## Knowledge State
 
@@ -16,16 +16,16 @@
 | 5. editor output format spec | done | specs/editor-output-format.md — change_log.md structure, 6 justification categories, commit gates, minimal edit principle |
 | 6. coherence-reviewer agent | done | .claude/agents/coherence-reviewer.md — 4 checks: promise-delivery, terminology, contradictions, novelty claims. Read-only on .tex, skim-first approach. |
 | 7. coherence-reviewer output format | done | specs/coherence-reviewer-output-format.md — coherence_review.md template, 3 severity levels, verdict logic, commit gates |
-| 8. paper-writer REVIEW-EDITS mode | pending | Update paper-writer.md |
-| 9-14. Analysis agents | pending | provocateur, synthesizer, triage |
-| 15-16. Critic update | pending | FIGURE-PROPOSAL mode |
-| 17-18. Venue + housekeeping | pending | init-project.sh, README |
-| 19-20. Verification | pending | Tool + agent loading checks |
+| 8. paper-writer REVIEW-EDITS mode | done | Updated paper-writer.md — third mode for reviewing editor changes, accept/revert with reasoning, edit_review.md output |
+| 9-14. Analysis agents | pending | provocateur, synthesizer, triage — Phase 3 |
+| 15-16. Critic update | pending | FIGURE-PROPOSAL mode — Phase 4 |
+| 17-18. Venue + housekeeping | pending | init-project.sh, README — Phase 5 |
+| 19-20. Verification | pending | Tool + agent loading checks — Phase 6 |
 
 ## Last Reflection
 
-Iteration 7: Created specs/coherence-reviewer-output-format.md — defines coherence_review.md template with all four check sections, three severity levels (CRITICAL/MODERATE/MINOR), verdict logic (COHERENT only if zero critical + zero moderate), promise-delivery table, term/acronym registries, contradiction format with quoted text, novelty claims cross-check table. Includes commit gates and partial report format for yield scenarios.
+Iteration 8: Updated .claude/agents/paper-writer.md with REVIEW-EDITS mode. Added: third mode in Identity section, review-edits-specific inputs (change_log.md + git diff), accept-by-default policy (≥80% acceptance target), complete workflow step 5 for review-edits (read change log → inspect diff → evaluate each change → apply reverts → write edit_review.md → run check_language → commit), and edit_review.md output format. Phase 2 is now complete.
 
 ## Next Task
 
-8. Update `.claude/agents/paper-writer.md` — add REVIEW-EDITS mode — research-coder
+9. Create `.claude/agents/provocateur.md` — research-coder (Phase 3 start — requires human review gate)
