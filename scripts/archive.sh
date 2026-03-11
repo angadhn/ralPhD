@@ -88,6 +88,19 @@ if [ -f inbox.md ] && [ -s inbox.md ]; then
 fi
 > inbox.md
 
+# Archive CHANGELOG.md (accumulates per-iteration entries across all threads)
+if [ -f CHANGELOG.md ]; then
+  mv CHANGELOG.md "$ARCHIVE_DIR/"
+  echo "# CHANGELOG" > CHANGELOG.md
+  echo "Archived and reset CHANGELOG.md"
+fi
+
+# Clean /tmp/ralph-* state files from this thread
+rm -f /tmp/ralph-context-pct /tmp/ralph-yield /tmp/ralph-budget-info \
+      /tmp/ralph-output.json /tmp/ralph-statusline-log /tmp/ralph-monitor-start \
+      /tmp/ralph-reflect /tmp/ralph-test-output.json
+echo "Cleaned /tmp/ralph-* state files"
+
 echo "Archived to $ARCHIVE_DIR/"
 
 # --- Restore blank templates ---
