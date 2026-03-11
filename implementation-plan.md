@@ -42,8 +42,8 @@ Interview decisions and full rationale are in this session's transcript.
 ## Phase 5: Venue Convention + Housekeeping
 <!-- gate -->
 
-- [ ] 17. Update `scripts/init-project.sh` — create `inputs/` directory during project init. Add comment documenting the convention (feedback, prior submissions, venue-specific docs). — **research-coder**
-- [ ] 18. Update `.claude/agents/README.md` — add new agents (editor, coherence-reviewer, provocateur, synthesizer, triage) with tool summaries. Document `inputs/` convention. — **research-coder**
+- [x] 17. Update `scripts/init-project.sh` — create `inputs/` directory during project init. Add comment documenting the convention (feedback, prior submissions, venue-specific docs). — **research-coder**
+- [x] 18. Update `.claude/agents/README.md` — add new agents (editor, coherence-reviewer, provocateur, synthesizer, triage) with tool summaries. Document `inputs/` convention. — **research-coder**
 
 ## Phase 6: Prompt Audit
 <!-- gate -->

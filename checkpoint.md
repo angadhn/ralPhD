@@ -3,7 +3,7 @@
 **Thread:** howler-port
 **Last updated:** 2026-03-11
 **Last agent:** research-coder
-**Status:** Phase 4 complete — all 16 tasks done. Phase 5 next (venue convention + housekeeping).
+**Status:** Phase 5 complete — all 18 tasks done. Phase 6 next (prompt audit).
 
 ## Knowledge State
 
@@ -25,7 +25,8 @@
 | 14. triage output format | done | specs/triage-output-format.md — templates for triage_report.md, reading_plan.md, corpus_index_deduped.jsonl |
 | 15. Critic FIGURE-PROPOSAL mode | done | Updated critic.md — 5th mode: reads deep-reader notes/reports, inventories existing figs, evaluates data availability + visual impact + claim support, ranks by impact |
 | 16. Critic output format update | done | Updated critic-output-format.md — figure_proposals.md template (per-proposal entries with impact/type/sources/rationale), HUMAN_REVIEW figure approval section, 5 commit gates |
-| 17-18. Venue + housekeeping | pending | init-project.sh, README — Phase 5 |
+| 17. init-project.sh update | done | Added inputs/ to directory creation; comment + README.md documenting convention (feedback, prior submissions, venue docs). Idempotent. |
+| 18. agents README update | done | Updated .claude/agents/README.md — 11 agents with tool summaries, typical flow diagram, inputs/ convention table |
 | 19. Prompt audit | pending | Phase 6 |
 | 20-21. Verification | pending | Tool + agent loading checks — Phase 7 |
 
@@ -35,4 +36,4 @@ Iteration 2 reflection: On track. Phase 3 nearly complete (13/14 tasks done). Pa
 
 ## Next Task
 
-17. Update scripts/init-project.sh — create inputs/ directory research-coder
+19. Audit all agent prompts against prompt quality checklist research-coder

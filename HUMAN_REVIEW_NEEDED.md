@@ -1,28 +1,28 @@
-# Human Review — Phase 4 → Phase 5 Gate
+# Stage Gate: Phase 5 → Phase 6
 
-## Completed: Phase 4 (Critic Update)
+## What was completed
 
-**Tasks 15-16 completed:**
+**Phase 5: Venue Convention + Housekeeping** (Tasks 17–18)
 
-1. **Updated `.claude/agents/critic.md`** — Added FIGURE-PROPOSAL as 5th mode:
-   - Triggered by `FIGURE-PROPOSAL critic` in checkpoint's Next Task
-   - Reads deep-reader `notes.md` Figure Opportunities sections + `report.tex` quantitative claims
-   - Inventories existing figures to avoid duplication
-   - Evaluates candidates on: data availability, visual impact, claim support
-   - Ranks proposals by impact (HIGH/MEDIUM/LOW)
-   - Outputs `figure_proposals.md` + appends approval section to `HUMAN_REVIEW_NEEDED.md`
-   - Flow: critic proposes → human approves → research-coder implements → figure-stylist reviews
+- **Task 17:** Updated `scripts/init-project.sh` to create `inputs/` directory during project init. Added a comment documenting the convention and a `README.md` inside `inputs/` with a usage table (reviewer feedback, prior submissions, venue guidelines, style files, supplementary notes). Idempotent — re-running init preserves existing files.
 
-2. **Updated `specs/critic-output-format.md`** — Added figure proposal format:
-   - `figure_proposals.md` template: self-contained entries with impact level, chart type, data sources with paths, data points table, rationale, design notes
-   - Impact criteria: HIGH (central thesis, 3+ sources), MEDIUM (secondary, 2 sources), LOW (illustrative, single source)
-   - `HUMAN_REVIEW_NEEDED.md` Figure Proposals section: checkbox approval list
-   - 5 commit gates for figure proposal mode
+- **Task 18:** Updated `.claude/agents/README.md` from 6 agents to 11, with a tools column, typical pipeline flow diagram, and `inputs/` convention documentation. New agents: triage, provocateur, synthesizer, editor, coherence-reviewer.
 
-## Next: Phase 5 (Venue Convention + Housekeeping)
+**Overall progress:** 18 of 21 tasks complete. Phases 1–5 done.
 
-**What Phase 5 will do:**
-- Task 17: Update `scripts/init-project.sh` to create `inputs/` directory during project init
-- Task 18: Update `.claude/agents/README.md` to document all new agents (editor, coherence-reviewer, provocateur, synthesizer, triage) with tool summaries + `inputs/` convention
+## What the next phase will do
 
-These are low-risk infrastructure changes. No agent prompts or tool code will be modified.
+**Phase 6: Prompt Audit** (Task 19)
+
+Audit all 11 agent prompts in `.claude/agents/*.md` against prompt quality guidelines:
+1. Remove role-playing language ("You are an expert X" → state the task directly)
+2. Convert negative prompts ("Don't do X" → positive instructions)
+3. Compress sections that can be shorter without losing meaning
+4. Verify mechanical procedures live in tools/specs, not baked into prompts
+5. Report token cost of each prompt
+
+This will modify every `.claude/agents/*.md` file. Changes should be semantic-preserving (same behavior, better prompting).
+
+## Decision needed
+
+Approve proceeding with prompt audit of all 11 agent files?
