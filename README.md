@@ -169,7 +169,7 @@ ralPhD/
 │   ├── pdf.py                  # pdf_metadata, extract_figure
 │   ├── download.py             # citation_download
 │   └── search.py               # list_files, code_search
-├── scripts/                    # Deterministic check/extraction scripts
+├── scripts/                    # Utility scripts + project scaffolding
 │   └── init-project.sh         # Scaffold a new project workspace
 ├── specs/                      # Quality standards + output format templates
 └── templates/                  # Starter checkpoint.md + implementation-plan.md
@@ -298,7 +298,7 @@ See `specs/api-contract.md` for the full API contract, webhook payload schema, a
 - **One agent per iteration.** Each iteration gets a fresh context window. No agent mixing, no subagent spawning.
 - **Per-agent tool registries.** Each agent only sees the tools it needs. Scout gets citation tools, critic gets compliance checkers, research-coder gets only the essentials. This focuses the model's attention and prevents tool misuse.
 - **Plan mode creates agents on the fly.** If a task needs a capability that doesn't exist yet, plan mode can write a new agent file rather than forcing everything through the predefined roles.
-- **Peer-reviewed sources only.** Scout searches academic databases via `citation_tools.py`. No general web search — journal submissions cite peer-reviewed and conference papers.
+- **Peer-reviewed sources only.** Scout searches academic databases via `tools/_citation.py`. No general web search — journal submissions cite peer-reviewed and conference papers.
 - **Human in the loop.** `HUMAN CHECKPOINT` tasks pause for review. `inbox.md` allows mid-run steering. Reflections every 5 iterations surface drift.
 
 ## References
