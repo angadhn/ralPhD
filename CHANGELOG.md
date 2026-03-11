@@ -29,3 +29,9 @@
 
 ## Iteration 4 — 2026-03-11
 - Add init-project.sh, update README with workspace separation docs
+
+## Reflection — Iteration 1 — 2026-03-11
+- Trajectory: on track. See ai-generated-outputs/reflections/reflection-iter-1.md
+
+## Iteration 5 — 2026-03-11
+- Create specs/evidence-format.md — evidence-ledger JSONL schema (howler-port Task 1)
