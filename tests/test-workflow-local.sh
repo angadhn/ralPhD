@@ -14,6 +14,11 @@ set -euo pipefail
 #   8. Tool path resolution (RALPH_HOME)
 #   9. Commit-back step (post-run result delivery)
 #   10. Webhook callback step (result delivery to external URL)
+#   11. End-to-end pipeline integration
+#   12. Architecture field parsing (--serial/--parallel/--single flags)
+#   13. Parallel phase detection (phase heading annotations)
+#   14. eval.jsonl output format (evaluate_iteration.py --dry-run)
+#   15. Single-agent mode (prompt-build-single.md)
 #
 # Usage: bash tests/test-workflow-local.sh
 
@@ -1313,6 +1318,623 @@ else
 fi
 
 rm -rf "$E2E_DIR"
+echo ""
+
+
+# ── Test 12: Architecture field parsing ──────────────────────
+echo "--- 12. Architecture Field Parsing ---"
+
+# 12a. Extract the Architecture field parsing logic from ralph-loop.sh
+parse_arch_field() {
+  local plan_file="$1"
+  local arch
+  arch=$(grep -i '^\*\*Architecture:\*\*\|^Architecture:' "$plan_file" 2>/dev/null | head -1 | sed 's/.*: *//' | sed 's/\*//g' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' || true)
+  if [ -z "$arch" ] || ! echo "$arch" | grep -qE '^(serial|parallel|single|auto)$'; then
+    arch="serial"
+  fi
+  echo "$arch"
+}
+
+# Test: serial field
+ARCH_TEST_DIR=$(mktemp -d)
+cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
+# Implementation Plan
+
+**Autonomy:** autopilot
+**Architecture:** serial
+
+## Phase 1
+- [ ] 1. Do thing — **coder**
+ARCHEOF
+
+PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+if [ "$PARSED" = "serial" ]; then
+  pass "12a: Architecture field parsed: serial"
+else
+  fail "12a: Architecture field: got '$PARSED', expected 'serial'"
+fi
+
+# Test: parallel field
+cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
+# Implementation Plan
+
+**Architecture:** parallel
+
+## Phase 1 (parallel)
+- [ ] 1. Do thing — **coder**
+ARCHEOF
+
+PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+if [ "$PARSED" = "parallel" ]; then
+  pass "12b: Architecture field parsed: parallel"
+else
+  fail "12b: Architecture field: got '$PARSED', expected 'parallel'"
+fi
+
+# Test: auto field
+cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
+# Plan
+**Architecture:** auto
+ARCHEOF
+
+PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+if [ "$PARSED" = "auto" ]; then
+  pass "12c: Architecture field parsed: auto"
+else
+  fail "12c: Architecture field: got '$PARSED', expected 'auto'"
+fi
+
+# Test: single field
+cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
+# Plan
+**Architecture:** single
+ARCHEOF
+
+PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+if [ "$PARSED" = "single" ]; then
+  pass "12d: Architecture field parsed: single"
+else
+  fail "12d: Architecture field: got '$PARSED', expected 'single'"
+fi
+
+# Test: missing field defaults to serial
+cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
+# Plan
+**Autonomy:** autopilot
+## Phase 1
+- [ ] 1. Do thing — **coder**
+ARCHEOF
+
+PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+if [ "$PARSED" = "serial" ]; then
+  pass "12e: missing Architecture field defaults to serial"
+else
+  fail "12e: missing field: got '$PARSED', expected 'serial'"
+fi
+
+# Test: invalid field defaults to serial
+cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
+# Plan
+**Architecture:** banana
+ARCHEOF
+
+PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+if [ "$PARSED" = "serial" ]; then
+  pass "12f: invalid Architecture field defaults to serial"
+else
+  fail "12f: invalid field: got '$PARSED', expected 'serial'"
+fi
+
+# Test: case insensitivity
+cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
+# Plan
+**Architecture:** Parallel
+ARCHEOF
+
+PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+if [ "$PARSED" = "parallel" ]; then
+  pass "12g: Architecture field case-insensitive: 'Parallel' → 'parallel'"
+else
+  fail "12g: case-insensitive: got '$PARSED', expected 'parallel'"
+fi
+
+# Test: CLI flag overrides plan field
+# Simulate the override logic from ralph-loop.sh
+cli_override_test() {
+  local cli_flag="$1"
+  local plan_field="$2"
+  local arch_mode=""
+  # Simulate: CLI flag takes priority
+  case "$cli_flag" in
+    --serial) arch_mode="serial" ;;
+    --parallel) arch_mode="parallel" ;;
+    --single) arch_mode="single" ;;
+  esac
+  if [ -z "$arch_mode" ]; then
+    arch_mode="$plan_field"
+  fi
+  echo "$arch_mode"
+}
+
+RESULT=$(cli_override_test "--serial" "parallel")
+if [ "$RESULT" = "serial" ]; then
+  pass "12h: --serial flag overrides plan field 'parallel'"
+else
+  fail "12h: flag override: got '$RESULT', expected 'serial'"
+fi
+
+RESULT=$(cli_override_test "--parallel" "serial")
+if [ "$RESULT" = "parallel" ]; then
+  pass "12i: --parallel flag overrides plan field 'serial'"
+else
+  fail "12i: flag override: got '$RESULT', expected 'parallel'"
+fi
+
+RESULT=$(cli_override_test "--single" "parallel")
+if [ "$RESULT" = "single" ]; then
+  pass "12j: --single flag overrides plan field 'parallel'"
+else
+  fail "12j: flag override: got '$RESULT', expected 'single'"
+fi
+
+RESULT=$(cli_override_test "" "parallel")
+if [ "$RESULT" = "parallel" ]; then
+  pass "12k: no CLI flag → uses plan field 'parallel'"
+else
+  fail "12k: no flag: got '$RESULT', expected 'parallel'"
+fi
+
+rm -rf "$ARCH_TEST_DIR"
+
+# Test: ralph-loop.sh actually contains the Architecture parsing code
+check "12l: ralph-loop.sh reads Architecture field" grep -q 'Architecture' "$RALPH_HOME/ralph-loop.sh"
+check "12m: ralph-loop.sh has --serial flag" grep -q '\-\-serial' "$RALPH_HOME/ralph-loop.sh"
+check "12n: ralph-loop.sh has --parallel flag" grep -q '\-\-parallel' "$RALPH_HOME/ralph-loop.sh"
+check "12o: ralph-loop.sh has --single flag" grep -q '\-\-single' "$RALPH_HOME/ralph-loop.sh"
+check "12p: ralph-loop.sh exports ARCH_MODE" grep -q 'export ARCH_MODE' "$RALPH_HOME/ralph-loop.sh"
+echo ""
+
+# ── Test 13: Parallel phase detection ────────────────────────
+echo "--- 13. Parallel Phase Detection ---"
+
+# Extract detect_current_phase and is_parallel_phase from ralph-loop.sh
+# (Test them on synthetic plan files)
+
+PHASE_TEST_DIR=$(mktemp -d)
+
+# 13a. Plan with a parallel phase
+cat > "$PHASE_TEST_DIR/plan.md" << 'PHASEEOF'
+# Plan
+**Architecture:** parallel
+
+## Phase 1 — Setup
+
+- [x] 1. Create config — **coder**
+- [x] 2. Create schema — **coder**
+
+## Phase 2 — Build (parallel)
+
+- [ ] 3. Write module A — **coder**
+- [ ] 4. Write module B — **coder**
+- [ ] 5. Write module C — **coder**
+
+## Phase 3 — Review
+
+- [ ] 6. Final review — **critic**
+PHASEEOF
+
+# detect_current_phase: find which phase the first unchecked task belongs to
+detect_current_phase_from() {
+  local plan_file="$1"
+  local in_phase=""
+  while IFS= read -r line; do
+    if echo "$line" | grep -q '^## Phase'; then
+      in_phase="$line"
+    fi
+    if echo "$line" | grep -q '^\- \[ \]'; then
+      echo "$in_phase"
+      return
+    fi
+  done < "$plan_file"
+  echo ""
+}
+
+# is_parallel_phase: check if phase heading contains "(parallel)"
+is_parallel_phase_test() {
+  local phase_line="$1"
+  echo "$phase_line" | grep -qi '(parallel)' && return 0 || return 1
+}
+
+# collect_phase_tasks: gather unchecked tasks in a phase
+collect_phase_tasks_from() {
+  local plan_file="$1"
+  local target_phase="$2"
+  local in_target=false
+  while IFS= read -r line; do
+    if echo "$line" | grep -q '^## Phase'; then
+      if [ "$line" = "$target_phase" ]; then
+        in_target=true
+      elif $in_target; then
+        break
+      fi
+    fi
+    if $in_target && echo "$line" | grep -q '^\- \[ \]'; then
+      local task_desc
+      task_desc=$(echo "$line" | sed 's/^- \[ \] [0-9]*\. *//' | sed 's/\*//g')
+      local agent_name="${task_desc##* }"
+      agent_name=$(echo "$agent_name" | sed 's/[^a-zA-Z0-9_-]//g')
+      echo "${agent_name}|${task_desc}"
+    fi
+  done < "$plan_file"
+}
+
+DETECTED_PHASE=$(detect_current_phase_from "$PHASE_TEST_DIR/plan.md")
+if [ "$DETECTED_PHASE" = "## Phase 2 — Build (parallel)" ]; then
+  pass "13a: detect_current_phase finds first unchecked phase"
+else
+  fail "13a: detect_current_phase: got '$DETECTED_PHASE'"
+fi
+
+if is_parallel_phase_test "$DETECTED_PHASE"; then
+  pass "13b: is_parallel_phase recognizes (parallel) annotation"
+else
+  fail "13b: is_parallel_phase failed for '$DETECTED_PHASE'"
+fi
+
+# 13c. Collect tasks from parallel phase
+TASKS=$(collect_phase_tasks_from "$PHASE_TEST_DIR/plan.md" "$DETECTED_PHASE")
+TASK_COUNT=$(echo "$TASKS" | wc -l | tr -d '[:space:]')
+if [ "$TASK_COUNT" = "3" ]; then
+  pass "13c: collect_phase_tasks found 3 tasks in parallel phase"
+else
+  fail "13c: collect_phase_tasks: got $TASK_COUNT tasks, expected 3"
+fi
+
+# Verify task agent extraction
+FIRST_AGENT=$(echo "$TASKS" | head -1 | cut -d'|' -f1)
+if [ "$FIRST_AGENT" = "coder" ]; then
+  pass "13d: task agent extraction: '$FIRST_AGENT'"
+else
+  fail "13d: task agent extraction: got '$FIRST_AGENT', expected 'coder'"
+fi
+
+# 13e. Plan with no parallel phases
+cat > "$PHASE_TEST_DIR/plan_serial.md" << 'PHASEEOF'
+# Plan
+**Architecture:** serial
+
+## Phase 1 — Work
+
+- [ ] 1. Write code — **coder**
+- [ ] 2. Review code — **critic**
+PHASEEOF
+
+DETECTED_PHASE=$(detect_current_phase_from "$PHASE_TEST_DIR/plan_serial.md")
+if ! is_parallel_phase_test "$DETECTED_PHASE"; then
+  pass "13e: serial phase not detected as parallel"
+else
+  fail "13e: serial phase incorrectly detected as parallel"
+fi
+
+# 13f. All tasks checked off → empty phase
+cat > "$PHASE_TEST_DIR/plan_done.md" << 'PHASEEOF'
+# Plan
+## Phase 1
+- [x] 1. Done — **coder**
+- [x] 2. Also done — **critic**
+PHASEEOF
+
+DETECTED_PHASE=$(detect_current_phase_from "$PHASE_TEST_DIR/plan_done.md")
+if [ -z "$DETECTED_PHASE" ]; then
+  pass "13f: no unchecked tasks → empty phase detection"
+else
+  fail "13f: all-done plan: got '$DETECTED_PHASE', expected empty"
+fi
+
+# 13g. Phase boundary: tasks in Phase 3 should not leak into Phase 2 collection
+cat > "$PHASE_TEST_DIR/plan_boundary.md" << 'PHASEEOF'
+# Plan
+
+## Phase 1 — Done
+
+- [x] 1. Setup — **coder**
+
+## Phase 2 — Build (parallel)
+
+- [ ] 2. Module A — **coder**
+- [ ] 3. Module B — **coder**
+
+## Phase 3 — Review
+
+- [ ] 4. Final review — **critic**
+PHASEEOF
+
+DETECTED_PHASE=$(detect_current_phase_from "$PHASE_TEST_DIR/plan_boundary.md")
+TASKS=$(collect_phase_tasks_from "$PHASE_TEST_DIR/plan_boundary.md" "$DETECTED_PHASE")
+TASK_COUNT=$(echo "$TASKS" | wc -l | tr -d '[:space:]')
+if [ "$TASK_COUNT" = "2" ]; then
+  pass "13g: phase boundary respected (2 tasks, not 3)"
+else
+  fail "13g: phase boundary: got $TASK_COUNT tasks, expected 2"
+fi
+
+# 13h. Verify ralph-loop.sh has the parallel phase functions
+check "13h: ralph-loop.sh has detect_current_phase" grep -q 'detect_current_phase' "$RALPH_HOME/ralph-loop.sh"
+check "13i: ralph-loop.sh has is_parallel_phase" grep -q 'is_parallel_phase' "$RALPH_HOME/ralph-loop.sh"
+check "13j: ralph-loop.sh has collect_phase_tasks" grep -q 'collect_phase_tasks' "$RALPH_HOME/ralph-loop.sh"
+check "13k: ralph-loop.sh has run_parallel_phase" grep -q 'run_parallel_phase' "$RALPH_HOME/ralph-loop.sh"
+
+rm -rf "$PHASE_TEST_DIR"
+echo ""
+
+# ── Test 14: eval.jsonl output format ────────────────────────
+echo "--- 14. eval.jsonl Output Format ---"
+
+EVAL_TEST_DIR=$(mktemp -d)
+(
+  cd "$EVAL_TEST_DIR"
+
+  # Set up minimal project structure for evaluate_iteration.py.
+  # The script resolves PROJECT_ROOT relative to its own location
+  # (SCRIPT_DIR.parent), so we copy it into the test workspace.
+  git init --quiet
+  git config user.name "test"
+  git config user.email "test@test.com"
+
+  mkdir -p logs scripts
+  cp "$RALPH_HOME/scripts/evaluate_iteration.py" scripts/evaluate_iteration.py
+
+  cat > checkpoint.md << 'CKPT'
+# Checkpoint — eval-test
+
+**Thread:** eval-test
+**Last agent:** coder
+**Status:** testing
+
+## Knowledge State
+
+| Task | Status | Notes |
+|------|--------|-------|
+| 1. First task | done | |
+CKPT
+
+  cat > implementation-plan.md << 'PLAN'
+# Plan
+- [x] 1. First task — **coder**
+- [ ] 2. Second task — **critic**
+PLAN
+
+  # Create a usage.jsonl entry
+  cat > logs/usage.jsonl << 'USAGE'
+{"iteration":1,"timestamp":"2026-03-11T10:00:00Z","thread":"eval-test","agent":"coder","loop_mode":"build","model":"claude-opus-4-6","num_turns":5,"duration_ms":45000,"input_tokens":120000,"cache_read_input_tokens":80000,"cache_creation_input_tokens":10000,"output_tokens":3500,"cost_usd":2.85}
+USAGE
+
+  # Create an initial commit so git diff has something to compare
+  echo "initial" > README.md
+  git add -A && git commit -m "initial" --quiet
+
+  # Simulate changes (like an agent would produce)
+  echo "new code here" > src_module.py
+  git add -A && git commit -m "ralph: iteration 1" --quiet
+
+  # Write a context file and clean up any stale yield file
+  echo "35" > /tmp/ralph-context-pct
+  rm -f /tmp/ralph-yield
+
+  # Run evaluate_iteration.py --dry-run (using local copy so PROJECT_ROOT is correct)
+  EVAL_OUTPUT=$(python3 scripts/evaluate_iteration.py \
+    --iteration 1 \
+    --arch-mode serial \
+    --run-tag test-run-1 \
+    --dry-run 2>/dev/null)
+
+  # Validate the JSON structure matches the spec in evaluation-metrics.md
+  echo "$EVAL_OUTPUT" | python3 -c "
+import sys, json
+
+entry = json.loads(sys.stdin.read().strip())
+
+# Required fields from evaluation-metrics.md
+required_fields = {
+    'timestamp': str,
+    'run_tag': str,
+    'arch_mode': str,
+    'iteration': int,
+    'agent': str,
+    'thread': str,
+    'cost_usd': (int, float),
+    'input_tokens': int,
+    'output_tokens': int,
+    'duration_ms': int,
+    'files_changed': int,
+    'lines_added': int,
+    'lines_removed': int,
+    'language_check_pass': bool,
+    'language_check_issues': int,
+    'journal_check_pass': bool,
+    'journal_check_issues': int,
+    'peak_context_pct': int,
+    'context_yield': bool,
+    'task_completed': bool,
+    'task_name': str,
+}
+
+for field, expected_type in required_fields.items():
+    assert field in entry, f'Missing required field: {field}'
+    if isinstance(expected_type, tuple):
+        assert isinstance(entry[field], expected_type), \
+            f'Field {field}: expected {expected_type}, got {type(entry[field]).__name__} = {entry[field]}'
+    else:
+        assert isinstance(entry[field], expected_type), \
+            f'Field {field}: expected {expected_type.__name__}, got {type(entry[field]).__name__} = {entry[field]}'
+
+# Verify specific values
+assert entry['run_tag'] == 'test-run-1', f'run_tag: {entry[\"run_tag\"]}'
+assert entry['arch_mode'] == 'serial', f'arch_mode: {entry[\"arch_mode\"]}'
+assert entry['iteration'] == 1, f'iteration: {entry[\"iteration\"]}'
+assert entry['agent'] == 'coder', f'agent: {entry[\"agent\"]}'
+assert entry['thread'] == 'eval-test', f'thread: {entry[\"thread\"]}'
+assert entry['cost_usd'] == 2.85, f'cost_usd: {entry[\"cost_usd\"]}'
+assert entry['input_tokens'] == 120000, f'input_tokens: {entry[\"input_tokens\"]}'
+assert entry['output_tokens'] == 3500, f'output_tokens: {entry[\"output_tokens\"]}'
+assert entry['duration_ms'] == 45000, f'duration_ms: {entry[\"duration_ms\"]}'
+
+# Git diff should show 1 file (src_module.py), 1 line added
+assert entry['files_changed'] >= 1, f'files_changed: {entry[\"files_changed\"]}'
+assert entry['lines_added'] >= 1, f'lines_added: {entry[\"lines_added\"]}'
+
+# Context yield should not be triggered
+assert entry['context_yield'] == False, f'context_yield: {entry[\"context_yield\"]}'
+
+print('eval.jsonl format validation passed')
+" || exit 1
+)
+EVAL_TEST_RC=$?
+
+# Clean up the context file we wrote
+rm -f /tmp/ralph-context-pct
+
+if [ "$EVAL_TEST_RC" -eq 0 ]; then
+  pass "14a: eval.jsonl entry has all required fields"
+  pass "14b: eval.jsonl field types match spec (str, int, float, bool)"
+  pass "14c: eval.jsonl values populated from usage.jsonl + git diff"
+else
+  fail "14: eval.jsonl format validation"
+fi
+
+# 14d. Test --dry-run doesn't write to file
+EVAL_TEST_DIR2=$(mktemp -d)
+(
+  cd "$EVAL_TEST_DIR2"
+  git init --quiet
+  git config user.name "test"
+  git config user.email "test@test.com"
+  mkdir -p logs scripts
+  cp "$RALPH_HOME/scripts/evaluate_iteration.py" scripts/evaluate_iteration.py
+  cat > checkpoint.md << 'CKPT'
+# Checkpoint
+**Thread:** dry-run-test
+**Last agent:** scout
+CKPT
+  cat > implementation-plan.md << 'PLAN'
+# Plan
+- [ ] 1. Task — **scout**
+PLAN
+  echo "x" > f.txt
+  git add -A && git commit -m "init" --quiet
+
+  python3 scripts/evaluate_iteration.py \
+    --iteration 1 --arch-mode serial --dry-run \
+    --eval-log "$EVAL_TEST_DIR2/logs/eval.jsonl" > /dev/null 2>&1
+
+  # eval.jsonl should NOT exist (--dry-run)
+  if [ ! -f "$EVAL_TEST_DIR2/logs/eval.jsonl" ]; then
+    exit 0
+  else
+    exit 1
+  fi
+)
+if [ $? -eq 0 ]; then
+  pass "14d: --dry-run does not write eval.jsonl"
+else
+  fail "14d: --dry-run wrote eval.jsonl (should not)"
+fi
+
+# 14e. Test that writing without --dry-run creates eval.jsonl
+(
+  cd "$EVAL_TEST_DIR2"
+  python3 scripts/evaluate_iteration.py \
+    --iteration 1 --arch-mode parallel --run-tag write-test \
+    --eval-log "$EVAL_TEST_DIR2/logs/eval.jsonl" > /dev/null 2>&1
+
+  if [ -f "$EVAL_TEST_DIR2/logs/eval.jsonl" ]; then
+    # Verify it's valid JSONL
+    python3 -c "
+import json
+with open('$EVAL_TEST_DIR2/logs/eval.jsonl') as f:
+    for line in f:
+        entry = json.loads(line.strip())
+        assert entry['arch_mode'] == 'parallel'
+        assert entry['run_tag'] == 'write-test'
+" || exit 1
+    exit 0
+  else
+    exit 1
+  fi
+)
+if [ $? -eq 0 ]; then
+  pass "14e: eval.jsonl written and contains valid JSONL"
+else
+  fail "14e: eval.jsonl write test"
+fi
+
+# 14f. Verify evaluate_iteration.py accepts all expected args
+if python3 "$RALPH_HOME/scripts/evaluate_iteration.py" --help 2>&1 | grep -q '\-\-iteration'; then
+  pass "14f: evaluate_iteration.py --iteration arg exists"
+else
+  fail "14f: evaluate_iteration.py missing --iteration"
+fi
+check "14g: evaluate_iteration.py --arch-mode arg" python3 "$RALPH_HOME/scripts/evaluate_iteration.py" --help 2>&1 grep -q '\-\-arch-mode'
+check "14h: evaluate_iteration.py --run-tag arg" python3 "$RALPH_HOME/scripts/evaluate_iteration.py" --help 2>&1 grep -q '\-\-run-tag'
+
+# 14i. Verify evaluate_run.py exists and has --compare
+check "14i: evaluate_run.py exists" test -f "$RALPH_HOME/scripts/evaluate_run.py"
+if python3 "$RALPH_HOME/scripts/evaluate_run.py" --help 2>&1 | grep -q '\-\-compare'; then
+  pass "14j: evaluate_run.py has --compare flag"
+else
+  fail "14j: evaluate_run.py missing --compare"
+fi
+
+rm -rf "$EVAL_TEST_DIR" "$EVAL_TEST_DIR2"
+echo ""
+
+# ── Test 15: Single-agent mode ───────────────────────────────
+echo "--- 15. Single-Agent Mode ---"
+
+# 15a. Verify prompt-build-single.md exists
+check "15a: prompt-build-single.md exists" test -f "$RALPH_HOME/prompt-build-single.md"
+
+# 15b. Verify it contains key single-agent sections
+if grep -q 'Single-Agent\|single-agent\|single agent' "$RALPH_HOME/prompt-build-single.md" 2>/dev/null; then
+  pass "15b: prompt-build-single.md mentions single-agent mode"
+else
+  fail "15b: prompt-build-single.md missing single-agent reference"
+fi
+
+if grep -q 'all.*tasks\|ALL.*tasks\|task list.*exhausted' "$RALPH_HOME/prompt-build-single.md" 2>/dev/null; then
+  pass "15c: prompt-build-single.md handles all tasks in one session"
+else
+  fail "15c: prompt-build-single.md missing all-tasks handling"
+fi
+
+# 15d. ralph-loop.sh switches to single prompt when ARCH_MODE=single
+if grep -q 'prompt-build-single.md' "$RALPH_HOME/ralph-loop.sh" 2>/dev/null; then
+  pass "15d: ralph-loop.sh references prompt-build-single.md"
+else
+  fail "15d: ralph-loop.sh missing prompt-build-single.md reference"
+fi
+
+# 15e. ralph-loop.sh skips agent detection in single mode
+if grep -q 'single.*skip.*agent\|single-agent.*skip\|CURRENT_AGENT="single"' "$RALPH_HOME/ralph-loop.sh" 2>/dev/null; then
+  pass "15e: ralph-loop.sh skips agent detection for single mode"
+else
+  fail "15e: ralph-loop.sh missing single-mode agent skip"
+fi
+
+# 15f. Verify prompt-build.md documents Architecture awareness
+if grep -q 'Architecture' "$RALPH_HOME/prompt-build.md" 2>/dev/null; then
+  pass "15f: prompt-build.md documents Architecture field"
+else
+  fail "15f: prompt-build.md missing Architecture documentation"
+fi
+
+# 15g. Verify prompt-plan.md has parallelism analysis
+if grep -q 'parallel\|Architecture' "$RALPH_HOME/prompt-plan.md" 2>/dev/null; then
+  pass "15g: prompt-plan.md includes parallelism/Architecture guidance"
+else
+  fail "15g: prompt-plan.md missing parallelism guidance"
+fi
+
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────
