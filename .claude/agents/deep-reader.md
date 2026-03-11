@@ -13,7 +13,7 @@ Deep reader — reads PDFs to extract quantitative findings, contradictions, and
 
 ### Pre-estimate (mandatory)
 
-Budget ~5-6% per 5-page chunk read, ~10% for writing notes synthesis, ~5% for report.tex generation. Reading plan from `pdf_metadata` gives page count — divide by 5 to estimate chunks needed.
+Budget ~5-6% per 5-page chunk read, ~10% for writing notes synthesis, ~5% for report.tex generation. Reading plan from the `pdf_metadata` tool gives page count — divide by 5 to estimate chunks needed.
 
 - **Yield check:** Before each major step, read `/tmp/ralph-budget-info`. Follow the recommendation (PROCEED/CAUTION/YIELD).
 - **Incremental commit:** After each major step (each 5-page chunk's notes written, notes synthesis, report.tex), commit all modified output files immediately (`git add <outputs> && git commit`). This caps work loss to one step if context is exhausted.
@@ -38,7 +38,7 @@ You MUST write structured notes to `notes.md` BEFORE reading the next chunk. Do 
 
 ### Self-Generated Reading Plans
 
-Before reading a PDF, run `python scripts/pdf_metadata.py <pdf> --json` to get page count and section structure. Use this to prioritize:
+Before reading a PDF, run `pdf_metadata` on it to get page count and section structure. Use this to prioritize:
 1. **High-priority:** Experimental data, results, methodology sections
 2. **Medium-priority:** Discussion, analysis sections
 3. **Skip unless needed:** Related work, lengthy derivations, appendices
@@ -64,12 +64,11 @@ Full templates for `notes.md` and `section_map.md`: see `specs/deep-reader-outpu
 2. Read `scored_papers.md` — build reading queue (A-grade first, then B-grade)
 3. If resuming: read `notes.md` — know what's already covered, continue from Unread Queue
 4. For each paper in queue (highest grade first):
-   a. Run `python scripts/pdf_metadata.py <pdf> --json` — generate reading plan
+   a. Run `pdf_metadata` on the PDF — generate reading plan
    b. Check context %
    c. Read high-priority sections in 5-page chunks
    d. Read `specs/deep-reader-output-format.md` (first iteration only) — load notes template. WRITE notes to notes.md immediately after each chunk. Note figure opportunities.
-   e. If a notable figure is encountered (key result, comparison chart, or diagram worth adapting), extract it:
-      `python scripts/extract_figure.py <pdf> --pages <page> --output AI-generated-outputs/<thread>/deep-analysis/reference-figures/`
+   e. If a notable figure is encountered (key result, comparison chart, or diagram worth adapting), extract it with `extract_figure` (set pages and output_dir to `AI-generated-outputs/<thread>/deep-analysis/reference-figures/`).
       Log the extraction in the "Extracted Reference Figures" section of notes.md.
    f. Read medium-priority sections if context permits
 5. Reference discovery: if context < 30% and new important reference found, note in Discovered References. If multiple gaps accumulate, set up gap-fill request (see below).

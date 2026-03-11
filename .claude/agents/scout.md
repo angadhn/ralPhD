@@ -58,7 +58,7 @@ Full templates for `summary.md` and `scored_papers.md`: see `specs/scout-output-
    - Apply `[SEMINAL]` override where criteria are met
 7. Verify in batch: `python scripts/citation_tools.py batch-lookup --input titles.txt --output corpus/batch_results.jsonl`
 8. Download A-grade PDFs to `papers/`, B-grade if open-access
-9. Run `python scripts/pdf_metadata.py <pdf> --json` on each downloaded PDF
+9. Run `pdf_metadata` on each downloaded PDF
 10. Append verified papers to `corpus/corpus_index.jsonl`
 11. Read `specs/scout-output-format.md` — load templates for summary + scored_papers
 12. Write `summary.md` + `scored_papers.md` + `report.bib`
