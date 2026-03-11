@@ -370,9 +370,19 @@ while true; do
     fi
     echo "  Agent detected: $CURRENT_AGENT"
   else
-    echo "  No task found in checkpoint.md — nothing to do."
-    echo "  Run 'bash \"$RALPH_HOME/ralph-loop.sh\" plan' to plan next steps,"
-    echo "  or 'bash \"$RALPH_HOME/scripts/archive.sh\"' to archive."
+    # Check if this is a completed plan (all tasks checked off) vs empty template
+    CHECKED=$(grep -c '^\- \[x\]' implementation-plan.md 2>/dev/null || echo 0)
+    UNCHECKED=$(grep -c '^\- \[ \]' implementation-plan.md 2>/dev/null || echo 0)
+    if [ "$CHECKED" -gt 0 ] && [ "$UNCHECKED" -eq 0 ]; then
+      echo "  All tasks complete — auto-archiving thread."
+      bash "${RALPH_HOME}/scripts/archive.sh"
+      echo ""
+      echo "=== Thread archived. Loop complete. ==="
+    else
+      echo "  No task found in checkpoint.md — nothing to do."
+      echo "  Run 'bash \"$RALPH_HOME/ralph-loop.sh\" plan' to plan next steps,"
+      echo "  or 'bash \"$RALPH_HOME/scripts/archive.sh\"' to archive."
+    fi
     break
   fi
 
