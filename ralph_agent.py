@@ -6,6 +6,9 @@ Replaces `claude -p` inside ralph-loop.sh. Loads an agent .md file as the
 system prompt, registers only the tools that agent needs, and loops until
 the model stops requesting tools.
 
+Each tool is a single unit: schema + handler colocated (à la ghuntley's
+coding-agent pattern). Adding a tool means adding one dict entry.
+
 Usage:
   python ralph_agent.py --agent paper-writer --task "Write the methods section"
   python ralph_agent.py --agent critic --task "$(cat prompt-build.md)"
@@ -35,9 +38,101 @@ def load_env():
 
 load_env()
 
-# ── Tool definitions ────────────────────────────────────────────
 
-TOOL_DEFS = {
+# ── Tool handlers ──────────────────────────────────────────────
+
+def _run_cmd(cmd):
+    """Run a subprocess, return combined stdout+stderr."""
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    output = result.stdout + result.stderr
+    return output if output.strip() else f"(exit code {result.returncode}, no output)"
+
+
+def _handle_check_language(inp):
+    cmd = ["python3", "scripts/check_language.py"]
+    if inp.get("strict"):
+        cmd.append("--strict")
+    cmd.append(inp["file_path"])
+    return _run_cmd(cmd)
+
+
+def _handle_read_file(inp):
+    try:
+        with open(inp["file_path"], "r") as f:
+            return f.read()
+    except Exception as e:
+        return f"Error reading file: {e}"
+
+
+def _handle_write_file(inp):
+    try:
+        os.makedirs(os.path.dirname(inp["file_path"]) or ".", exist_ok=True)
+        with open(inp["file_path"], "w") as f:
+            f.write(inp["content"])
+        return f"Wrote {len(inp['content'])} chars to {inp['file_path']}"
+    except Exception as e:
+        return f"Error writing file: {e}"
+
+
+def _handle_bash(inp):
+    result = subprocess.run(
+        ["bash", "-c", inp["command"]],
+        capture_output=True, text=True, timeout=120,
+    )
+    output = result.stdout + result.stderr
+    if result.returncode != 0:
+        return f"(exit code {result.returncode})\n{output}"
+    return output if output.strip() else "(no output)"
+
+
+def _handle_check_journal(inp):
+    cmd = ["python3", "scripts/check_journal.py"]
+    if inp.get("pub_reqs"):
+        cmd.extend(["--pub-reqs", inp["pub_reqs"]])
+    cmd.append(inp["sections_dir"])
+    return _run_cmd(cmd)
+
+
+def _handle_check_figure(inp):
+    cmd = ["python3", "scripts/check_figure.py", "--json"]
+    if inp.get("pub_reqs"):
+        cmd.extend(["--pub-reqs", inp["pub_reqs"]])
+    cmd.append(inp["figures_dir"])
+    return _run_cmd(cmd)
+
+
+def _handle_citation_lint(inp):
+    cmd = ["python3", "scripts/citation_tools.py", "lint",
+           "--bib-dir", inp["bib_dir"],
+           "--output", "/dev/stdout"]
+    return _run_cmd(cmd)
+
+
+def _handle_pdf_metadata(inp):
+    cmd = ["python3", "scripts/pdf_metadata.py", "--json", inp["pdf_path"]]
+    return _run_cmd(cmd)
+
+
+def _handle_extract_figure(inp):
+    if inp.get("list_only"):
+        cmd = ["python3", "scripts/extract_figure.py", "--list", inp["pdf_path"]]
+    elif inp.get("render_page"):
+        cmd = ["python3", "scripts/extract_figure.py", inp["pdf_path"],
+               "--render-page", str(inp["render_page"]),
+               "--output", inp.get("output_dir", "figures/")]
+        if inp.get("dpi"):
+            cmd.extend(["--dpi", str(inp["dpi"])])
+    else:
+        cmd = ["python3", "scripts/extract_figure.py", inp["pdf_path"],
+               "--output", inp.get("output_dir", "figures/")]
+        if inp.get("pages"):
+            cmd.extend(["--pages", inp["pages"]])
+    return _run_cmd(cmd)
+
+
+# ── Tool definitions (schema + handler colocated) ──────────────
+
+TOOLS = {
     "check_language": {
         "name": "check_language",
         "description": (
@@ -48,11 +143,12 @@ TOOL_DEFS = {
         "input_schema": {
             "type": "object",
             "properties": {
-                "file_path": {"type": "string", "description": "Path to the LaTeX file to check"},
+                "file_path": {"type": "string", "description": "Path to the LaTeX or Markdown file to check"},
                 "strict": {"type": "boolean", "description": "Fail on warnings too (default false)"},
             },
             "required": ["file_path"],
         },
+        "function": _handle_check_language,
     },
     "read_file": {
         "name": "read_file",
@@ -64,6 +160,7 @@ TOOL_DEFS = {
             },
             "required": ["file_path"],
         },
+        "function": _handle_read_file,
     },
     "write_file": {
         "name": "write_file",
@@ -76,6 +173,7 @@ TOOL_DEFS = {
             },
             "required": ["file_path", "content"],
         },
+        "function": _handle_write_file,
     },
     "bash": {
         "name": "bash",
@@ -87,6 +185,7 @@ TOOL_DEFS = {
             },
             "required": ["command"],
         },
+        "function": _handle_bash,
     },
     "check_journal": {
         "name": "check_journal",
@@ -103,6 +202,7 @@ TOOL_DEFS = {
             },
             "required": ["sections_dir"],
         },
+        "function": _handle_check_journal,
     },
     "check_figure": {
         "name": "check_figure",
@@ -118,6 +218,7 @@ TOOL_DEFS = {
             },
             "required": ["figures_dir"],
         },
+        "function": _handle_check_figure,
     },
     "citation_lint": {
         "name": "citation_lint",
@@ -132,6 +233,7 @@ TOOL_DEFS = {
             },
             "required": ["bib_dir"],
         },
+        "function": _handle_citation_lint,
     },
     "pdf_metadata": {
         "name": "pdf_metadata",
@@ -147,6 +249,7 @@ TOOL_DEFS = {
             },
             "required": ["pdf_path"],
         },
+        "function": _handle_pdf_metadata,
     },
     "extract_figure": {
         "name": "extract_figure",
@@ -166,6 +269,7 @@ TOOL_DEFS = {
             },
             "required": ["pdf_path"],
         },
+        "function": _handle_extract_figure,
     },
 }
 
@@ -183,95 +287,19 @@ AGENT_TOOLS = {
 DEFAULT_TOOLS = ["read_file", "write_file", "bash"]
 
 
-# ── Tool execution ─────────────────────────────────────────────
+# ── Tool dispatch ──────────────────────────────────────────────
+
+def _api_schema(tool: dict) -> dict:
+    """Strip function from tool def for the API payload."""
+    return {k: v for k, v in tool.items() if k != "function"}
+
 
 def execute_tool(name: str, tool_input: dict) -> str:
-    if name == "check_language":
-        cmd = ["python3", "scripts/check_language.py"]
-        if tool_input.get("strict"):
-            cmd.append("--strict")
-        cmd.append(tool_input["file_path"])
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        output = result.stdout + result.stderr
-        return output if output.strip() else f"(exit code {result.returncode}, no output)"
-
-    elif name == "read_file":
-        try:
-            with open(tool_input["file_path"], "r") as f:
-                return f.read()
-        except Exception as e:
-            return f"Error reading file: {e}"
-
-    elif name == "write_file":
-        try:
-            os.makedirs(os.path.dirname(tool_input["file_path"]) or ".", exist_ok=True)
-            with open(tool_input["file_path"], "w") as f:
-                f.write(tool_input["content"])
-            return f"Wrote {len(tool_input['content'])} chars to {tool_input['file_path']}"
-        except Exception as e:
-            return f"Error writing file: {e}"
-
-    elif name == "bash":
-        result = subprocess.run(
-            ["bash", "-c", tool_input["command"]],
-            capture_output=True, text=True, timeout=120,
-        )
-        output = result.stdout + result.stderr
-        if result.returncode != 0:
-            return f"(exit code {result.returncode})\n{output}"
-        return output if output.strip() else "(no output)"
-
-    elif name == "check_journal":
-        cmd = ["python3", "scripts/check_journal.py"]
-        if tool_input.get("pub_reqs"):
-            cmd.extend(["--pub-reqs", tool_input["pub_reqs"]])
-        cmd.append(tool_input["sections_dir"])
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        output = result.stdout + result.stderr
-        return output if output.strip() else f"(exit code {result.returncode}, no output)"
-
-    elif name == "check_figure":
-        cmd = ["python3", "scripts/check_figure.py", "--json"]
-        if tool_input.get("pub_reqs"):
-            cmd.extend(["--pub-reqs", tool_input["pub_reqs"]])
-        cmd.append(tool_input["figures_dir"])
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        output = result.stdout + result.stderr
-        return output if output.strip() else f"(exit code {result.returncode}, no output)"
-
-    elif name == "citation_lint":
-        cmd = ["python3", "scripts/citation_tools.py", "lint",
-               "--bib-dir", tool_input["bib_dir"],
-               "--output", "/dev/stdout"]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        output = result.stdout + result.stderr
-        return output if output.strip() else f"(exit code {result.returncode}, no output)"
-
-    elif name == "pdf_metadata":
-        cmd = ["python3", "scripts/pdf_metadata.py", "--json", tool_input["pdf_path"]]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        output = result.stdout + result.stderr
-        return output if output.strip() else f"(exit code {result.returncode}, no output)"
-
-    elif name == "extract_figure":
-        if tool_input.get("list_only"):
-            cmd = ["python3", "scripts/extract_figure.py", "--list", tool_input["pdf_path"]]
-        elif tool_input.get("render_page"):
-            cmd = ["python3", "scripts/extract_figure.py", tool_input["pdf_path"],
-                   "--render-page", str(tool_input["render_page"]),
-                   "--output", tool_input.get("output_dir", "figures/")]
-            if tool_input.get("dpi"):
-                cmd.extend(["--dpi", str(tool_input["dpi"])])
-        else:
-            cmd = ["python3", "scripts/extract_figure.py", tool_input["pdf_path"],
-                   "--output", tool_input.get("output_dir", "figures/")]
-            if tool_input.get("pages"):
-                cmd.extend(["--pages", tool_input["pages"]])
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        output = result.stdout + result.stderr
-        return output if output.strip() else f"(exit code {result.returncode}, no output)"
-
-    return f"Unknown tool: {name}"
+    """Dispatch a tool call to its colocated handler."""
+    tool = TOOLS.get(name)
+    if not tool:
+        return f"Unknown tool: {name}"
+    return tool["function"](tool_input)
 
 
 # ── Agent loop ─────────────────────────────────────────────────
@@ -320,7 +348,7 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
 
     # Build tool list for this agent
     tool_names = AGENT_TOOLS.get(agent_name, DEFAULT_TOOLS)
-    tools = [TOOL_DEFS[t] for t in tool_names]
+    tools = [_api_schema(TOOLS[t]) for t in tool_names]
 
     print(f"Agent: {agent_name}", file=sys.stderr)
     print(f"Tools: {', '.join(tool_names)}", file=sys.stderr)
