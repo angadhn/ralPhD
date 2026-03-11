@@ -76,6 +76,11 @@ Record the choice in `implementation-plan.md` as a frontmatter field
 (`**Autonomy:** autopilot | stage-gates | step-by-step`) so build mode
 can enforce it.
 
+Also set the **Architecture** field:
+(`**Architecture:** serial | parallel | auto`). Set to `parallel` if
+any phases have independent agents (see Step 5), `serial` if all phases
+are strictly sequential, or `auto` to let build mode decide.
+
 For stage gates: ask which transitions warrant a pause. Common gates:
 - After literature review, before writing begins
 - After first draft, before editing passes
@@ -115,3 +120,29 @@ IMPORTANT: Also seed `checkpoint.md` with the thread name and first
 task (if it isn't already seeded from template). Build mode reads
 `checkpoint.md` to detect the next agent — if it's still a template,
 build mode cannot start.
+
+## Step 5 — Parallelism analysis
+
+After generating the plan, analyze agent dependencies within each phase:
+
+1. For each `## Phase` heading, examine the tasks within it.
+2. Two tasks are **independent** if neither reads files that the other writes,
+   and they don't modify the same state files (checkpoint.md is excluded —
+   each agent updates only its own task entry).
+3. If all tasks in a phase are independent, mark the phase heading with
+   `(parallel)` suffix: `## Phase 3 — Critical review (parallel)`.
+4. If tasks have dependencies (e.g., one generates data another analyzes),
+   leave the phase unmarked (serial execution).
+
+Common parallel-safe patterns:
+- Multiple critics reviewing different sections simultaneously
+- Scout + research-coder working on independent sub-problems
+- Multiple deep-readers analyzing different papers
+
+Common serial-required patterns:
+- Writer → editor → reviewer (each depends on prior output)
+- Scout → deep-reader (reader needs scout's corpus)
+- Any task that reads checkpoint.md to determine what to do next
+
+Set `**Architecture:** parallel` if any phases are annotated `(parallel)`.
+Set `**Architecture:** serial` if no phases qualify.
