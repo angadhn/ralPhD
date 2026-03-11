@@ -17,3 +17,12 @@
 
 ## Iteration 8 — 2026-03-11
 - Track tools/download.py in git (was incorrectly gitignored)
+
+## Iteration 1 — 2026-03-11
+- Update checkpoint and plan: Task 1 (RALPH_HOME in ralph-loop.sh) done
+
+## Iteration 2 — 2026-03-11
+- Update checkpoint and plan: Task 2 (RALPH_HOME in ralph_agent.py) done
+
+## Iteration 3 — 2026-03-11
+- Update checkpoint and plan: Task 3 (_scripts_dir in tools/*.py) done
