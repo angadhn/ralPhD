@@ -15,7 +15,11 @@ echo "Initializing ralph workspace: $WORKSPACE"
 echo "Framework: $RALPH_HOME"
 
 # --- Directories ---
-for dir in ai-generated-outputs papers corpus sections references figures logs archive; do
+# inputs/ — user-provided context: reviewer feedback, prior submissions,
+#            venue-specific guidelines, style files, supplementary material.
+#            Agents (editor, paper-writer, coherence-reviewer) read from here
+#            but never write to it. Only humans populate this directory.
+for dir in ai-generated-outputs papers corpus sections references figures logs archive inputs; do
   mkdir -p "$WORKSPACE/$dir"
 done
 
@@ -38,6 +42,31 @@ cp -n "$RALPH_HOME/templates/checkpoint.md" "$WORKSPACE/checkpoint.md" 2>/dev/nu
 cp -n "$RALPH_HOME/templates/implementation-plan.md" "$WORKSPACE/implementation-plan.md" 2>/dev/null || true
 [ -f "$WORKSPACE/inbox.md" ] || touch "$WORKSPACE/inbox.md"
 [ -f "$WORKSPACE/iteration_count" ] || echo "0" > "$WORKSPACE/iteration_count"
+
+# --- inputs/ README (first-init only) ---
+if [ ! -f "$WORKSPACE/inputs/README.md" ]; then
+  cat > "$WORKSPACE/inputs/README.md" << 'INPUTS_README'
+# inputs/
+
+Human-provided context for the writing pipeline. Place files here for agents to read.
+
+## What goes here
+
+| File type | Example | Used by |
+|-----------|---------|---------|
+| Reviewer feedback | `reviews-round1.pdf`, `reviewer2-comments.txt` | editor, paper-writer |
+| Prior submissions | `v1-submitted.pdf` | editor, coherence-reviewer |
+| Venue guidelines | `icml2025-style-guide.pdf`, `author-kit.zip` | editor, paper-writer |
+| Style files | `icml2025.sty`, `neurips_2025.sty` | paper-writer |
+| Supplementary notes | `advisor-notes.md` | all agents |
+
+## Convention
+
+- Agents read from this directory but never write to it.
+- Only humans populate `inputs/`.
+- Filenames should be descriptive — agents use them to decide relevance.
+INPUTS_README
+fi
 
 # --- .ralphrc ---
 echo "RALPH_HOME=$RALPH_HOME" > "$WORKSPACE/.ralphrc"
