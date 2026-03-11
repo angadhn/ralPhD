@@ -8,8 +8,9 @@ set -euo pipefail
 #   moves checkpoint.md and implementation-plan.md there, copies templates back to root,
 #   and resets iteration_count.
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$REPO_ROOT"
+# Framework home — defaults to script's parent dir (backward compatible).
+# In RALPH_HOME mode, templates come from the framework; project files stay in CWD.
+RALPH_HOME="${RALPH_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
 
 # --- Parse checkpoint.md for thread name and date ---
 if [ ! -f checkpoint.md ]; then
@@ -40,9 +41,9 @@ if [ -d "$ARCHIVE_DIR" ]; then
 fi
 
 # --- Verify templates exist ---
-if [ ! -f templates/checkpoint.md ] || [ ! -f templates/implementation-plan.md ]; then
+if [ ! -f "$RALPH_HOME/templates/checkpoint.md" ] || [ ! -f "$RALPH_HOME/templates/implementation-plan.md" ]; then
   echo "Error: templates/ directory missing required files" >&2
-  echo "Expected: templates/checkpoint.md and templates/implementation-plan.md" >&2
+  echo "Expected: $RALPH_HOME/templates/checkpoint.md and $RALPH_HOME/templates/implementation-plan.md" >&2
   exit 1
 fi
 
@@ -59,8 +60,8 @@ fi
 echo "Archived to $ARCHIVE_DIR/"
 
 # --- Restore blank templates ---
-cp templates/checkpoint.md checkpoint.md
-cp templates/implementation-plan.md implementation-plan.md
+cp "$RALPH_HOME/templates/checkpoint.md" checkpoint.md
+cp "$RALPH_HOME/templates/implementation-plan.md" implementation-plan.md
 
 echo "Restored blank templates to root"
 
