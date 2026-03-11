@@ -3,7 +3,7 @@
 **Thread:** ralph-as-engine
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 1 in progress (task 3 done)
+**Status:** Phase 1 in progress (tasks 3–4 done, task 5 next)
 
 ## Knowledge State
 
@@ -12,7 +12,7 @@
 | 1. Archive all per-thread files | done | archive.sh now handles agent outputs, reflections, inbox |
 | 2. Audit for other stale files | done | CHANGELOG.md archived+reset, /tmp/ralph-* cleaned |
 | 3. GitHub Actions workflow | done | `.github/workflows/ralph-run.yml` — workflow_dispatch with 7 inputs |
-| 4. .ralph init step | pending | template copying for new repos (already partially in workflow step 5) |
+| 4. .ralph init step | done | `init-project.sh --ci` copies instead of symlinking; workflow step injects thread/prompt/autonomy |
 | 5. Local workflow test | pending | verify with act or test repo |
 | 6. ralph-loop.sh path audit | pending | RALPH_HOME separation |
 | 7. Agent prompt path audit | pending | specs/templates via RALPH_HOME |
@@ -25,10 +25,8 @@
 
 ## Last Reflection
 
-Task 3 completed: Created `.github/workflows/ralph-run.yml` with workflow_dispatch trigger. The workflow accepts thread, prompt, autonomy, target_repo, target_ref, max_iterations, and loop_mode inputs. It checks out ralPhD as RALPH_HOME and the target project as workspace, runs init-project.sh if needed, writes the prompt to inbox.md, and runs ralph-loop.sh in pipe mode. Outputs uploaded as artifacts with job summary.
-
-Note: Task 4 (init step) is largely already handled by step 5 of the workflow ("Initialize workspace with ralph") which calls init-project.sh. May be a quick task or can be merged.
+Tasks 3–4 completed in one iteration. The workflow is structurally complete: dual checkout (engine + workspace), CI-aware init, pipe-mode ralph-loop, artifact upload, job summary. Task 5 (local test) will need `act` or a test repo to verify the full pipeline. After task 5, we hit the Phase 1→2 stage gate.
 
 ## Next Task
 
-4. Add a `.ralph` init step to the workflow — **coder**
+5. Test workflow locally with `act` or a test repo — **coder**
