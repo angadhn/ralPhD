@@ -49,10 +49,40 @@ def _handle_check_figure(inp):
 
 
 def _handle_citation_lint(inp):
+    report_path = os.path.join(inp["bib_dir"], "citation_verification_report.md")
     cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "lint",
            "--bib-dir", inp["bib_dir"],
-           "--output", "/dev/stdout"]
-    return _run_cmd(cmd)
+           "--output", report_path]
+    _run_cmd(cmd)
+
+    # Return summary only (counts + flagged entries), not the full report
+    summary_lines = []
+    counts = {"VERIFIED": 0, "LIKELY": 0, "SUSPICIOUS": 0, "UNVERIFIED": 0}
+    flagged = []
+    try:
+        with open(report_path) as f:
+            for line in f:
+                line_s = line.strip()
+                for status in counts:
+                    if status in line_s:
+                        counts[status] += line_s.count(status)
+                if "SUSPICIOUS" in line_s or "UNVERIFIED" in line_s:
+                    flagged.append(line_s)
+    except FileNotFoundError:
+        return "(citation_lint produced no report file)"
+
+    summary_lines.append("Citation lint summary:")
+    for status, count in counts.items():
+        summary_lines.append(f"  {status}: {count}")
+    if flagged:
+        summary_lines.append("")
+        summary_lines.append("Flagged entries:")
+        for entry in flagged[:20]:  # cap at 20 to avoid bloating context
+            summary_lines.append(f"  {entry}")
+        if len(flagged) > 20:
+            summary_lines.append(f"  ... and {len(flagged) - 20} more")
+    summary_lines.append(f"\nFull report: {report_path}")
+    return "\n".join(summary_lines)
 
 
 def _handle_citation_lookup(inp):

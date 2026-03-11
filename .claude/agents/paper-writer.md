@@ -58,7 +58,7 @@ checkpoint.md                        # Updated Knowledge State + Next Task
 
 `cited_tracker.jsonl` — one line per cited DOI:
 ```json
-{"doi": "10.xxxx/xxxxx", "section": "2.1", "role": "primary_evidence"}
+{"doi": "10.xxxx/xxxxx", "section": "2.1", "role": "primary_evidence", "claim": "Fracture toughness scales with grain boundary density under cyclic loading."}
 ```
 
 Full `outline.md` template: see `specs/paper-writer-output-format.md` (read at step 2d).
@@ -90,7 +90,7 @@ Full `outline.md` template: see `specs/paper-writer-output-format.md` (read at s
    - Place figures per outline *(write mode)*
    - Apply only approved changes, preserve paragraph structure where possible *(revise mode)*
 8. Run commit gates: `check_language` on the section, `citation_lint` on references/.
-9. Update `references/cited_tracker.jsonl` with DOIs cited in this section
+9. Update `references/cited_tracker.jsonl` with DOIs cited in this section. For each entry, populate the `claim` field with the specific claim the citation supports in this subsection (one sentence, precise).
 10. Update `checkpoint.md` — set Next Task to `STYLE-CHECK critic` (triggers style review of this section)
 11. Commit all outputs. Yield — critic runs style check before next section.
 

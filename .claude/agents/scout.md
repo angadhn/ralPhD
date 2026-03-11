@@ -56,7 +56,7 @@ Full templates for `summary.md` and `scored_papers.md`: see `specs/scout-output-
    - `score = (relevance * 0.6) + (citation_signal * 0.2) + (recency * 0.2)`
    - Grade: A >= 0.7, B >= 0.4, C < 0.4
    - Apply `[SEMINAL]` override where criteria are met
-7. Verify in batch: `python scripts/citation_tools.py batch-lookup --input titles.txt --output corpus/batch_results.jsonl`
+7. Verify in batch: use the `citation_lookup` tool with `input_file` set to `titles.txt` (batch mode)
 8. Download A-grade PDFs to `papers/`, B-grade if open-access
 9. Run `pdf_metadata` on each downloaded PDF
 10. Append verified papers to `corpus/corpus_index.jsonl`

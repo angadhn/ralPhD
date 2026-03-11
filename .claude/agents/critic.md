@@ -71,7 +71,8 @@ Full `HUMAN_REVIEW_NEEDED.md` templates (all 4 modes): see `specs/critic-output-
    b. Run `check_language` on the section file
    c. Read `specs/writing-style.md`
    d. Check claim calibration: match modal verb strength to evidence
-   e. Read `specs/critic-output-format.md` — load template. Append "Style Check — [Section Name]" section to `HUMAN_REVIEW_NEEDED.md`
+   e. Cross-check `references/cited_tracker.jsonl` claims against deep-reader's `notes.md`: for each `claim` field in cited_tracker entries for this section, verify the claim is supported by the deep-reader's notes. Flag discrepancies as `[CLAIM-SOURCE MISMATCH]` in `HUMAN_REVIEW_NEEDED.md`.
+   f. Read `specs/critic-output-format.md` — load template. Append "Style Check — [Section Name]" section to `HUMAN_REVIEW_NEEDED.md`
 4. **Journal compliance mode:**
    a. Run `check_journal` on sections/ with pub-reqs specs/publication-requirements.md
    b. Parse JSON output — extract word counts, page estimate, bib issues, pass/fail

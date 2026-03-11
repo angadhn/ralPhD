@@ -459,7 +459,8 @@ while true; do
            cache_read_input_tokens: .usage.cache_read_input_tokens,
            cache_creation_input_tokens: .usage.cache_creation_input_tokens,
            output_tokens: .usage.output_tokens,
-           cost_usd: .total_cost_usd}
+           cost_usd: .total_cost_usd,
+           tools_called: (.tools_called // [])}
         end
       ' /tmp/ralph-output.json >> "$USAGE_LOG" 2>/dev/null \
         && echo "  Usage logged to $USAGE_LOG" \

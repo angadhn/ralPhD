@@ -137,6 +137,7 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
     total_output = 0
     total_cache_create = 0
     total_cache_read = 0
+    tools_called = []
 
     while True:
         # Retry transient API errors (rate limit, overload, network).
@@ -193,7 +194,11 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
                 print(block.text)
             elif block.type == "tool_use":
                 print(f"  [tool] {block.name}({json.dumps(block.input, indent=None)})", file=sys.stderr)
-                result = execute_tool(block.name, block.input)
+                tools_called.append(block.name)
+                try:
+                    result = execute_tool(block.name, block.input)
+                except Exception as e:
+                    result = f"Tool error: {type(e).__name__}: {e}"
                 result = truncate_result(result)
                 print(f"  [result] {result[:200]}{'...' if len(result) > 200 else ''}", file=sys.stderr)
                 tool_results.append({
@@ -211,11 +216,29 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
 
     duration_ms = int(_time.time() * 1000) - start_ms
 
+    # Compute cost from token usage
+    # Pricing per million tokens (as of 2025-05)
+    _PRICING = {
+        "claude-opus-4-6":   {"input": 15.0, "output": 75.0, "cache_read": 1.5,  "cache_create": 18.75},
+        "claude-sonnet-4-6": {"input": 3.0,  "output": 15.0, "cache_read": 0.3,  "cache_create": 3.75},
+        "claude-haiku-4-5":  {"input": 0.8,  "output": 4.0,  "cache_read": 0.08, "cache_create": 1.0},
+    }
+    prices = _PRICING.get(model, _PRICING["claude-sonnet-4-6"])
+    total_cost_usd = round(
+        (total_input * prices["input"]
+         + total_output * prices["output"]
+         + total_cache_read * prices["cache_read"]
+         + total_cache_create * prices["cache_create"]) / 1_000_000,
+        6,
+    )
+
     # Write usage JSON compatible with ralph-loop.sh's jq parsing
     usage = {
         "is_error": False,
         "num_turns": num_turns,
         "duration_ms": duration_ms,
+        "total_cost_usd": total_cost_usd,
+        "tools_called": tools_called,
         "result": response.content[0].text if response.content and response.content[0].type == "text" else "",
         "usage": {
             "input_tokens": total_input,
@@ -244,7 +267,7 @@ def main():
     parser = argparse.ArgumentParser(description="Ralph agent runner")
     parser.add_argument("--agent", required=True, help="Agent name (e.g., paper-writer)")
     parser.add_argument("--task", required=True, help="Task prompt (or - to read from stdin)")
-    parser.add_argument("--model", default=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
+    parser.add_argument("--model", default=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
                         help="Model to use")
     parser.add_argument("--max-tokens", type=int, default=None, help="Max output tokens (default: from context-budgets.json or 8096)")
     parser.add_argument("--output-json", help="Write usage JSON to this path (compatible with ralph-loop.sh)")

@@ -36,6 +36,9 @@
 ### Writing Style Violations
 - [Specific violations of specs/writing-style.md rules]
 
+### Claim-Source Mismatches
+- [CLAIM-SOURCE MISMATCH] DOI [doi], Section [N.M]: cited_tracker claims "[claim text]" but deep-reader notes [do not mention this / state something different: "[what notes say]"]
+
 ### Verdict: [PASS / REVISE]
 ```
 
