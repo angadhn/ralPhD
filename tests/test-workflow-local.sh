@@ -9,6 +9,8 @@ set -euo pipefail
 #   3. RALPH_HOME resolution in ralph-loop.sh
 #   4. Agent detection from checkpoint.md
 #   5. Workflow YAML structure
+#   6. Idempotent re-init
+#   7. Path context preamble (RALPH_HOME separation)
 #
 # Usage: bash tests/test-workflow-local.sh
 
@@ -254,6 +256,49 @@ echo "--- 6. Idempotent Re-init ---"
 echo "custom content" > "$WORKSPACE/checkpoint.md"
 RALPH_HOME="$RALPH_HOME" bash "$RALPH_HOME/scripts/init-project.sh" --ci "$WORKSPACE" > /dev/null
 check "checkpoint.md preserved on re-init" grep -q "custom content" "$WORKSPACE/checkpoint.md"
+echo ""
+
+# ── Test 7: Path context preamble ─────────────────────────────
+echo "--- 7. Path Context Preamble ---"
+
+# Test build_path_preamble in ralph_agent.py
+if python3 -c "
+import sys, os
+from pathlib import Path
+
+# Add RALPH_HOME to sys.path so we can import
+sys.path.insert(0, '$RALPH_HOME')
+from ralph_agent import build_path_preamble
+
+# Test 1: Same dir = no preamble
+cwd = Path.cwd()
+result = build_path_preamble(cwd)
+assert result == '', f'Expected empty for same dir, got: {repr(result)}'
+
+# Test 2: Different dir = preamble with both paths
+rh = Path('/opt/ralphd-framework')
+result = build_path_preamble(rh)
+assert '## Path Context' in result, 'Missing Path Context header'
+assert 'RALPH_HOME' in result, 'Missing RALPH_HOME reference'
+assert '/opt/ralphd-framework' in result, 'Missing framework path'
+assert 'specs/' in result, 'Missing specs/ in framework files list'
+assert 'templates/' in result, 'Missing templates/ in framework files list'
+assert 'checkpoint.md' in result, 'Missing checkpoint.md in project files list'
+assert 'implementation-plan.md' in result, 'Missing implementation-plan.md in project files'
+
+# Test 3: agent-base.md has Path Resolution section
+base_path = Path('$RALPH_HOME/.claude/agents/agent-base.md')
+content = base_path.read_text()
+assert '## Path Resolution' in content, 'agent-base.md missing Path Resolution section'
+assert 'RALPH_HOME' in content, 'agent-base.md missing RALPH_HOME reference'
+assert 'working directory' in content.lower(), 'agent-base.md missing working directory reference'
+" 2>/dev/null; then
+  pass "build_path_preamble: same dir = empty"
+  pass "build_path_preamble: different dir = preamble with paths"
+  pass "agent-base.md has Path Resolution section"
+else
+  fail "path context preamble tests"
+fi
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────
