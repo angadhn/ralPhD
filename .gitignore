@@ -6,3 +6,4 @@ __pycache__/
 iteration_count
 .env
 *.swp
+tools/download.py

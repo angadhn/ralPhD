@@ -8,6 +8,7 @@ from tools.core import TOOLS as _core_tools
 from tools.checks import TOOLS as _checks_tools
 from tools.pdf import TOOLS as _pdf_tools
 from tools.search import TOOLS as _search_tools
+from tools.download import TOOLS as _download_tools
 
 # ── Merged registry ───────────────────────────────────────────
 
@@ -16,6 +17,7 @@ TOOLS.update(_core_tools)
 TOOLS.update(_checks_tools)
 TOOLS.update(_pdf_tools)
 TOOLS.update(_search_tools)
+TOOLS.update(_download_tools)
 
 # ── Per-agent tool registries ─────────────────────────────────
 # Every agent gets the 5 essentials: read_file, write_file, bash, list_files, code_search
@@ -25,7 +27,7 @@ _ESSENTIALS = ["read_file", "write_file", "bash", "list_files", "code_search"]
 AGENT_TOOLS = {
     "paper-writer": _ESSENTIALS + ["check_language", "citation_lint"],
     "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure"],
-    "scout": _ESSENTIALS + ["pdf_metadata", "citation_lookup", "citation_verify", "citation_manifest"],
+    "scout": _ESSENTIALS + ["pdf_metadata", "citation_lookup", "citation_verify", "citation_manifest", "citation_download"],
     "deep-reader": _ESSENTIALS + ["pdf_metadata", "extract_figure"],
     "research-coder": _ESSENTIALS + [],
     "figure-stylist": _ESSENTIALS + ["check_figure"],
