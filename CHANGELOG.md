@@ -71,3 +71,9 @@
 
 ## Iteration 8 — 2026-03-11
 - checkpoint: task 9 complete, next: task 10 (webhook callback)
+
+## Iteration 9 — 2026-03-11
+- checkpoint: task 10 done — webhook callback step complete
+
+## Reflection — Iteration 4 — 2026-03-11
+- Trajectory: on track. See ai-generated-outputs/reflections/reflection-iter-4.md
