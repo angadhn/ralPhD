@@ -3,7 +3,7 @@
 **Thread:** benchmarking-infra
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 3 complete — tasks 1-10 done. Phase 4 (verification + docs) next.
+**Status:** Phase 4 in progress — tasks 1-11 done. Task 12 (README docs) next.
 
 ## Knowledge State
 
@@ -19,6 +19,7 @@
 | 8. Implement single-agent mode | ✅ done | Skip agent detection, use single prompt |
 | 9. Update prompt-plan.md | ✅ done | Step 5 parallelism analysis, Architecture field |
 | 10. Update prompt-build.md | ✅ done | Architecture awareness section |
+| 11. Update tests in test-workflow-local.sh | ✅ done | 116/116 pass — tests 12-15 cover arch parsing, parallel phases, eval.jsonl, single mode |
 
 ## Last Reflection
 
@@ -26,4 +27,4 @@
 
 ## Next Task
 
-11. Update tests in `tests/test-workflow-local.sh` — add tests for: Architecture field parsing, parallel phase detection, eval.jsonl output format, --serial/--parallel/--single flag parsing — coder
+12. Update `README.md` — document benchmarking workflow: how to plan with annotations, run three modes, compare results. Include example commands for the IFP benchmarking run — coder
