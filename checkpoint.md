@@ -1,38 +1,25 @@
-# Checkpoint — tool-call-prototype
+# Checkpoint — ralph-home-separation
 
-**Thread:** tool-call-prototype
+**Thread:** ralph-home-separation
 **Last updated:** 2026-03-11
-**Last agent:** research-coder (Task 10)
-**Status:** Ready for human tasks
+**Last agent:** research-coder
+**Status:** In progress
 
 ## Knowledge State
 
 | Task | Status | Notes |
 |------|--------|-------|
-| 1. Write ralph_agent.py | done | ~464 lines, tool-calling loop |
-| 2. OAuth auth fix | done | X-Api-Key, not Bearer |
-| 3. Standalone test | done | Tested with haiku |
-| 4. Update paper-writer.md | done | Commit gates simplified |
-| 5. Update critic.md | done | 6 script invocations → tool names |
-| 6. Test critic tool use | done | check_language called as tool |
-| 7. Wire ralph-loop.sh | done | Line 336 updated |
-| 8. Split ralph_agent.py | done | tools/{__init__,core,checks,pdf}.py — 9 tools, 6 agents |
-| 9. Complete tool inventory | **done** | 14 tools total: +citation_lookup/verify/manifest, +list_files, +code_search |
-| 10. SciHub download tool | **done** | citation_download — Unpaywall + SciHub, gitignored |
-| 11. Interview re: Howler agents | pending | human — which agents to port |
-| 12. End-to-end test | pending | human — full ralph-loop run |
-| 13. Toolsmith agent | future | human — self-extending capability |
+| 1. RALPH_HOME in ralph-loop.sh | done | 7 framework refs prefixed, export RALPH_HOME, defaults to script dir |
+| 2. RALPH_HOME in ralph_agent.py | pending | agent prompt + budgets path |
+| 3. _scripts_dir() in tools/*.py | pending | 14 occurrences across 3 files |
+| 4. RALPH_HOME in archive.sh | pending | template paths |
+| 5. init-project.sh | pending | new workspace scaffolding script |
+| 6. README.md update | pending | three usage modes + structure tree |
+| 7. Backward compat verification | pending | verify ralPhD-repo usage unchanged |
+| 8. New-project smoke test | pending | init + verify structure |
 
 ## Last Completed
 
-Task 10: citation_download tool.
-- `tools/download.py` (new, 1 tool): citation_download — fetches PDFs by DOI
-  - Unpaywall (legal, open-access) tried first
-  - SciHub fallback only if SCIHUB_MIRROR env var is set (opt-in)
-  - Saves to papers/ with Author2024_ShortTitle.pdf naming
-  - Auto-registers in manifest via citation_tools.py manifest-add
-- `tools/__init__.py`: registered download module, added citation_download to scout
-- `.gitignore`: tools/download.py excluded per legal grey area
-- 15 tools total, scout has 10 tools, all schemas verified
+Task 1: Added RALPH_HOME resolution block after mode-parsing in `ralph-loop.sh`. Resolves `RALPH_HOME` defaulting to script directory (backward compatible), validates `ralph_agent.py` exists, exports for child processes, and prefixes 7 framework file references: `PROMPT_FILE` (3 via single prefix after arg loop), `context-budgets.json` (3 occurrences in `compute_budget_info`), `.claude/agents/` (agent file check), `ralph_agent.py` (invocation), `scripts/extract_session_usage.py`. Project files remain CWD-relative. Syntax check and backward-compat path resolution verified.
 
-**Next Task:** Task 11: Interview re: Howler agents — human
+**Next Task:** Task 2: RALPH_HOME in ralph_agent.py — research-coder
