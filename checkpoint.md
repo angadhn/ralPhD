@@ -3,7 +3,7 @@
 **Thread:** howler-port
 **Last updated:** 2026-03-11
 **Last agent:** research-coder
-**Status:** Phase 2 in progress — task 4 done, tasks 5-8 remain
+**Status:** Phase 2 in progress — tasks 4-5 done, tasks 6-8 remain
 
 ## Knowledge State
 
@@ -13,7 +13,7 @@
 | 2. check_claims tool | done | tools/claims.py — cross-refs .tex + ledger + .bib; registered for critic, editor, coherence-reviewer |
 | 3. citation_verify_all tool | done | tools/checks.py — batch DOI verify via CrossRef; registered for scout, editor, critic (triage/synthesizer when created) |
 | 4. editor agent | done | .claude/agents/editor.md — substantiated editing, section-by-section, pre/post diagnostics |
-| 5. editor output format spec | pending | specs/editor-output-format.md |
+| 5. editor output format spec | done | specs/editor-output-format.md — change_log.md structure, 6 justification categories, commit gates, minimal edit principle |
 | 6. coherence-reviewer agent | pending | .claude/agents/coherence-reviewer.md |
 | 7. coherence-reviewer output format | pending | specs/coherence-reviewer-output-format.md |
 | 8. paper-writer REVIEW-EDITS mode | pending | Update paper-writer.md |
@@ -24,8 +24,8 @@
 
 ## Last Reflection
 
-Iteration 4: Created editor.md agent — lean prompt for academic editor with substantiation rule (every edit justified by evidence/venue/style). Includes pre/post check_language diagnostics, check_claims integration, change_log.md output, commit gates. Follows existing agent format (critic, paper-writer pattern). Yielded due to context budget.
+Iteration 5: Created specs/editor-output-format.md — defines change_log.md structure with per-edit justification requirements, six justification categories (evidence ledger, venue requirement, style rule, claim calibration, critic feedback, structural clarity), tool diagnostics section, commit gates checklist, and minimal edit principle. Follows pattern of existing output format specs.
 
 ## Next Task
 
-5. Create `specs/editor-output-format.md` — research-coder
+6. Create `.claude/agents/coherence-reviewer.md` — research-coder
