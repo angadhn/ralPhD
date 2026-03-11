@@ -3,7 +3,17 @@
 Wrappers around scripts/ for PDF analysis and figure extraction.
 """
 
+import os
 import subprocess
+from pathlib import Path
+
+
+def _scripts_dir() -> Path:
+    """Resolve scripts/ directory via RALPH_HOME, falling back to repo-relative."""
+    ralph_home = os.environ.get("RALPH_HOME", "")
+    if ralph_home:
+        return Path(ralph_home) / "scripts"
+    return Path(__file__).resolve().parent.parent / "scripts"
 
 
 def _run_cmd(cmd):
@@ -14,21 +24,21 @@ def _run_cmd(cmd):
 
 
 def _handle_pdf_metadata(inp):
-    cmd = ["python3", "scripts/pdf_metadata.py", "--json", inp["pdf_path"]]
+    cmd = ["python3", str(_scripts_dir() / "pdf_metadata.py"), "--json", inp["pdf_path"]]
     return _run_cmd(cmd)
 
 
 def _handle_extract_figure(inp):
     if inp.get("list_only"):
-        cmd = ["python3", "scripts/extract_figure.py", "--list", inp["pdf_path"]]
+        cmd = ["python3", str(_scripts_dir() / "extract_figure.py"), "--list", inp["pdf_path"]]
     elif inp.get("render_page"):
-        cmd = ["python3", "scripts/extract_figure.py", inp["pdf_path"],
+        cmd = ["python3", str(_scripts_dir() / "extract_figure.py"), inp["pdf_path"],
                "--render-page", str(inp["render_page"]),
                "--output", inp.get("output_dir", "figures/")]
         if inp.get("dpi"):
             cmd.extend(["--dpi", str(inp["dpi"])])
     else:
-        cmd = ["python3", "scripts/extract_figure.py", inp["pdf_path"],
+        cmd = ["python3", str(_scripts_dir() / "extract_figure.py"), inp["pdf_path"],
                "--output", inp.get("output_dir", "figures/")]
         if inp.get("pages"):
             cmd.extend(["--pages", inp["pages"]])

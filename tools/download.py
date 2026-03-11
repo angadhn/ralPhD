@@ -16,6 +16,14 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+def _scripts_dir() -> Path:
+    """Resolve scripts/ directory via RALPH_HOME, falling back to repo-relative."""
+    ralph_home = os.environ.get("RALPH_HOME", "")
+    if ralph_home:
+        return Path(ralph_home) / "scripts"
+    return Path(__file__).resolve().parent.parent / "scripts"
+
+
 _UNPAYWALL_EMAIL = "ralph-agent@example.com"  # Unpaywall requires an email
 _DEFAULT_PAPERS_DIR = "papers"
 _DOWNLOAD_TIMEOUT = 60
@@ -100,7 +108,7 @@ def _try_scihub(doi: str, mirror: str) :
 
 def _register_manifest(doi: str, filename: str, papers_dir: str, title: str = "") -> str:
     """Register downloaded PDF in the manifest via citation_tools.py."""
-    cmd = ["python3", "scripts/citation_tools.py", "manifest-add",
+    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "manifest-add",
            "--file", filename,
            "--doi", doi,
            "--scout", "scout",

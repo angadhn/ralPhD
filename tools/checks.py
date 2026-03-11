@@ -4,7 +4,17 @@ citation_lookup, citation_verify, citation_manifest.
 Wrappers around scripts/ that enforce writing quality and publication readiness.
 """
 
+import os
 import subprocess
+from pathlib import Path
+
+
+def _scripts_dir() -> Path:
+    """Resolve scripts/ directory via RALPH_HOME, falling back to repo-relative."""
+    ralph_home = os.environ.get("RALPH_HOME", "")
+    if ralph_home:
+        return Path(ralph_home) / "scripts"
+    return Path(__file__).resolve().parent.parent / "scripts"
 
 
 def _run_cmd(cmd):
@@ -15,7 +25,7 @@ def _run_cmd(cmd):
 
 
 def _handle_check_language(inp):
-    cmd = ["python3", "scripts/check_language.py"]
+    cmd = ["python3", str(_scripts_dir() / "check_language.py")]
     if inp.get("strict"):
         cmd.append("--strict")
     cmd.append(inp["file_path"])
@@ -23,7 +33,7 @@ def _handle_check_language(inp):
 
 
 def _handle_check_journal(inp):
-    cmd = ["python3", "scripts/check_journal.py"]
+    cmd = ["python3", str(_scripts_dir() / "check_journal.py")]
     if inp.get("pub_reqs"):
         cmd.extend(["--pub-reqs", inp["pub_reqs"]])
     cmd.append(inp["sections_dir"])
@@ -31,7 +41,7 @@ def _handle_check_journal(inp):
 
 
 def _handle_check_figure(inp):
-    cmd = ["python3", "scripts/check_figure.py", "--json"]
+    cmd = ["python3", str(_scripts_dir() / "check_figure.py"), "--json"]
     if inp.get("pub_reqs"):
         cmd.extend(["--pub-reqs", inp["pub_reqs"]])
     cmd.append(inp["figures_dir"])
@@ -39,7 +49,7 @@ def _handle_check_figure(inp):
 
 
 def _handle_citation_lint(inp):
-    cmd = ["python3", "scripts/citation_tools.py", "lint",
+    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "lint",
            "--bib-dir", inp["bib_dir"],
            "--output", "/dev/stdout"]
     return _run_cmd(cmd)
@@ -48,12 +58,12 @@ def _handle_citation_lint(inp):
 def _handle_citation_lookup(inp):
     if inp.get("input_file"):
         # Batch mode
-        cmd = ["python3", "scripts/citation_tools.py", "batch-lookup",
+        cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "batch-lookup",
                "--input", inp["input_file"],
                "--output", inp.get("output_file", "corpus/batch_results.jsonl")]
         return _run_cmd(cmd)
     # Single lookup
-    cmd = ["python3", "scripts/citation_tools.py", "lookup",
+    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "lookup",
            "--title", inp["title"]]
     if inp.get("authors"):
         cmd.extend(["--authors", inp["authors"]])
@@ -61,7 +71,7 @@ def _handle_citation_lookup(inp):
 
 
 def _handle_citation_verify(inp):
-    cmd = ["python3", "scripts/citation_tools.py", "verify",
+    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "verify",
            "--doi", inp["doi"]]
     return _run_cmd(cmd)
 
@@ -69,7 +79,7 @@ def _handle_citation_verify(inp):
 def _handle_citation_manifest(inp):
     if inp.get("file"):
         # Add mode
-        cmd = ["python3", "scripts/citation_tools.py", "manifest-add",
+        cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "manifest-add",
                "--file", inp["file"]]
         if inp.get("doi"):
             cmd.extend(["--doi", inp["doi"]])
@@ -83,7 +93,7 @@ def _handle_citation_manifest(inp):
             cmd.extend(["--ntrs-id", inp["ntrs_id"]])
         return _run_cmd(cmd)
     # Check mode
-    cmd = ["python3", "scripts/citation_tools.py", "manifest-check"]
+    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "manifest-check"]
     if inp.get("doi"):
         cmd.extend(["--doi", inp["doi"]])
     if inp.get("title"):
