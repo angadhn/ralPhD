@@ -79,18 +79,30 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 
 ## Agents
 
-Six agents, each handling one type of work per iteration:
+Eleven agents, each handling one type of work per iteration:
 
 | Agent | What it does |
 |-------|-------------|
 | **scout** | Searches literature, scores papers, builds a reading list |
+| **triage** | Deduplicates corpus, resolves grade conflicts, generates reading plan |
 | **deep-reader** | Reads papers in depth, extracts claims and data, maps sections |
-| **critic** | Assesses structure; checks style, journal, and figure compliance |
-| **paper-writer** | Writes or revises paper sections from an outline |
+| **critic** | Assesses structure; checks style, journal, figure compliance; proposes figures |
+| **provocateur** | Stress-tests arguments: negative space, inverted assumptions, cross-domain bridges |
+| **synthesizer** | Merges findings into synthesis narrative, master.bib, and section outline |
+| **paper-writer** | Writes or revises paper sections; reviews editor changes |
+| **editor** | Substantiated edits to .tex sections with evidence backing |
+| **coherence-reviewer** | Post-editing QA: promise-delivery, terminology, contradictions, novelty claims |
 | **research-coder** | Generates analysis scripts and figures |
 | **figure-stylist** | Reviews figures for visual clarity and print readiness |
 
-Agent files live in `.claude/agents/`. Each contains inputs, outputs, workflow steps, guardrails, and a yield protocol. The dispatcher never needs to know the details — it just routes.
+Agent files live in `.claude/agents/`. Each inherits shared protocol from `agent-base.md` and has its own inputs, outputs, workflow steps, and yield protocol. The dispatcher never needs to know the details — it just routes.
+
+Typical flow:
+
+```
+scout → triage → deep-reader → critic → provocateur → synthesizer
+  → paper-writer → editor → coherence-reviewer → research-coder → figure-stylist
+```
 
 Some agents have modes. The mode is a prefix in the Next Task field:
 
@@ -100,6 +112,8 @@ GAP-FILL scout     → targeted gap-fill search
 critic             → survey assessment
 STYLE-CHECK critic → writing style review
 JOURNAL-CHECK critic → journal compliance check
+FIGURE-PROPOSAL critic → identify claims needing figures
+REVIEW-EDITS paper-writer → accept/revert editor changes
 ```
 
 The agent detects its mode from the prefix.
@@ -145,11 +159,12 @@ ralPhD/
 ├── prompt-build.md             # Build-mode dispatcher
 ├── prompt-plan.md              # Plan-mode dispatcher
 ├── context-budgets.json        # Per-agent context budget config
-├── .claude/agents/             # 6 agent prompts (scout, deep-reader, critic, etc.)
+├── .claude/agents/             # 11 agent prompts + agent-base.md shared protocol
 ├── tools/                      # Tool registry + per-agent tool implementations
 │   ├── __init__.py             # Merged registry, AGENT_TOOLS, dispatch
 │   ├── core.py                 # read_file, write_file, bash
-│   ├── checks.py               # check_language, citation_lint/lookup/verify/manifest
+│   ├── checks.py               # check_language, citation_lint/lookup/verify/manifest, citation_verify_all
+│   ├── claims.py               # check_claims (cross-ref .tex + evidence-ledger + .bib)
 │   ├── pdf.py                  # pdf_metadata, extract_figure
 │   ├── download.py             # citation_download
 │   └── search.py               # list_files, code_search
@@ -192,14 +207,19 @@ Tools are defined in `tools/` and registered per-agent in `tools/__init__.py`:
 
 | Agent | Tools (beyond essentials) |
 |-------|--------------------------|
-| scout | pdf_metadata, citation_lookup/verify/manifest |
+| scout | pdf_metadata, citation_lookup/verify/verify_all, citation_manifest/download |
+| triage | pdf_metadata, citation_verify_all |
 | deep-reader | pdf_metadata, extract_figure |
-| critic | check_language, check_journal, check_figure |
+| critic | check_language, check_journal, check_figure, check_claims, citation_verify_all |
+| provocateur | (essentials only) |
+| synthesizer | citation_lint, citation_verify_all |
 | paper-writer | check_language, citation_lint |
+| editor | check_claims, check_language, citation_lint, citation_verify_all |
+| coherence-reviewer | check_claims, check_language |
 | research-coder | (essentials only) |
 | figure-stylist | check_figure |
 
-Every agent gets 5 essentials: `read_file`, `write_file`, `bash`, `list_files`, `code_search`. 14 tools total.
+Every agent gets 5 essentials: `read_file`, `write_file`, `bash`, `list_files`, `code_search`. 17 tools total across 7 modules.
 
 Based on [ghuntley's agent architecture](https://ghuntley.com/agent): the agent = the loop + tool registry, the prompt = behavioral guidance.
 
@@ -225,7 +245,7 @@ steps:
 - **No orchestrator agent.** `checkpoint.md` and `implementation-plan.md` are the shared state. The dispatcher is ~25 lines. Claude picks the highest-priority task each iteration.
 - **One agent per iteration.** Each iteration gets a fresh context window. No agent mixing, no subagent spawning.
 - **Per-agent tool registries.** Each agent only sees the tools it needs. Scout gets citation tools, critic gets compliance checkers, research-coder gets only the essentials. This focuses the model's attention and prevents tool misuse.
-- **Plan mode creates agents on the fly.** If a task needs a capability that doesn't exist yet, plan mode can write a new agent file rather than forcing everything through six predefined roles.
+- **Plan mode creates agents on the fly.** If a task needs a capability that doesn't exist yet, plan mode can write a new agent file rather than forcing everything through the predefined roles.
 - **Peer-reviewed sources only.** Scout searches academic databases via `citation_tools.py`. No general web search — journal submissions cite peer-reviewed and conference papers.
 - **Human in the loop.** `HUMAN CHECKPOINT` tasks pause for review. `inbox.md` allows mid-run steering. Reflections every 5 iterations surface drift.
 
