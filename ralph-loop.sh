@@ -499,13 +499,18 @@ while true; do
   CURRENT_THREAD=$(grep '^\*\*Thread:\*\*\|^Thread:' checkpoint.md 2>/dev/null \
     | head -1 | sed 's/.*: *//' | sed 's/\*//g' | tr -d '[:space:]')
   [ -z "$CURRENT_THREAD" ] || [ "$CURRENT_THREAD" = "<thread-name>" ] && CURRENT_THREAD="unknown"
-  CURRENT_AGENT=$(detect_agent)
+  if [ "$ARCH_MODE" = "single" ] && [ "$LOOP_MODE" = "build" ]; then
+    CURRENT_AGENT="single"
+    echo "  Single-agent mode — skipping agent detection"
+  else
+    CURRENT_AGENT=$(detect_agent)
+  fi
   if [ "$LOOP_MODE" = "plan" ]; then
     # Plan mode doesn't need an agent — it's an interactive session
     CURRENT_AGENT="${CURRENT_AGENT:-plan}"
     echo "  Plan mode (agent detection skipped)"
   elif [ -n "$CURRENT_AGENT" ] && [ "$CURRENT_AGENT" != "" ]; then
-    if [ ! -f "${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md" ]; then
+    if [ "$CURRENT_AGENT" != "single" ] && [ ! -f "${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md" ]; then
       RAW_LINE=$(grep -i '^\*\*Next Task\|^Next Task\|^## Next' checkpoint.md 2>/dev/null | head -1)
       echo "  ⚠  Agent file not found: ${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md"
       echo "     Raw Next Task line: $RAW_LINE"
@@ -557,6 +562,11 @@ while true; do
     fi
     # Not a parallel phase — fall through to serial execution
     echo "  Phase not marked (parallel) — running serially"
+  fi
+
+  # --- Single-agent mode: use combined prompt ---
+  if [ "$ARCH_MODE" = "single" ] && [ "$LOOP_MODE" = "build" ]; then
+    PROMPT_FILE="${RALPH_HOME}/prompt-build-single.md"
   fi
 
   # --- Build prompt ---
