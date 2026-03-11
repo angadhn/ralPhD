@@ -3,7 +3,7 @@
 **Thread:** benchmarking-infra
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 2 complete — tasks 1-8 done. Phase 3 next.
+**Status:** Phase 3 complete — tasks 1-10 done. Phase 4 (verification + docs) next.
 
 ## Knowledge State
 
@@ -17,6 +17,8 @@
 | 6. Implement parallel execution | ✅ done | Phase detection, concurrent spawning |
 | 7. Create prompt-build-single.md | ✅ done | Combined single-agent prompt |
 | 8. Implement single-agent mode | ✅ done | Skip agent detection, use single prompt |
+| 9. Update prompt-plan.md | ✅ done | Step 5 parallelism analysis, Architecture field |
+| 10. Update prompt-build.md | ✅ done | Architecture awareness section |
 
 ## Last Reflection
 
@@ -24,4 +26,4 @@
 
 ## Next Task
 
-9. Update `prompt-plan.md` — add step in plan generation where the planner analyzes agent dependencies and marks phases with independent agents as `(parallel)`. Add `**Architecture:**` field to plan header template — coder
+11. Update tests in `tests/test-workflow-local.sh` — add tests for: Architecture field parsing, parallel phase detection, eval.jsonl output format, --serial/--parallel/--single flag parsing — coder

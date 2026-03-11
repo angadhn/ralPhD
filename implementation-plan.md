@@ -45,8 +45,8 @@ build mode how to execute. CLI flags on build mode can override for benchmarking
 
 ## Phase 3 — Plan mode parallelism awareness
 
-- [ ] 9. Update `prompt-plan.md` — add step in plan generation where the planner analyzes agent dependencies and marks phases with independent agents as `(parallel)`. Add `**Architecture:**` field to plan header template. Planner sets it to `parallel` if any phases are annotatable, `serial` if all phases are strictly sequential — **coder**
-- [ ] 10. Update `prompt-build.md` — add instruction to read `**Architecture:**` field and respect `(parallel)` phase annotations. Document that CLI flags override the plan field — **coder**
+- [x] 9. Update `prompt-plan.md` — add step in plan generation where the planner analyzes agent dependencies and marks phases with independent agents as `(parallel)`. Add `**Architecture:**` field to plan header template. Planner sets it to `parallel` if any phases are annotatable, `serial` if all phases are strictly sequential — **coder**
+- [x] 10. Update `prompt-build.md` — add instruction to read `**Architecture:**` field and respect `(parallel)` phase annotations. Document that CLI flags override the plan field — **coder**
 
 <!-- gate -->
 
