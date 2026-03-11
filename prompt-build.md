@@ -35,6 +35,22 @@ Read the `**Autonomy:**` field in `implementation-plan.md`.
 
 If the field is missing, default to **stage-gates**.
 
+## Architecture Awareness
+
+Read the `**Architecture:**` field in `implementation-plan.md`:
+
+- **serial** — execute tasks one at a time (default).
+- **parallel** — phases marked `(parallel)` may have their tasks run
+  concurrently by the loop. You still handle one task per iteration;
+  the loop manages concurrency.
+- **auto** — the loop decides based on phase annotations.
+
+CLI flags (`--serial`, `--parallel`, `--single`) override the plan field.
+
+When in parallel mode, be aware that other agents may be running
+simultaneously on sibling tasks. Only modify files relevant to your
+specific task. Update only your task's entry in `checkpoint.md`.
+
 ## Status Reporting
 
 - Start: `>>> Starting: [task name] — [1-sentence description]`
