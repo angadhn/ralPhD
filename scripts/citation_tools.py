@@ -613,6 +613,73 @@ def cited_check(doi: str, tracker_path: str = "references/cited_tracker.jsonl") 
     return {"status": "NOT_CITED"}
 
 
+# ── Batch DOI Verify ─────────────────────────────────────────────
+
+def batch_verify_bib(bib_file: str) -> dict:
+    """Verify every DOI in a .bib file via CrossRef. Returns summary dict."""
+    try:
+        import bibtexparser
+    except ImportError:
+        return {"error": "bibtexparser not installed. Run: pip install 'bibtexparser<2'"}
+
+    bib_path = Path(bib_file)
+    if not bib_path.exists():
+        return {"error": f"File not found: {bib_file}"}
+
+    with open(bib_path, "r", encoding="utf-8") as f:
+        db = bibtexparser.load(f)
+
+    entries = db.entries
+    if not entries:
+        return {"error": f"No entries found in {bib_file}"}
+
+    verified = []
+    failed = []
+    no_doi = []
+
+    for i, entry in enumerate(entries):
+        key = entry.get("ID", f"entry_{i}")
+        doi = entry.get("doi", "").strip()
+        bib_title = entry.get("title", "").strip("{}")
+
+        if not doi:
+            no_doi.append({"key": key, "title": bib_title})
+            continue
+
+        result = verify_doi(doi)
+        if result and result.get("verified"):
+            # Check title similarity to catch DOI/entry mismatches
+            api_title = result.get("title", "")
+            sim = SequenceMatcher(None, bib_title.lower(), api_title.lower()).ratio()
+            verified.append({
+                "key": key,
+                "doi": doi,
+                "title_similarity": round(sim, 3),
+                "api_title": api_title,
+            })
+            if sim < 0.7:
+                verified[-1]["warning"] = "DOI resolves but title mismatch — possible wrong DOI"
+        else:
+            failed.append({"key": key, "doi": doi, "title": bib_title})
+
+        # Rate-limit: 1 req/sec to be polite to CrossRef
+        if i < len(entries) - 1:
+            time.sleep(1.0)
+
+        if (i + 1) % 10 == 0:
+            print(f"  Verified {i + 1}/{len(entries)} entries...", file=sys.stderr)
+
+    return {
+        "total": len(entries),
+        "verified": len(verified),
+        "failed": len(failed),
+        "no_doi": len(no_doi),
+        "failed_entries": failed,
+        "no_doi_entries": no_doi,
+        "warnings": [v for v in verified if "warning" in v],
+    }
+
+
 # ── CLI ──────────────────────────────────────────────────────────
 
 def main():
@@ -646,6 +713,9 @@ def main():
     p_madd.add_argument("--title", default="", help="Paper title")
     p_madd.add_argument("--papers-dir", default="papers/", help="Papers directory")
     p_madd.add_argument("--ntrs-id", default=None, help="NTRS ID if applicable")
+
+    p_bverify = sub.add_parser("batch-verify", help="Batch-verify all DOIs in a .bib file via CrossRef")
+    p_bverify.add_argument("--bib-file", required=True, help="Path to .bib file")
 
     p_cited = sub.add_parser("cited-check", help="Check if a DOI is already in cited_tracker.jsonl")
     p_cited.add_argument("--doi", required=True, help="DOI to check")
@@ -700,6 +770,15 @@ def main():
     elif args.command == "manifest-add":
         result = manifest_add(args.doi, args.file, args.scout, args.title, args.papers_dir, args.ntrs_id)
         print(json.dumps(result, indent=2))
+
+    elif args.command == "batch-verify":
+        result = batch_verify_bib(args.bib_file)
+        if isinstance(result, dict) and result.get("error"):
+            print(f"Error: {result['error']}", file=sys.stderr)
+            sys.exit(1)
+        print(json.dumps(result, indent=2))
+        if result.get("failed", 0) > 0:
+            sys.exit(1)
 
     elif args.command == "cited-check":
         result = cited_check(args.doi, args.tracker)

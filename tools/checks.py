@@ -1,5 +1,5 @@
 """Check tools: check_language, check_journal, check_figure, citation_lint,
-citation_lookup, citation_verify, citation_manifest.
+citation_lookup, citation_verify, citation_verify_all, citation_manifest.
 
 Wrappers around scripts/ that enforce writing quality and publication readiness.
 """
@@ -104,6 +104,63 @@ def _handle_citation_verify(inp):
     cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "verify",
            "--doi", inp["doi"]]
     return _run_cmd(cmd)
+
+
+def _handle_citation_verify_all(inp):
+    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "batch-verify",
+           "--bib-file", inp["bib_file"]]
+    raw = _run_cmd(cmd)
+
+    # Parse JSON output for a compact summary
+    import json as _json
+    try:
+        data = _json.loads(raw)
+    except (ValueError, _json.JSONDecodeError):
+        return raw  # fallback: return raw output
+
+    lines = ["## citation_verify_all report", ""]
+    lines.append(f"Total entries: {data.get('total', '?')}")
+    lines.append(f"DOI verified: {data.get('verified', '?')}")
+    lines.append(f"DOI failed: {data.get('failed', '?')}")
+    lines.append(f"No DOI: {data.get('no_doi', '?')}")
+    lines.append("")
+
+    n_issues = data.get("failed", 0) + data.get("no_doi", 0) + len(data.get("warnings", []))
+    if n_issues == 0:
+        lines.append("**PASS** — all DOIs verified successfully.")
+        return "\n".join(lines)
+
+    lines.append(f"**{n_issues} issue(s) found:**")
+    lines.append("")
+
+    failed = data.get("failed_entries", [])
+    if failed:
+        lines.append(f"### Failed DOI verification ({len(failed)})")
+        for e in failed[:20]:
+            lines.append(f"- [{e.get('key', '?')}] doi:{e.get('doi', '?')} — {e.get('title', '?')[:100]}")
+        if len(failed) > 20:
+            lines.append(f"  ... and {len(failed) - 20} more")
+        lines.append("")
+
+    no_doi = data.get("no_doi_entries", [])
+    if no_doi:
+        lines.append(f"### Entries without DOI ({len(no_doi)})")
+        for e in no_doi[:20]:
+            lines.append(f"- [{e.get('key', '?')}] {e.get('title', '?')[:100]}")
+        if len(no_doi) > 20:
+            lines.append(f"  ... and {len(no_doi) - 20} more")
+        lines.append("")
+
+    warnings = data.get("warnings", [])
+    if warnings:
+        lines.append(f"### DOI/title mismatches ({len(warnings)})")
+        for e in warnings[:20]:
+            lines.append(f"- [{e.get('key', '?')}] doi:{e.get('doi', '?')} — {e.get('warning', '?')}")
+        if len(warnings) > 20:
+            lines.append(f"  ... and {len(warnings) - 20} more")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 def _handle_citation_manifest(inp):
@@ -232,6 +289,22 @@ TOOLS = {
             "required": ["doi"],
         },
         "function": _handle_citation_verify,
+    },
+    "citation_verify_all": {
+        "name": "citation_verify_all",
+        "description": (
+            "Batch-verify every entry in a .bib file by resolving DOIs via CrossRef. "
+            "Reports: verified DOIs, failed DOIs, entries without DOI, and DOI/title mismatches. "
+            "Use this after bibliography updates to ensure all citations resolve."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "bib_file": {"type": "string", "description": "Path to the .bib file to verify"},
+            },
+            "required": ["bib_file"],
+        },
+        "function": _handle_citation_verify_all,
     },
     "citation_manifest": {
         "name": "citation_manifest",

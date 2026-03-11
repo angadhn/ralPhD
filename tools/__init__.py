@@ -28,8 +28,8 @@ _ESSENTIALS = ["read_file", "write_file", "bash", "list_files", "code_search"]
 
 AGENT_TOOLS = {
     "paper-writer": _ESSENTIALS + ["check_language", "citation_lint"],
-    "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure", "check_claims"],
-    "scout": _ESSENTIALS + ["pdf_metadata", "citation_lookup", "citation_verify", "citation_manifest", "citation_download"],
+    "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure", "check_claims", "citation_verify_all"],
+    "scout": _ESSENTIALS + ["pdf_metadata", "citation_lookup", "citation_verify", "citation_verify_all", "citation_manifest", "citation_download"],
     "deep-reader": _ESSENTIALS + ["pdf_metadata", "extract_figure"],
     "research-coder": _ESSENTIALS + [],
     "figure-stylist": _ESSENTIALS + ["check_figure"],
