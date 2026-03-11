@@ -110,3 +110,8 @@ propose structure, refine based on feedback.
 Your output is `implementation-plan.md` — a prioritized checklist that
 build mode executes. Each task names an agent as its last word
 (same convention as build mode).
+
+IMPORTANT: Also seed `checkpoint.md` with the thread name and first
+task (if it isn't already seeded from template). Build mode reads
+`checkpoint.md` to detect the next agent — if it's still a template,
+build mode cannot start.
