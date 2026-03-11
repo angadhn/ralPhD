@@ -195,10 +195,10 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
                 )
                 break
             except anthropic.APIStatusError as e:
-                # 529 = overloaded, treat as transient
-                if e.status_code == 529 and _attempt < _MAX_RETRIES:
+                # 500 = internal server error, 529 = overloaded — both transient
+                if e.status_code in (500, 529) and _attempt < _MAX_RETRIES:
                     delay = _RETRY_DELAYS[_attempt]
-                    print(f"  [retry] API overloaded (529), attempt {_attempt + 1}/{_MAX_RETRIES}, waiting {delay}s", file=sys.stderr)
+                    print(f"  [retry] API error ({e.status_code}), attempt {_attempt + 1}/{_MAX_RETRIES}, waiting {delay}s", file=sys.stderr)
                     _time.sleep(delay)
                     continue
                 raise

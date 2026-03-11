@@ -58,6 +58,43 @@ POLL_INTERVAL=5
 STATUSLINE_LOG="/tmp/ralph-statusline-log"
 BACKOFF=60
 USAGE_LOG="logs/usage.jsonl"
+AGENT_MAX_RETRIES=3          # bash-level retries per agent invocation
+AGENT_RETRY_DELAYS=(5 15 45) # seconds between retries
+
+# --- Circuit breaker ---
+# Halts the loop after too many consecutive failures to avoid burning tokens.
+CB_FILE="/tmp/ralph-circuit-breaker"
+CB_THRESHOLD=5   # consecutive failures before opening circuit
+CB_CONSECUTIVE_FAILURES=0
+
+cb_reset() {
+  CB_CONSECUTIVE_FAILURES=0
+  rm -f "$CB_FILE"
+}
+
+cb_record_failure() {
+  CB_CONSECUTIVE_FAILURES=$((CB_CONSECUTIVE_FAILURES + 1))
+  echo "$CB_CONSECUTIVE_FAILURES" > "$CB_FILE"
+}
+
+cb_record_success() {
+  if [ "$CB_CONSECUTIVE_FAILURES" -gt 0 ]; then
+    echo "  Circuit breaker: reset after $CB_CONSECUTIVE_FAILURES failure(s)"
+  fi
+  cb_reset
+}
+
+cb_is_open() {
+  [ "$CB_CONSECUTIVE_FAILURES" -ge "$CB_THRESHOLD" ]
+}
+
+# Restore circuit breaker state from previous run
+if [ -f "$CB_FILE" ]; then
+  CB_CONSECUTIVE_FAILURES=$(cat "$CB_FILE" 2>/dev/null | tr -d '[:space:]')
+  if ! [[ "$CB_CONSECUTIVE_FAILURES" =~ ^[0-9]+$ ]]; then
+    CB_CONSECUTIVE_FAILURES=0
+  fi
+fi
 
 # --- Persistent iteration counter ---
 COUNTER_FILE="iteration_count"
@@ -81,7 +118,7 @@ cleanup() {
   [ -n "$JSONL_MONITOR_PID" ] && kill "$JSONL_MONITOR_PID" 2>/dev/null || true
   [ -n "$MONITOR_PID" ] && kill "$MONITOR_PID" 2>/dev/null || true
   [ -n "$CLAUDE_PID" ] && kill "$CLAUDE_PID" 2>/dev/null || true
-  rm -f "$YIELD_FILE" "$CTX_FILE" "$BUDGET_FILE"
+  rm -f "$YIELD_FILE" "$CTX_FILE" "$BUDGET_FILE" "$CB_FILE"
 }
 
 handle_interrupt() {
@@ -483,6 +520,20 @@ run_parallel_phase() {
 
 
 while true; do
+  # --- Circuit breaker check ---
+  if cb_is_open; then
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════╗"
+    echo "║  CIRCUIT BREAKER OPEN — $CB_CONSECUTIVE_FAILURES consecutive failures"
+    echo "║  Halting to avoid wasting tokens.                       ║"
+    echo "╠══════════════════════════════════════════════════════════╣"
+    echo "║  To resume:                                             ║"
+    echo "║    rm $CB_FILE && ./ralph-loop.sh -p     ║"
+    echo "║  Or investigate logs/usage.jsonl for error patterns.    ║"
+    echo "╚══════════════════════════════════════════════════════════╝"
+    break
+  fi
+
   ITERATION=$((ITERATION + 1))
   echo "$ITERATION" > "$COUNTER_FILE"
   echo "=== Iteration $ITERATION ==="
@@ -616,40 +667,61 @@ while true; do
       echo "  JSONL context monitor started (pid $JSONL_MONITOR_PID)"
     fi
 
-    # Launch agent runner (ralph_agent.py with per-agent tool registries)
-    echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json &
-    CLAUDE_PID=$!
+    # Launch agent runner with bash-level retries for transient failures
+    AGENT_ATTEMPT=0
+    while true; do
+      rm -f /tmp/ralph-output.json
 
-    # Wait for first context reading (after ignore window) and print it
-    for i in $(seq 1 30); do
-      now=$(date +%s)
-      if [ "$now" -ge "$IGNORE_UNTIL" ] && [ -f "$CTX_FILE" ]; then
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-          file_time=$(stat -f %m "$CTX_FILE" 2>/dev/null || echo 0)
-        else
-          file_time=$(stat -c %Y "$CTX_FILE" 2>/dev/null || echo 0)
-        fi
-        if [ "$file_time" -ge "$IGNORE_UNTIL" ]; then
-          start_pct=$(cat "$CTX_FILE" 2>/dev/null | tr -d '[:space:]')
-          if [ -n "$start_pct" ] 2>/dev/null; then
-            echo "  Starting context: ${start_pct}%"
-            break
+      echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json &
+      CLAUDE_PID=$!
+
+      # Wait for first context reading (after ignore window) and print it
+      for i in $(seq 1 30); do
+        now=$(date +%s)
+        if [ "$now" -ge "$IGNORE_UNTIL" ] && [ -f "$CTX_FILE" ]; then
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            file_time=$(stat -f %m "$CTX_FILE" 2>/dev/null || echo 0)
+          else
+            file_time=$(stat -c %Y "$CTX_FILE" 2>/dev/null || echo 0)
+          fi
+          if [ "$file_time" -ge "$IGNORE_UNTIL" ]; then
+            start_pct=$(cat "$CTX_FILE" 2>/dev/null | tr -d '[:space:]')
+            if [ -n "$start_pct" ] 2>/dev/null; then
+              echo "  Starting context: ${start_pct}%"
+              break
+            fi
           fi
         fi
+        sleep 2
+      done
+
+      monitor_context "$CLAUDE_PID" "$ITER_START" "$IGNORE_UNTIL" "$CURRENT_AGENT" &
+      MONITOR_PID=$!
+
+      wait "$CLAUDE_PID" 2>/dev/null
+      EXIT_CODE=$?
+      CLAUDE_PID=""
+
+      kill "$MONITOR_PID" 2>/dev/null || true
+      wait "$MONITOR_PID" 2>/dev/null || true
+      MONITOR_PID=""
+
+      # Success — break out of retry loop
+      if [ "$EXIT_CODE" -eq 0 ]; then
+        break
       fi
-      sleep 2
+
+      # Check if the failure looks transient (no output JSON = crash before any work)
+      AGENT_ATTEMPT=$((AGENT_ATTEMPT + 1))
+      if [ "$AGENT_ATTEMPT" -ge "$AGENT_MAX_RETRIES" ]; then
+        echo "  Agent $CURRENT_AGENT failed after $((AGENT_ATTEMPT + 1)) attempts (exit $EXIT_CODE)"
+        break
+      fi
+
+      delay=${AGENT_RETRY_DELAYS[$((AGENT_ATTEMPT - 1))]:-45}
+      echo "  [agent retry] $CURRENT_AGENT exited $EXIT_CODE, attempt $((AGENT_ATTEMPT + 1))/$((AGENT_MAX_RETRIES + 1)), waiting ${delay}s..."
+      sleep "$delay"
     done
-
-    monitor_context "$CLAUDE_PID" "$ITER_START" "$IGNORE_UNTIL" "$CURRENT_AGENT" &
-    MONITOR_PID=$!
-
-    wait "$CLAUDE_PID" 2>/dev/null
-    EXIT_CODE=$?
-    CLAUDE_PID=""
-
-    kill "$MONITOR_PID" 2>/dev/null || true
-    wait "$MONITOR_PID" 2>/dev/null || true
-    MONITOR_PID=""
 
     # Stop JSONL monitor if running
     if [ -n "$JSONL_MONITOR_PID" ]; then
@@ -790,6 +862,7 @@ while true; do
     else
       echo "  ⚠  Claude exited $EXIT_CODE. Backing off ${BACKOFF}s ..."
     fi
+    cb_record_failure
     sleep "$BACKOFF"
     BACKOFF=$((BACKOFF * 2))
     [ "$BACKOFF" -gt 3600 ] && BACKOFF=3600
@@ -799,8 +872,9 @@ while true; do
     continue
   fi
 
-  # Reset backoff after success
+  # Reset backoff and circuit breaker after success
   BACKOFF=60
+  cb_record_success
 
   # Safety net: detect and restore git-tracked files truncated to 0 bytes
   TRUNCATED=$(git diff --numstat 2>/dev/null | awk '$1 == 0 && $2 > 0 {print $3}')
