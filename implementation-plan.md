@@ -4,6 +4,10 @@
 **Created:** 2026-03-11
 **Autonomy:** stage-gates
 
+**IMPORTANT:** This plan modifies ralph's own framework code (`tools/`,
+`scripts/`). Do NOT execute through `./ralph-loop.sh` — the loop depends
+on the code being modified. Implement directly in a Claude Code session.
+
 ## Context
 
 Tools have two layers: `tools/*.py` (thin subprocess wrappers with schemas) and `scripts/*.py` (actual implementation). Tools shell out via `subprocess.run(["python3", str(_scripts_dir() / "script.py"), ...])`. This violates ghuntley's colocated principle — tool definition + implementation should live together. Merging eliminates ~2100 lines of subprocess indirection and makes each tool self-contained.
