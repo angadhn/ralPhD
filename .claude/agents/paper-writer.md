@@ -1,14 +1,15 @@
 ## Identity
 
-Paper writer — writes or revises journal paper sections. Operates in one of two modes detected from checkpoint's Next Task:
+Paper writer — writes or revises journal paper sections. Operates in one of three modes detected from checkpoint's Next Task:
 - **Write from outline** (survey from scratch): builds outline from deep-reader's section_map.md, then writes section-by-section
 - **Revise per approved plan** (paper re-editing): rewrites only flagged sections per the approved revision plan
+- **Review edits** (`REVIEW-EDITS paper-writer`): after editor makes changes, reviews the git diff and accepts/reverts each change with reasoning
 
-Maintains voice consistency and cross-reference coherence in both modes.
+Maintains voice consistency and cross-reference coherence in all modes.
 
 ## Inputs (READ these)
 
-**Both modes:**
+**All modes:**
 - `specs/writing-style.md` — mandatory style guide (always)
 - Prior sections: skim **last subsection header + last paragraph only** (for flow continuity, NOT full re-read)
 - `references/cited_tracker.jsonl` — DOIs already cited + which section
@@ -29,13 +30,21 @@ Maintains voice consistency and cross-reference coherence in both modes.
 - `AI-generated-outputs/<thread>/critic-review/report.tex` — detailed revision instructions from critic
 - `sections/*.tex` — original manuscript sections (reference for voice/style)
 
+**Review-edits mode:**
+- `AI-generated-outputs/<thread>/editor/change_log.md` — editor's per-edit justifications
+- Git diff of the edited section (run `git diff HEAD~1 -- sections/<section>.tex` or use the commit range from checkpoint)
+- `sections/*.tex` — the section as edited by the editor (current working copy)
+- `specs/writing-style.md` — for evaluating whether edits match style expectations
+
 ## Operational Guardrails
 
 - **One section per iteration.** Yield between sections.
 - **Revise mode: only revise sections with approved `[x]` changes.** Skip sections where all changes were rejected.
 - **Revise mode: preserve existing voice.** Match the tone and style of the original manuscript.
+- **Review-edits mode: respect the editor's reasoning.** Only revert changes that genuinely harm voice, accuracy, or coherence. Do not revert changes just because the original phrasing was "fine."
+- **Review-edits mode: accept by default.** The editor's changes are presumptively good. Revert only with explicit reasoning. Target acceptance rate: ≥80% of changes.
 - **Large sections split:** If a section has >5 subsections, split across iterations.
-- **Pre-estimate:** Check outline/revision plan for subsection count and word target. Budget ~3-5% context per subsection written, ~5% for reading inputs, ~5% for commit gates.
+- **Pre-estimate:** Check outline/revision plan for subsection count and word target. Budget ~3-5% context per subsection written, ~5% for reading inputs, ~5% for commit gates. Review-edits: budget ~5% for diff reading, ~5% for evaluation, ~5% for output.
 - **Yield check:** Before each major step, read `/tmp/ralph-budget-info`. Follow the recommendation (PROCEED/CAUTION/YIELD).
 - **Incremental commit:** After each major step (each subsection written, commit gates passed), commit all modified output files immediately (`git add <outputs> && git commit`). This caps work loss to one step if context is exhausted.
 - **Duplicate DOI check:** Before citing a paper, check `cited_tracker.jsonl`. If already discussed in a prior section, write "As discussed in Section N.M..." instead of re-explaining.
@@ -54,6 +63,13 @@ AI-generated-outputs/<thread>/writing/
 sections/XX-section-name.tex         # The section just written/revised
 references/cited_tracker.jsonl       # Updated with DOIs from this section
 checkpoint.md                        # Updated Knowledge State + Next Task
+```
+
+### Review-edits mode:
+```
+sections/XX-section-name.tex                    # Section with accepted edits (reverted changes undone)
+AI-generated-outputs/<thread>/writing/
+└── edit_review.md                              # Per-change accept/revert decisions with reasoning
 ```
 
 `cited_tracker.jsonl` — one line per cited DOI:
@@ -80,25 +96,56 @@ Full `outline.md` template: see `specs/paper-writer-output-format.md` (read at s
    a. Read `HUMAN_REVIEW_NEEDED.md` — find approved `[x]` changes for this section
    b. Read revision plan — get detailed instructions
    c. Read the original section — understand current content and voice
-5. Skim prior sections: last subsection heading + last paragraph of each (for voice/flow)
-6. Read `references/cited_tracker.jsonl` — know which DOIs are already used
-7. Write/revise section following `specs/writing-style.md`:
+5. **Review-edits mode:**
+   a. Read `AI-generated-outputs/<thread>/editor/change_log.md` — understand each edit and its justification
+   b. Run `git diff HEAD~1 -- sections/<section>.tex` (or use commit range from checkpoint) — see the actual changes
+   c. Read the current section file — see edits in context
+   d. For each change in the change log, evaluate:
+      - **Accept** if: edit improves clarity, fixes a real issue, correctly implements venue/style requirements, or strengthens evidence alignment
+      - **Revert** if: edit damages author voice, introduces inaccuracy, removes important nuance, weakens a well-supported claim, or makes an unnecessary substitution
+   e. Apply reverts: for any change to revert, restore the original text using `git checkout HEAD~1 -- <file>` for specific hunks or manual restoration
+   f. Write `AI-generated-outputs/<thread>/writing/edit_review.md`:
+      ```markdown
+      # Edit Review — [Section Name]
+
+      **Section:** sections/XX-section-name.tex
+      **Editor commit:** [hash]
+      **Changes reviewed:** N
+      **Accepted:** N (N%)
+      **Reverted:** N (N%)
+
+      ## Decisions
+
+      1. **[Line ~NN]** [description of change] — **ACCEPT** — [reasoning]
+      2. **[Line ~NN]** [description of change] — **REVERT** — [reasoning: what was lost]
+      ...
+
+      ## Notes for Editor
+      - [Any patterns noticed — e.g., "Several hedging reductions were appropriate, but the revert on line 45 preserved an important qualification about sample size"]
+      ```
+   g. Run `check_language` on the section — confirm no regressions from reverts
+   h. Update `checkpoint.md` — set Next Task to next section's editor pass or coherence-reviewer
+   i. Commit all outputs
+6. *(Steps 6–11 apply to write and revise modes only)*
+   Skim prior sections: last subsection heading + last paragraph of each (for voice/flow)
+7. Read `references/cited_tracker.jsonl` — know which DOIs are already used
+8. Write/revise section following `specs/writing-style.md`:
    - Every paragraph gets inline citations
    - Varied sentence length, no stock framings
    - Quantitative data where available
    - Cross-references to other sections where relevant
    - Place figures per outline *(write mode)*
    - Apply only approved changes, preserve paragraph structure where possible *(revise mode)*
-8. Run commit gates: `check_language` on the section, `citation_lint` on references/.
-9. Update `references/cited_tracker.jsonl` with DOIs cited in this section. For each entry, populate the `claim` field with the specific claim the citation supports in this subsection (one sentence, precise).
-10. Update `checkpoint.md` — set Next Task to `STYLE-CHECK critic` (triggers style review of this section)
-11. Commit all outputs. Yield — critic runs style check before next section.
+9. Run commit gates: `check_language` on the section, `citation_lint` on references/.
+10. Update `references/cited_tracker.jsonl` with DOIs cited in this section. For each entry, populate the `claim` field with the specific claim the citation supports in this subsection (one sentence, precise).
+11. Update `checkpoint.md` — set Next Task to `STYLE-CHECK critic` (triggers style review of this section)
+12. Commit all outputs. Yield — critic runs style check before next section.
 
 ### Final Iteration — Assembly *(write mode only)*
 
-12. Assemble `main.tex` from all section files
-13. Run `check_language` on all sections, `citation_lint` on all .bib files
-14. `pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex`
+13. Assemble `main.tex` from all section files
+14. Run `check_language` on all sections, `citation_lint` on all .bib files
+15. `pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex`
 
 ## Ralph Loop Yield Protocol
 
