@@ -342,7 +342,10 @@ while true; do
     echo "  Reflection iteration (mod 5)"
   fi
 
-  # --- Detect agent for budget computation ---
+  # --- Detect thread and agent ---
+  CURRENT_THREAD=$(grep '^\*\*Thread:\*\*\|^Thread:' checkpoint.md 2>/dev/null \
+    | head -1 | sed 's/.*: *//' | sed 's/\*//g' | tr -d '[:space:]')
+  [ -z "$CURRENT_THREAD" ] || [ "$CURRENT_THREAD" = "<thread-name>" ] && CURRENT_THREAD="unknown"
   CURRENT_AGENT=$(detect_agent)
   if [ "$LOOP_MODE" = "plan" ]; then
     # Plan mode doesn't need an agent — it's an interactive session
@@ -457,12 +460,12 @@ while true; do
       AGENT_NAME="${AGENT_NAME:-unknown}"
       mkdir -p "$(dirname "$USAGE_LOG")"
       jq -c --arg iter "$ITERATION" --arg agent "$AGENT_NAME" --arg mode "$LOOP_MODE" \
-        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg thread "$CURRENT_THREAD" '
         if .is_error then
-          {iteration: ($iter|tonumber), timestamp: $ts, agent: $agent, loop_mode: $mode,
+          {iteration: ($iter|tonumber), timestamp: $ts, thread: $thread, agent: $agent, loop_mode: $mode,
            error: true, message: .result}
         else
-          {iteration: ($iter|tonumber), timestamp: $ts, agent: $agent, loop_mode: $mode,
+          {iteration: ($iter|tonumber), timestamp: $ts, thread: $thread, agent: $agent, loop_mode: $mode,
            model: (.modelUsage // {} | keys[0] // "unknown"),
            num_turns: .num_turns, duration_ms: .duration_ms,
            input_tokens: .usage.input_tokens,
@@ -516,8 +519,8 @@ while true; do
       mkdir -p "$(dirname "$USAGE_LOG")"
       python3 "${RALPH_HOME}/scripts/extract_session_usage.py" "$SESSION_FILE" \
         | jq -c --arg iter "$ITERATION" --arg agent "$AGENT_NAME" --arg mode "$LOOP_MODE" \
-            --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '. + {iteration: ($iter|tonumber), timestamp: $ts, agent: $agent, loop_mode: $mode}' \
+            --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg thread "$CURRENT_THREAD" \
+            '. + {iteration: ($iter|tonumber), timestamp: $ts, thread: $thread, agent: $agent, loop_mode: $mode}' \
         >> "$USAGE_LOG" 2>/dev/null \
         && echo "  Usage logged to $USAGE_LOG" \
         || echo "  (could not log usage data)"

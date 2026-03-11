@@ -65,6 +65,29 @@ cp "$RALPH_HOME/templates/implementation-plan.md" implementation-plan.md
 
 echo "Restored blank templates to root"
 
+# --- Write thread summary to usage log ---
+USAGE_LOG="logs/usage.jsonl"
+if [ -f "$USAGE_LOG" ]; then
+  SUMMARY=$(jq -sc --arg thread "$THREAD" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    [ .[] | select(.thread == $thread and .error != true) ] |
+    if length > 0 then
+      {type: "thread_summary", timestamp: $ts, thread: $thread,
+       iterations: length,
+       first_iteration: (map(.iteration) | min),
+       last_iteration: (map(.iteration) | max),
+       total_input_tokens: (map(.input_tokens // 0) | add),
+       total_output_tokens: (map(.output_tokens // 0) | add),
+       total_cost_usd: (map(.cost_usd // 0) | add | . * 100 | round / 100),
+       total_duration_ms: (map(.duration_ms // 0) | add),
+       agents_used: (map(.agent) | unique)}
+    else empty end
+  ' "$USAGE_LOG" 2>/dev/null)
+  if [ -n "$SUMMARY" ]; then
+    echo "$SUMMARY" >> "$USAGE_LOG"
+    echo "Thread summary written to $USAGE_LOG"
+  fi
+fi
+
 # --- Reset iteration counter ---
 echo "0" > iteration_count
 echo "Reset iteration_count to 0"
