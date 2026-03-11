@@ -3,7 +3,7 @@
 **Thread:** colocated-tools-refactor
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 3 complete
+**Status:** Phase 4 complete
 
 ## Knowledge State
 
@@ -16,6 +16,7 @@
 | 5. Rewire 5 citation handlers in `tools/checks.py` | DONE | All 5 handlers import from tools._citation, subprocess removed entirely from checks.py, 72/72 tests pass |
 | 6. Inline `pdf_metadata.py` into `tools/pdf.py` | DONE | 3 functions + 3 regex patterns inlined, fitz lazy-imported, handler returns json.dumps directly, 72/72 tests pass |
 | 7. Inline `extract_figure.py` into `tools/pdf.py` | DONE | 4 functions inlined, all return strings via io.StringIO, subprocess removed entirely from pdf.py, 72/72 tests pass |
+| 8. Replace subprocess in `_register_manifest()` | DONE | Direct `manifest_add` import, `import subprocess` removed entirely from download.py, 72/72 tests pass |
 
 ## Last Reflection
 
@@ -23,5 +24,5 @@ Iteration 1 (2026-03-11): Trajectory on track. 7/11 tasks complete, 72/72 tests 
 
 ## Next Task
 
-Task 8: Replace subprocess in `_register_manifest()` with `from tools._citation import manifest_add` — coder
-(Phase 4 begins — stage gate: HUMAN_REVIEW_NEEDED required)
+Task 9: Run full test suite verification — coder
+(Phase 5 begins — stage gate: HUMAN_REVIEW_NEEDED required)

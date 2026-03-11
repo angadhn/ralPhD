@@ -1,23 +1,22 @@
-# Human Review Needed — Phase 3 → Phase 4 Gate
+# Human Review Needed — Phase 4 Complete
 
-## Completed: Phase 3 — Rewrite tools/pdf.py
+## What was completed
 
-- **Task 6:** Inlined `pdf_metadata.py` into `tools/pdf.py` — 3 functions (`get_fast_metadata`, `get_section_headings`, `estimate_reading_chunks`) + 3 regex patterns. `fitz` imported lazily. Handler returns `json.dumps(result, indent=2)`.
-- **Task 7:** Inlined `extract_figure.py` into `tools/pdf.py` — 4 functions (`parse_page_range`, `list_images`, `extract_images`, `extract_page_as_image`). All refactored from `print()` to return strings via `io.StringIO`. `subprocess` and `_run_cmd` removed entirely from `pdf.py`.
+**Phase 4 — Modify tools/download.py** (Task 8)
 
-All 72/72 tests pass after each task.
+- Replaced subprocess call in `_register_manifest()` with direct `from tools._citation import manifest_add`
+- Removed `import subprocess` entirely from `tools/download.py`
+- All Unpaywall/SciHub download logic unchanged
+- 72/72 tests pass
 
-## Next: Phase 4 — Modify tools/download.py
+**Overall progress:** 8/11 tasks complete. All 4 tool modules (`checks.py`, `pdf.py`, `download.py`) now call implementation functions directly — zero subprocess indirection remains in the tools layer.
 
-- **Task 8:** Replace subprocess in `_register_manifest()` with `from tools._citation import manifest_add`. Remove `import subprocess`. Keep all Unpaywall/SciHub logic unchanged.
+## What Phase 5 will do
 
-This is a small, targeted change — one handler in `download.py` currently shells out to `citation_tools.py manifest-add`. After this change it will call `manifest_add()` directly from the shared `tools/_citation.py` module.
+**Phase 5 — Verify and clean up** (Tasks 9-11)
 
-## Status
+- **Task 9:** Run full test suite as final verification
+- **Task 10:** Delete 6 merged scripts (`check_language.py`, `check_journal.py`, `check_figure.py`, `citation_tools.py`, `pdf_metadata.py`, `extract_figure.py`) and re-run tests
+- **Task 11:** Update `tools/README.md` and module docstrings
 
-- 7/11 tasks complete
-- 72/72 tests passing
-- Files modified so far: `tools/_citation.py` (created), `tools/checks.py` (rewritten), `tools/pdf.py` (rewritten)
-- Scripts not yet deleted (that's Phase 5)
-
-Delete this file to approve proceeding to Phase 4.
+This is the final cleanup phase — deleting the now-unused script files and updating documentation.

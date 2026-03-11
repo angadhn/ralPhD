@@ -43,7 +43,7 @@ Tools have two layers: `tools/*.py` (thin subprocess wrappers with schemas) and 
 
 ## Phase 4 — Modify tools/download.py
 
-- [ ] 8. Replace subprocess in `_register_manifest()` with `from tools._citation import manifest_add`. Remove `import subprocess`. Keep all Unpaywall/SciHub logic unchanged — **coder**
+- [x] 8. Replace subprocess in `_register_manifest()` with `from tools._citation import manifest_add`. Remove `import subprocess`. Keep all Unpaywall/SciHub logic unchanged — **coder**
 
 <!-- gate -->
 
