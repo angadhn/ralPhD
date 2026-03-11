@@ -10,7 +10,7 @@
 | Task | Status | Notes |
 |------|--------|-------|
 | 1. RALPH_HOME in ralph-loop.sh | done | 7 framework refs prefixed, export RALPH_HOME, defaults to script dir |
-| 2. RALPH_HOME in ralph_agent.py | pending | agent prompt + budgets path |
+| 2. RALPH_HOME in ralph_agent.py | done | ralph_home var resolves from env, falls back to script dir; used for budgets_path and agent_path |
 | 3. _scripts_dir() in tools/*.py | pending | 14 occurrences across 3 files |
 | 4. RALPH_HOME in archive.sh | pending | template paths |
 | 5. init-project.sh | pending | new workspace scaffolding script |
@@ -20,6 +20,6 @@
 
 ## Last Completed
 
-Task 1: Added RALPH_HOME resolution block after mode-parsing in `ralph-loop.sh`. Resolves `RALPH_HOME` defaulting to script directory (backward compatible), validates `ralph_agent.py` exists, exports for child processes, and prefixes 7 framework file references: `PROMPT_FILE` (3 via single prefix after arg loop), `context-budgets.json` (3 occurrences in `compute_budget_info`), `.claude/agents/` (agent file check), `ralph_agent.py` (invocation), `scripts/extract_session_usage.py`. Project files remain CWD-relative. Syntax check and backward-compat path resolution verified.
+Task 2: Added `ralph_home` variable to `main()` in `ralph_agent.py` that resolves `RALPH_HOME` env var with fallback to `Path(__file__).parent` (backward compatible). Used it for `budgets_path` (context-budgets.json) and `agent_path` (.claude/agents/*.md). Syntax check passed, smoke tests confirmed both default and explicit RALPH_HOME paths work. `.env` loading and Python imports unchanged (already use __file__-relative paths).
 
-**Next Task:** Task 2: RALPH_HOME in ralph_agent.py — research-coder
+**Next Task:** Task 3: _scripts_dir() in tools/*.py — research-coder
