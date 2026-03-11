@@ -14,3 +14,6 @@
 
 ## Iteration 7 — 2026-03-11
 - Complete tool inventory: 14 tools, 6 agents (Task 9)
+
+## Iteration 8 — 2026-03-11
+- Track tools/download.py in git (was incorrectly gitignored)

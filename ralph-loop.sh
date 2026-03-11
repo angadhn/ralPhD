@@ -83,11 +83,28 @@ detect_agent() {
 
 estimate_input_cost() {
   # Estimate context % that reading input files will consume for a given agent.
-  # Uses file sizes on disk: ~4 bytes/token, ~200k tokens = 100% context.
   # Returns integer percentage via stdout.
+  #
+  # Constants (calibrate after first e2e run using logs/usage.jsonl):
+  #   BYTES_PER_TOKEN: ~3.5 for English markdown/LaTeX, ~4.0 for mixed code.
+  #     Using 3.5 (conservative — overestimates tokens, triggers yield earlier).
+  #   CONTEXT_WINDOW: 200k tokens total.
+  #   BASELINE_OVERHEAD: system prompt + tool schemas consume tokens before any
+  #     user content. Measured 2026-03-11:
+  #       scout: ~2730 tokens (9.6k bytes), paper-writer: ~2740 (9.6k),
+  #       critic: ~2885 (10.1k), deep-reader: ~2490 (8.7k),
+  #       research-coder: ~2250 (7.9k), figure-stylist: ~1690 (5.9k)
+  #     Using 3000 as safe upper bound for all agents.
   local agent_name=$1
   local thread=""
   local total_bytes=0
+
+  local BYTES_PER_TOKEN=35    # x10 to avoid floating point (3.5 * 10)
+  local CONTEXT_WINDOW=200000
+  local BASELINE_OVERHEAD=3000  # tokens consumed by system prompt + tool schemas
+
+  # Effective window = total window minus baseline overhead
+  local EFFECTIVE_WINDOW=$(( CONTEXT_WINDOW - BASELINE_OVERHEAD ))
 
   # Resolve thread from checkpoint.md
   thread=$(grep '^\*\*Thread:\*\*\|^Thread:' checkpoint.md 2>/dev/null \
@@ -135,9 +152,10 @@ estimate_input_cost() {
       ;;
   esac
 
-  # ~4 bytes per token, ~200k tokens = 100% context → 800k bytes = 100%
-  # pct = total_bytes * 100 / 800000
-  local input_pct=$(( total_bytes * 100 / 800000 ))
+  # tokens = bytes * 10 / BYTES_PER_TOKEN (x10 to avoid floating point)
+  # pct = tokens * 100 / EFFECTIVE_WINDOW
+  local input_tokens=$(( total_bytes * 10 / BYTES_PER_TOKEN ))
+  local input_pct=$(( input_tokens * 100 / EFFECTIVE_WINDOW ))
   echo "$input_pct"
 }
 
@@ -297,6 +315,14 @@ while true; do
   # --- Detect agent for budget computation ---
   CURRENT_AGENT=$(detect_agent)
   if [ -n "$CURRENT_AGENT" ] && [ "$CURRENT_AGENT" != "" ]; then
+    if [ ! -f ".claude/agents/${CURRENT_AGENT}.md" ]; then
+      RAW_LINE=$(grep -i '^\*\*Next Task\|^Next Task\|^## Next' checkpoint.md 2>/dev/null | head -1)
+      echo "  ⚠  Agent file not found: .claude/agents/${CURRENT_AGENT}.md"
+      echo "     Raw Next Task line: $RAW_LINE"
+      echo "     Skipping iteration (fix checkpoint.md or agent name)."
+      sleep 5
+      continue
+    fi
     echo "  Agent detected: $CURRENT_AGENT"
   else
     CURRENT_AGENT="unknown"

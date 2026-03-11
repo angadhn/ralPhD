@@ -27,6 +27,44 @@ import anthropic
 from tools import execute_tool, get_tools_for_agent
 
 
+def truncate_result(result: str, limit: int = 50000) -> str:
+    """Truncate tool results while preserving complete lines/JSON entries.
+
+    If the result exceeds `limit` chars, keep complete lines from the start
+    up to the limit, then append a summary of what was dropped.
+    """
+    if len(result) <= limit:
+        return result
+
+    total_chars = len(result)
+    lines = result.split("\n")
+    total_lines = len(lines)
+
+    kept = []
+    kept_chars = 0
+    kept_count = 0
+
+    for line in lines:
+        # +1 for the newline we'll rejoin with
+        if kept_chars + len(line) + 1 > limit:
+            break
+        kept.append(line)
+        kept_chars += len(line) + 1
+        kept_count += 1
+
+    # If even the first line exceeds the limit, keep it truncated
+    if not kept:
+        kept.append(lines[0][:limit])
+        kept_count = 1
+
+    dropped = total_lines - kept_count
+    summary = (
+        f"\n\n[truncated: kept {kept_count} of {total_lines} lines, "
+        f"{kept_chars} of {total_chars} chars — {dropped} lines dropped]"
+    )
+    return "\n".join(kept) + summary
+
+
 def load_env():
     """Load .env file if it exists (avoids needing python-dotenv)."""
     env_path = Path(__file__).parent / ".env"
@@ -101,13 +139,44 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
     total_cache_read = 0
 
     while True:
-        response = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system_prompt,
-            tools=tools,
-            messages=messages,
+        # Retry transient API errors (rate limit, overload, network).
+        # Non-transient errors (auth, bad request) propagate immediately.
+        _TRANSIENT = (
+            anthropic.RateLimitError,
+            anthropic.APIConnectionError,
         )
+        _MAX_RETRIES = 3
+        _RETRY_DELAYS = [5, 15, 45]
+
+        response = None
+        for _attempt in range(_MAX_RETRIES + 1):
+            try:
+                response = client.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    system=system_prompt,
+                    tools=tools,
+                    messages=messages,
+                )
+                break
+            except anthropic.APIStatusError as e:
+                # 529 = overloaded, treat as transient
+                if e.status_code == 529 and _attempt < _MAX_RETRIES:
+                    delay = _RETRY_DELAYS[_attempt]
+                    print(f"  [retry] API overloaded (529), attempt {_attempt + 1}/{_MAX_RETRIES}, waiting {delay}s", file=sys.stderr)
+                    _time.sleep(delay)
+                    continue
+                raise
+            except _TRANSIENT as e:
+                if _attempt < _MAX_RETRIES:
+                    delay = _RETRY_DELAYS[_attempt]
+                    print(f"  [retry] {type(e).__name__}, attempt {_attempt + 1}/{_MAX_RETRIES}, waiting {delay}s", file=sys.stderr)
+                    _time.sleep(delay)
+                    continue
+                raise
+
+        if response is None:
+            raise RuntimeError("API call failed after all retries")
         num_turns += 1
         total_input += response.usage.input_tokens
         total_output += response.usage.output_tokens
@@ -125,9 +194,7 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
             elif block.type == "tool_use":
                 print(f"  [tool] {block.name}({json.dumps(block.input, indent=None)})", file=sys.stderr)
                 result = execute_tool(block.name, block.input)
-                # Truncate very long results to avoid flooding context
-                if len(result) > 50000:
-                    result = result[:50000] + f"\n\n... (truncated, {len(result)} total chars)"
+                result = truncate_result(result)
                 print(f"  [result] {result[:200]}{'...' if len(result) > 200 else ''}", file=sys.stderr)
                 tool_results.append({
                     "type": "tool_result",
@@ -179,9 +246,21 @@ def main():
     parser.add_argument("--task", required=True, help="Task prompt (or - to read from stdin)")
     parser.add_argument("--model", default=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
                         help="Model to use")
-    parser.add_argument("--max-tokens", type=int, default=8096, help="Max output tokens")
+    parser.add_argument("--max-tokens", type=int, default=None, help="Max output tokens (default: from context-budgets.json or 8096)")
     parser.add_argument("--output-json", help="Write usage JSON to this path (compatible with ralph-loop.sh)")
     args = parser.parse_args()
+
+    # Resolve max_tokens: CLI flag > context-budgets.json > 8096
+    if args.max_tokens is None:
+        budgets_path = Path(__file__).parent / "context-budgets.json"
+        if budgets_path.exists():
+            try:
+                budgets = json.loads(budgets_path.read_text())
+                args.max_tokens = budgets.get(args.agent, {}).get("max_tokens", 8096)
+            except (json.JSONDecodeError, KeyError):
+                args.max_tokens = 8096
+        else:
+            args.max_tokens = 8096
 
     # Load agent prompt
     agent_path = f".claude/agents/{args.agent}.md"
