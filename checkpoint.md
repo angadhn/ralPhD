@@ -1,9 +1,9 @@
-# Checkpoint — <thread name>
+# Checkpoint — Colocated Tools Refactor
 
-**Thread:** <thread-name>
-**Last updated:** <date>
-**Last agent:** <agent>
-**Status:** <current status>
+**Thread:** colocated-tools-refactor
+**Last updated:** 2026-03-11
+**Last agent:** plan
+**Status:** Plan written, ready to start Phase 1
 
 ## Knowledge State
 
@@ -16,4 +16,4 @@
 
 ## Next Task
 
-<next task from implementation plan>
+Create tools/_citation.py coder
