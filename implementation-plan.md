@@ -29,7 +29,7 @@ Interview decisions and full rationale are in this session's transcript.
 - [x] 9. Create `.claude/agents/provocateur.md` — finds gaps no other agent covers. Cross-domain bridges, inverted assumptions, negative space. Reads deep-reader reports + critic output. Outputs `provocations.md`. Tools: `_ESSENTIALS` only. — **research-coder**
 - [x] 10. Create `specs/provocateur-output-format.md` — provocations output format. — **research-coder**
 - [x] 11. Create `.claude/agents/synthesizer.md` — merges critic review + deep-reader reports into section outline, merged master.bib, synthesis narrative. Tools: `_ESSENTIALS` + `citation_lint`, `citation_verify_all`. — **research-coder**
-- [ ] 12. Create `specs/synthesizer-output-format.md` — synthesizer output format. — **research-coder**
+- [x] 12. Create `specs/synthesizer-output-format.md` — synthesizer output format. — **research-coder**
 - [ ] 13. Create `.claude/agents/triage.md` — sits between scout and deep-reader. Corpus deduplication, grade conflict resolution, reading plan generation. Tools: `_ESSENTIALS` + `pdf_metadata`, `citation_verify_all`. — **research-coder**
 - [ ] 14. Create `specs/triage-output-format.md` — triage output format. — **research-coder**
 
