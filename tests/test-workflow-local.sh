@@ -13,6 +13,7 @@ set -euo pipefail
 #   7. Path context preamble (RALPH_HOME separation)
 #   8. Tool path resolution (RALPH_HOME)
 #   9. Commit-back step (post-run result delivery)
+#   10. Webhook callback step (result delivery to external URL)
 #
 # Usage: bash tests/test-workflow-local.sh
 
@@ -578,6 +579,363 @@ else
 fi
 
 rm -rf "$COMMIT_TEST_DIR"
+echo ""
+
+# ── Test 10: Webhook callback step ───────────────────────────
+echo "--- 10. Webhook Callback Step ---"
+
+# 10a. Verify callback_url input in YAML
+if python3 -c "
+import yaml, sys
+with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
+    doc = yaml.safe_load(f)
+on_field = doc.get(True) or doc.get('on')
+inputs = on_field['workflow_dispatch']['inputs']
+assert 'callback_url' in inputs, 'missing callback_url input'
+cu = inputs['callback_url']
+assert cu.get('required', True) == False, 'callback_url should not be required'
+assert cu['default'] == '', 'callback_url default should be empty string'
+assert cu['type'] == 'string', 'callback_url type should be string'
+" 2>/dev/null; then
+  pass "callback_url input: exists, optional, default empty"
+else
+  fail "callback_url input validation"
+fi
+
+# 10b. Verify webhook step exists with correct conditions
+if python3 -c "
+import yaml, sys
+with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
+    doc = yaml.safe_load(f)
+steps = doc['jobs']['ralph-loop']['steps']
+webhook_step = None
+for s in steps:
+    if 'webhook' in s.get('name', '').lower() or 'callback' in s.get('name', '').lower():
+        webhook_step = s
+        break
+assert webhook_step is not None, 'webhook/callback step not found'
+
+# Must run on always() and only when callback_url is set
+cond = webhook_step.get('if', '')
+assert 'always()' in cond, f'webhook should run on always(), got: {cond}'
+assert 'callback_url' in cond, f'webhook should check callback_url, got: {cond}'
+" 2>/dev/null; then
+  pass "webhook step: exists with always() + callback_url condition"
+else
+  fail "webhook step conditions"
+fi
+
+# 10c. Verify webhook step has required env vars
+if python3 -c "
+import yaml, sys
+with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
+    doc = yaml.safe_load(f)
+steps = doc['jobs']['ralph-loop']['steps']
+webhook_step = None
+for s in steps:
+    if 'webhook' in s.get('name', '').lower() or 'callback' in s.get('name', '').lower():
+        webhook_step = s
+        break
+env_block = webhook_step.get('env', {})
+required_env = ['INPUT_CALLBACK_URL', 'INPUT_THREAD', 'INPUT_MODE', 'INPUT_COMMIT_MODE']
+for e in required_env:
+    assert e in env_block, f'webhook step missing env: {e}'
+# CALLBACK_SECRET should reference a secret
+assert 'CALLBACK_SECRET' in env_block, 'webhook step missing CALLBACK_SECRET env'
+assert 'secrets.CALLBACK_SECRET' in str(env_block['CALLBACK_SECRET']), 'CALLBACK_SECRET should reference secrets'
+" 2>/dev/null; then
+  pass "webhook step: has required env vars including CALLBACK_SECRET"
+else
+  fail "webhook step env vars"
+fi
+
+# 10d. Verify webhook script builds JSON with jq and uses curl
+WEBHOOK_SCRIPT=$(python3 -c "
+import yaml
+with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
+    doc = yaml.safe_load(f)
+for s in doc['jobs']['ralph-loop']['steps']:
+    if 'webhook' in s.get('name', '').lower() or 'callback' in s.get('name', '').lower():
+        print(s.get('run', ''))
+        break
+" 2>/dev/null)
+
+if echo "$WEBHOOK_SCRIPT" | grep -q 'jq'; then
+  pass "webhook script: uses jq for JSON construction"
+else
+  fail "webhook script: missing jq usage"
+fi
+
+if echo "$WEBHOOK_SCRIPT" | grep -q 'curl'; then
+  pass "webhook script: uses curl for HTTP POST"
+else
+  fail "webhook script: missing curl usage"
+fi
+
+if echo "$WEBHOOK_SCRIPT" | grep -q 'ralph.run.completed'; then
+  pass "webhook script: includes event type"
+else
+  fail "webhook script: missing event type"
+fi
+
+if echo "$WEBHOOK_SCRIPT" | grep -q 'X-Ralph-Signature'; then
+  pass "webhook script: includes HMAC signature header"
+else
+  fail "webhook script: missing HMAC signature"
+fi
+
+if echo "$WEBHOOK_SCRIPT" | grep -q 'openssl.*hmac'; then
+  pass "webhook script: uses openssl for HMAC computation"
+else
+  fail "webhook script: missing openssl HMAC"
+fi
+
+# 10e. Verify retry logic
+if echo "$WEBHOOK_SCRIPT" | grep -q 'attempt.*[123]\|for attempt'; then
+  pass "webhook script: has retry logic"
+else
+  fail "webhook script: missing retry logic"
+fi
+
+if echo "$WEBHOOK_SCRIPT" | grep -q 'non-fatal\|non.fatal'; then
+  pass "webhook script: failure is non-fatal"
+else
+  fail "webhook script: should be non-fatal on failure"
+fi
+
+# 10f. Simulate webhook JSON payload construction
+WEBHOOK_TEST_DIR=$(mktemp -d)
+(
+  cd "$WEBHOOK_TEST_DIR"
+
+  # Create a mock checkpoint
+  cat > checkpoint.md << 'CKPT'
+# Checkpoint — webhook-test
+
+**Thread:** webhook-test
+**Last updated:** 2026-03-11
+**Last agent:** coder
+**Status:** testing
+
+## Knowledge State
+
+| Task | Status | Notes |
+|------|--------|-------|
+| 1. First task | done | completed |
+| 2. Second task | done | completed |
+| 3. Third task | pending | next up |
+
+## Next Task
+
+3. Third task — **coder**
+CKPT
+
+  # Build the JSON payload using the same jq command from the workflow
+  INPUT_THREAD="webhook-test"
+  INPUT_MODE="build"
+  INPUT_AUTONOMY="autopilot"
+  INPUT_MAX_ITER="5"
+  INPUT_TARGET="owner/repo"
+  INPUT_TARGET_REF="main"
+  INPUT_COMMIT_MODE="branch"
+
+  STATUS="completed"
+  CHECKPOINT_SUMMARY=$(head -20 checkpoint.md | python3 -c "
+import sys, json
+print(json.dumps(sys.stdin.read()))" 2>/dev/null | sed 's/^"//;s/"$//')
+
+  LAST_TASK=$(grep -m1 '## Next Task' checkpoint.md -A2 2>/dev/null | tail -1 | sed 's/^ *//' || echo "")
+  LAST_AGENT=$(grep -m1 '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null | sed 's/.*:\*\* *//' || echo "")
+  TASKS_DONE=$(grep -c '| done |' checkpoint.md 2>/dev/null || echo "0")
+  TASKS_TOTAL=$(grep -c '| done \|| pending \|| in.progress |' checkpoint.md 2>/dev/null || echo "0")
+
+  REVIEW_NEEDED="false"
+  REVIEW_BODY=""
+
+  PAYLOAD=$(jq -n \
+    --arg thread "$INPUT_THREAD" \
+    --arg status "$STATUS" \
+    --arg mode "$INPUT_MODE" \
+    --arg autonomy "$INPUT_AUTONOMY" \
+    --arg max_iter "$INPUT_MAX_ITER" \
+    --arg target_repo "$INPUT_TARGET" \
+    --arg target_ref "$INPUT_TARGET_REF" \
+    --arg commit_mode "$INPUT_COMMIT_MODE" \
+    --arg last_agent "$LAST_AGENT" \
+    --arg next_task "$LAST_TASK" \
+    --arg tasks_done "$TASKS_DONE" \
+    --arg tasks_total "$TASKS_TOTAL" \
+    --argjson review_needed "$REVIEW_NEEDED" \
+    --arg review_body "$REVIEW_BODY" \
+    --arg checkpoint_summary "$CHECKPOINT_SUMMARY" \
+    --arg run_id "local" \
+    --arg run_url "https://github.com/local/actions/runs/0" \
+    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{
+      event: "ralph.run.completed",
+      timestamp: $timestamp,
+      thread: $thread,
+      status: $status,
+      config: {
+        mode: $mode,
+        autonomy: $autonomy,
+        max_iterations: ($max_iter | tonumber),
+        target_repo: $target_repo,
+        target_ref: $target_ref,
+        commit_mode: $commit_mode
+      },
+      result: {
+        last_agent: $last_agent,
+        next_task: $next_task,
+        tasks_done: ($tasks_done | tonumber),
+        tasks_total: ($tasks_total | tonumber),
+        review_needed: $review_needed,
+        review_body: (if $review_needed then $review_body else null end),
+        checkpoint_summary: $checkpoint_summary
+      },
+      run: {
+        id: $run_id,
+        url: $run_url
+      }
+    }')
+
+  # Validate the JSON payload
+  echo "$PAYLOAD" | python3 -c "
+import sys, json
+p = json.load(sys.stdin)
+assert p['event'] == 'ralph.run.completed', f'wrong event: {p[\"event\"]}'
+assert p['thread'] == 'webhook-test', f'wrong thread: {p[\"thread\"]}'
+assert p['status'] == 'completed', f'wrong status: {p[\"status\"]}'
+assert p['config']['mode'] == 'build', f'wrong mode: {p[\"config\"][\"mode\"]}'
+assert p['config']['max_iterations'] == 5, f'max_iter should be int 5, got: {p[\"config\"][\"max_iterations\"]}'
+assert p['config']['commit_mode'] == 'branch', f'wrong commit_mode'
+assert p['result']['last_agent'] == 'coder', f'wrong last_agent: {p[\"result\"][\"last_agent\"]}'
+assert p['result']['tasks_done'] == 2, f'wrong tasks_done: {p[\"result\"][\"tasks_done\"]}'
+assert p['result']['tasks_total'] == 3, f'wrong tasks_total: {p[\"result\"][\"tasks_total\"]}'
+assert p['result']['review_needed'] == False, 'review_needed should be False'
+assert p['result']['review_body'] is None, 'review_body should be None when no review'
+assert 'webhook-test' in p['result']['checkpoint_summary'], 'checkpoint_summary should contain thread name'
+assert p['run']['id'] == 'local', f'wrong run id'
+assert 'timestamp' in p, 'missing timestamp'
+" || exit 1
+)
+if [ $? -eq 0 ]; then
+  pass "webhook JSON payload: valid structure with correct field types"
+else
+  fail "webhook JSON payload construction"
+fi
+
+# 10g. Test HMAC signature generation
+(
+  cd "$WEBHOOK_TEST_DIR"
+  PAYLOAD='{"event":"ralph.run.completed","thread":"test"}'
+  SECRET="test-secret-key"
+  SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/.*= //')
+
+  # Verify the signature is a valid hex string (64 chars for SHA-256)
+  if echo "$SIGNATURE" | grep -qE '^[a-f0-9]{64}$'; then
+    true
+  else
+    exit 1
+  fi
+
+  # Verify signature is deterministic (same input = same output)
+  SIGNATURE2=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/.*= //')
+  [ "$SIGNATURE" = "$SIGNATURE2" ] || exit 1
+
+  # Verify different secret produces different signature
+  SIGNATURE3=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "other-secret" | sed 's/.*= //')
+  [ "$SIGNATURE" != "$SIGNATURE3" ] || exit 1
+)
+if [ $? -eq 0 ]; then
+  pass "HMAC signature: deterministic, correct format, secret-dependent"
+else
+  fail "HMAC signature generation"
+fi
+
+# 10h. Test review_needed payload variation
+(
+  cd "$WEBHOOK_TEST_DIR"
+
+  # Create HUMAN_REVIEW_NEEDED.md
+  cat > HUMAN_REVIEW_NEEDED.md << 'REVIEW'
+## Phase 1 Complete
+
+All archive tasks done. Ready for Phase 2 (workflow creation).
+REVIEW
+
+  STATUS="review_needed"
+  REVIEW_NEEDED="true"
+  REVIEW_BODY=$(python3 -c "
+import sys, json
+print(json.dumps(open('HUMAN_REVIEW_NEEDED.md').read()))" 2>/dev/null | sed 's/^"//;s/"$//')
+
+  PAYLOAD=$(jq -n \
+    --arg status "$STATUS" \
+    --argjson review_needed "$REVIEW_NEEDED" \
+    --arg review_body "$REVIEW_BODY" \
+    '{
+      status: $status,
+      result: {
+        review_needed: $review_needed,
+        review_body: (if $review_needed then $review_body else null end)
+      }
+    }')
+
+  echo "$PAYLOAD" | python3 -c "
+import sys, json
+p = json.load(sys.stdin)
+assert p['status'] == 'review_needed', f'wrong status: {p[\"status\"]}'
+assert p['result']['review_needed'] == True, 'review_needed should be True'
+assert 'Phase 1 Complete' in p['result']['review_body'], 'review_body should contain review content'
+" || exit 1
+)
+if [ $? -eq 0 ]; then
+  pass "webhook payload: review_needed=true includes review body"
+else
+  fail "webhook payload review_needed variation"
+fi
+
+# 10i. Verify summary step includes callback info
+if python3 -c "
+import yaml
+with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
+    doc = yaml.safe_load(f)
+for s in doc['jobs']['ralph-loop']['steps']:
+    if 'summary' in s.get('name', '').lower():
+        run = s.get('run', '')
+        assert 'callback' in run.lower() or 'CALLBACK' in run, 'summary should mention callback'
+        env = s.get('env', {})
+        assert 'INPUT_CALLBACK_URL' in env, 'summary env missing INPUT_CALLBACK_URL'
+        break
+" 2>/dev/null; then
+  pass "summary step: includes callback info"
+else
+  fail "summary step: missing callback info"
+fi
+
+# 10j. Verify webhook step comes before upload/summary (correct ordering)
+if python3 -c "
+import yaml
+with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
+    doc = yaml.safe_load(f)
+steps = doc['jobs']['ralph-loop']['steps']
+step_names = [s.get('name', '') for s in steps]
+webhook_idx = next(i for i, n in enumerate(step_names) if 'webhook' in n.lower() or 'callback' in n.lower())
+upload_idx = next(i for i, n in enumerate(step_names) if 'upload' in n.lower())
+summary_idx = next(i for i, n in enumerate(step_names) if 'summary' in n.lower())
+commit_idx = next(i for i, n in enumerate(step_names) if 'commit results' in n.lower())
+# Webhook should be after commit-back but before upload
+assert webhook_idx > commit_idx, f'webhook (idx {webhook_idx}) should be after commit-back (idx {commit_idx})'
+assert webhook_idx < upload_idx, f'webhook (idx {webhook_idx}) should be before upload (idx {upload_idx})'
+assert webhook_idx < summary_idx, f'webhook (idx {webhook_idx}) should be before summary (idx {summary_idx})'
+" 2>/dev/null; then
+  pass "webhook step: correctly ordered (after commit, before upload/summary)"
+else
+  fail "webhook step ordering"
+fi
+
+rm -rf "$WEBHOOK_TEST_DIR"
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────

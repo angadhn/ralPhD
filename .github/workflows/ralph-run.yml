@@ -290,7 +290,7 @@ jobs:
 
           # Extract last task status from checkpoint
           LAST_TASK=$(grep -m1 '## Next Task' checkpoint.md -A2 2>/dev/null | tail -1 | sed 's/^ *//' || echo "")
-          LAST_AGENT=$(grep -m1 '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null | sed 's/.*: *//' || echo "")
+          LAST_AGENT=$(grep -m1 '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null | sed 's/.*:\*\* *//' || echo "")
 
           # Count tasks done vs total from Knowledge State table
           TASKS_DONE=$(grep -c '| done |' checkpoint.md 2>/dev/null || echo "0")
