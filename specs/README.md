@@ -2,6 +2,10 @@
 
 Quality standards and output format templates. Agents read these during their workflows so the agent prompts stay short. Verbose examples live in `templates/`.
 
+## API contract
+
+- `api-contract.md` — workflow_dispatch interface for triggering ralPhD as an engine (inputs, outputs, webhook, expected repo structure)
+
 ## Quality standards
 
 - `writing-style.md` — anti-LLM-speak rules
