@@ -48,7 +48,11 @@ Interview decisions and full rationale are in this session's transcript.
 ## Phase 6: Prompt Audit
 <!-- gate -->
 
-- [ ] 19. Audit all agent prompts against prompt quality checklist. For each `.claude/agents/*.md` file: (1) remove role-playing language — no "You are an expert X", just state the task; (2) convert negative prompts — change "Don't do X" to positive instructions; (3) compress — if a section can be shorter without losing meaning, shorten it; (4) check that mechanical procedures live in tools/specs, not baked into the prompt; (5) measure token cost of each prompt and report. Reference: Anthropic context engineering guide (https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), Claude 4 best practices (https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices), ghuntley principle: agents reason, tools do mechanical work. — **research-coder**
+- [x] 19. Audit all agent prompts against prompt quality checklist. For each `.claude/agents/*.md` file: (1) remove role-playing language — no "You are an expert X", just state the task; (2) convert negative prompts — change "Don't do X" to positive instructions; (3) compress — if a section can be shorter without losing meaning, shorten it; (4) check that mechanical procedures live in tools/specs, not baked into the prompt; (5) measure token cost of each prompt and report. Reference: Anthropic context engineering guide (https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), Claude 4 best practices (https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices), ghuntley principle: agents reason, tools do mechanical work. — **research-coder**
+  - Compress `specs/synthesizer-output-format.md` (278 lines) and `specs/triage-output-format.md` (262 lines). Move verbose examples to a `templates/` directory; keep specs under 80 lines.
+  - Extract repeated boilerplate (yield protocol, commit gates, operational guardrails) into a shared `agent-base.md` that agents reference instead of duplicating.
+  - Clarify role overlaps with a one-line "Runs after: X" or "Upstream: X → this → Y" note in each agent: critic style-check vs editor, synthesizer outline vs paper-writer outline, provocateur vs critic figure-proposal.
+  - Update `agents/README.md` to be the planner's menu: one row per agent with role, tools, upstream/downstream, and when-to-assign.
 
 ## Phase 7: Verification
 <!-- gate -->
