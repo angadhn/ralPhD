@@ -3,7 +3,7 @@
 **Thread:** ralph-as-engine
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 3 in progress — task 10 done
+**Status:** Phase 4 in progress — task 12 done, 12/13 tasks complete
 
 ## Knowledge State
 
@@ -19,14 +19,14 @@
 | 8. ralph_agent.py path audit | done | Consolidated _scripts_dir() into tools/_paths.py; 39/39 tests pass |
 | 9. Commit-back step | done | New commit_mode input (branch/direct/none); step 7 pushes agent outputs to target repo; 47/47 tests pass |
 | 10. Webhook callback step | done | New callback_url input; step 8 POSTs JSON summary with HMAC signature, retry logic; 62/62 tests pass |
-| 11. API contract docs | pending | workflow_dispatch interface |
-| 12. End-to-end test | pending | full integration verification |
+| 11. API contract docs | done | specs/api-contract.md — inputs, outputs, webhook schema, repo structure, examples |
+| 12. End-to-end test | done | Full pipeline integration test (Test 11): 10 sub-tests covering init → inject → detect → agent work → commit-back → webhook → artifacts → summary → re-init; 72/72 tests pass |
 | 13. README updates | pending | 12-agent system + Actions docs |
 
 ## Last Reflection
 
-Phase 3 (Result delivery) task 10 complete. Added webhook callback step that POSTs structured JSON to an external URL (for Howler integration). Features: always() execution, HMAC-SHA256 signing via CALLBACK_SECRET, 3 retries, non-fatal failure. JSON payload includes event type, thread, status, config, task progress, and checkpoint summary. Fixed LAST_AGENT extraction to strip markdown bold markers. 62/62 tests pass.
+Reflection 4: On track, 10/13 tasks complete. Remaining work is documentation and verification. No course corrections needed. Now 12/13 complete after e2e test.
 
 ## Next Task
 
-11. Document the workflow_dispatch API contract — inputs, outputs, expected repo structure — so Howler's edge functions can trigger it — **coder**
+13. Update README and agents README to document the new 12-agent system and GitHub Actions invocation — **coder**
