@@ -3,7 +3,7 @@
 **Thread:** howler-port
 **Last updated:** 2026-03-11
 **Last agent:** research-coder
-**Status:** Phase 6 complete — 19 tasks done. Phase 7 next (verification).
+**Status:** Phase 7 complete — all 21 tasks done. Implementation plan finished.
 
 ## Knowledge State
 
@@ -28,12 +28,13 @@
 | 17. init-project.sh update | done | Added inputs/ to directory creation; comment + README.md documenting convention (feedback, prior submissions, venue docs). Idempotent. |
 | 18. agents README update | done | Updated .claude/agents/README.md — 11 agents with tool summaries, typical flow diagram, inputs/ convention table |
 | 19. Prompt audit | done | Created agent-base.md (shared protocol). Compressed synthesizer-output-format 278→47 lines, triage-output-format 262→49 lines; examples moved to templates/. All 11 agents: added upstream/downstream ordering, removed duplicated boilerplate, converted negative prompts, compressed. README.md now planner's menu with when-to-assign column. Net: -89 lines across agents, -457 lines across specs. |
-| 20-21. Verification | pending | Tool + agent loading checks — Phase 7 |
+| 20. Verify tool registration | done | Programmatic import check: all 11 agents resolve tools without errors, 17 tools in registry, all plan-specified assignments confirmed, schemas valid. |
+| 21. Verify agent file loading | done | Full load path tested: prompt file + tool schema generation for all 11 agents. All have Identity, Workflow, agent-base.md inheritance. |
 
 ## Last Reflection
 
-Task 19 complete. Phase 6 done. Largest savings: synthesizer/triage output formats (moved examples to templates/), yield protocol dedup (agent-base.md). All agents now have explicit upstream/downstream notes. Critic and paper-writer remain the longest (124/151 lines) due to multi-mode workflows — reasonable given their complexity.
+Tasks 20-21 complete. Phase 7 done. All 21 tasks in the howler-port implementation plan are finished. Verification was done programmatically (import-based checks) rather than via API calls — more reliable and zero-cost. Confirmed: 17 tools in registry, all 11 agents load cleanly, all tool assignments match the plan.
 
 ## Next Task
 
-20. Verify tool registration research-coder
+Implementation plan complete. No remaining tasks.
