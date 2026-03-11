@@ -3,7 +3,7 @@
 **Thread:** colocated-tools-refactor
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 4 complete
+**Status:** COMPLETE — all 11 tasks done
 
 ## Knowledge State
 
@@ -17,12 +17,18 @@
 | 6. Inline `pdf_metadata.py` into `tools/pdf.py` | DONE | 3 functions + 3 regex patterns inlined, fitz lazy-imported, handler returns json.dumps directly, 72/72 tests pass |
 | 7. Inline `extract_figure.py` into `tools/pdf.py` | DONE | 4 functions inlined, all return strings via io.StringIO, subprocess removed entirely from pdf.py, 72/72 tests pass |
 | 8. Replace subprocess in `_register_manifest()` | DONE | Direct `manifest_add` import, `import subprocess` removed entirely from download.py, 72/72 tests pass |
+| 9. Run full test suite verification | DONE | 72/72 assertions pass pre- and post-deletion |
+| 10. Delete merged scripts | DONE | 6 files deleted (2118 lines removed), 72/72 tests pass after deletion |
+| 11. Update tools/README.md and docstrings | DONE | tools/README.md rewritten, README.md updated, module docstrings already current |
 
 ## Last Reflection
 
 Iteration 1 (2026-03-11): Trajectory on track. 7/11 tasks complete, 72/72 tests passing. Inline-test-commit pattern working well, no course correction needed.
 
+## Summary
+
+All 11 tasks of the colocated-tools-refactor are complete. The refactor eliminated ~2100 lines of subprocess indirection by inlining 6 scripts into their respective `tools/*.py` modules. A shared `tools/_citation.py` houses 17 citation functions used by both checks and download tools. All 72 test assertions pass. No remaining references to deleted scripts.
+
 ## Next Task
 
-Task 9: Run full test suite verification — coder
-(Phase 5 begins — stage gate: HUMAN_REVIEW_NEEDED required)
+None — thread complete.

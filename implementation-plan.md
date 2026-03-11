@@ -49,9 +49,9 @@ Tools have two layers: `tools/*.py` (thin subprocess wrappers with schemas) and 
 
 ## Phase 5 — Verify and clean up
 
-- [ ] 9. Run full test suite: `bash tests/test-workflow-local.sh` — all 72 assertions must pass. Critical: Test 8a-c (`scripts_dir()` resolution), Test 8d (17 tools, all agent registries valid), Test 8e (`_scripts_dir` backward compat) — **coder**
-- [ ] 10. Delete merged scripts: `check_language.py`, `check_journal.py`, `check_figure.py`, `citation_tools.py`, `pdf_metadata.py`, `extract_figure.py`. Re-run tests to confirm nothing references deleted files — **coder**
-- [ ] 11. Update `tools/README.md` — remove "wrappers around scripts/" language. Update module docstrings in checks.py, pdf.py, download.py — **coder**
+- [x] 9. Run full test suite: `bash tests/test-workflow-local.sh` — all 72 assertions must pass. Critical: Test 8a-c (`scripts_dir()` resolution), Test 8d (17 tools, all agent registries valid), Test 8e (`_scripts_dir` backward compat) — **coder**
+- [x] 10. Delete merged scripts: `check_language.py`, `check_journal.py`, `check_figure.py`, `citation_tools.py`, `pdf_metadata.py`, `extract_figure.py`. Re-run tests to confirm nothing references deleted files — **coder**
+- [x] 11. Update `tools/README.md` — remove "wrappers around scripts/" language. Update module docstrings in checks.py, pdf.py, download.py — **coder**
 
 ## Files Changed
 
