@@ -501,6 +501,13 @@ while true; do
         || echo "  (could not log usage data)"
     fi
 
+
+    # --- Eval capture ---
+    python3 "${RALPH_HOME}/scripts/evaluate_iteration.py" \
+      --iteration "$ITERATION" \
+      --arch-mode "${ARCH_MODE:-serial}" \
+      --run-tag "${RUN_TAG:-}" \
+      2>/dev/null || echo "  (eval capture skipped)"
     # Human review checkpoint
     if [ -f "HUMAN_REVIEW_NEEDED.md" ]; then
       echo ""
@@ -549,6 +556,13 @@ while true; do
       echo "  (session file not found — usage not logged)"
     fi
 
+
+    # --- Eval capture ---
+    python3 "${RALPH_HOME}/scripts/evaluate_iteration.py" \
+      --iteration "$ITERATION" \
+      --arch-mode "${ARCH_MODE:-serial}" \
+      --run-tag "${RUN_TAG:-}" \
+      2>/dev/null || echo "  (eval capture skipped)"
     # Human review checkpoint
     if [ -f "HUMAN_REVIEW_NEEDED.md" ]; then
       echo ""
