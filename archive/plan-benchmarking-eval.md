@@ -1,6 +1,46 @@
-# Benchmarking & Evaluation Plan (Sections 1-4)
+# Benchmarking & Evaluation Plan (Sections 0-4)
 
 Archived from planning session for the next thread.
+
+---
+
+## 0. Post-E2E Calibration (prerequisite for accurate Section 1 metrics)
+
+**Why before Section 1:** Section 1a captures "Context efficiency: peak context
+% before yield." The yield signal is driven by `estimate_input_cost()` and
+`compute_budget_info()` in `ralph-loop.sh`, which use constants that were
+improved in commit `2feca33` but still need empirical validation against real
+usage data.
+
+**Depends on:** At least one full e2e run through `ralph-loop.sh -p` that
+generates `logs/usage.jsonl` with 5+ entries per agent.
+
+### 0a. Calibrate bytes-per-token ratio
+
+Read `logs/usage.jsonl`. For each agent, compare file sizes read (from git
+diff or tool call logs) against `input_tokens` reported by the API. Derive
+actual bytes-per-token ratio for English markdown/LaTeX. Current default: 3.5.
+Update `BYTES_PER_TOKEN` in `estimate_input_cost()` if the empirical value
+differs by >10%.
+
+### 0b. Calibrate baseline overhead per agent
+
+From `logs/usage.jsonl`, take the first turn of each iteration (before any
+tool results are appended). The `input_tokens` on that turn = system prompt +
+tool schemas + task prompt. Subtract an estimate for the task prompt
+(~`wc -c < prompt-build.md` / 3.5) to isolate system overhead per agent.
+Current default: 3000 tokens. Update `BASELINE_OVERHEAD` if needed, or make
+it per-agent in `context-budgets.json`.
+
+### 0c. Validate yield timing
+
+Compare the context % at which agents actually yielded (from eval data or
+stderr logs) against the `CONTEXT_THRESHOLD` (55%). If agents are yielding
+too early (leaving >30% unused) or too late (exhausting context), adjust
+`CONTEXT_THRESHOLD` or per-agent `max_step` values.
+
+**Files to modify:** `ralph-loop.sh` (constants), possibly `context-budgets.json`
+**Data needed:** `logs/usage.jsonl` with 5+ entries per agent
 
 ---
 
