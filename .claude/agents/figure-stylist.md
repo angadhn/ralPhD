@@ -34,14 +34,15 @@ Full Round 1 / Round 2 templates: see `specs/figure-stylist-output-format.md` (r
 1. Read `checkpoint.md` — determine which figure to review from Knowledge State + Next Task
 2. Read the figure PDF as an image — assess visual quality
 3. Read the figure script — understand what was intended
-4. Evaluate against the 10-item Review Checklist
-5. Read `specs/figure-stylist-output-format.md` — load review templates. Write `figures/style_feedback.md`:
+4. Run `check_figure` on the figures directory — get automated DPI/dimensions/format checks
+5. Evaluate against the 10-item Review Checklist (incorporate check_figure results)
+6. Read `specs/figure-stylist-output-format.md` — load review templates. Write `figures/style_feedback.md`:
    - Round 1: full review — REVISE with must-fix issues, or APPROVED if clean
    - Round 2: polish re-check — always APPROVED, note remaining cosmetic issues
-6. Update `checkpoint.md`:
+7. Update `checkpoint.md`:
    - If REVISE (round 1): set Next Task to `research-coder (figure mode)` (sends back for fixes)
    - If APPROVED: set Next Task to next figure or next phase
-7. Commit
+8. Commit
 
 ## Operational Guardrails
 

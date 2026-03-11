@@ -7,6 +7,7 @@ Adding a tool = adding it to the right submodule's TOOLS dict + AGENT_TOOLS here
 from tools.core import TOOLS as _core_tools
 from tools.checks import TOOLS as _checks_tools
 from tools.pdf import TOOLS as _pdf_tools
+from tools.search import TOOLS as _search_tools
 
 # ── Merged registry ───────────────────────────────────────────
 
@@ -14,19 +15,23 @@ TOOLS = {}
 TOOLS.update(_core_tools)
 TOOLS.update(_checks_tools)
 TOOLS.update(_pdf_tools)
+TOOLS.update(_search_tools)
 
 # ── Per-agent tool registries ─────────────────────────────────
+# Every agent gets the 5 essentials: read_file, write_file, bash, list_files, code_search
+
+_ESSENTIALS = ["read_file", "write_file", "bash", "list_files", "code_search"]
 
 AGENT_TOOLS = {
-    "paper-writer": ["read_file", "write_file", "bash", "check_language", "citation_lint"],
-    "critic": ["read_file", "write_file", "bash", "check_language", "check_journal", "check_figure"],
-    "scout": ["read_file", "write_file", "bash", "pdf_metadata"],
-    "deep-reader": ["read_file", "write_file", "bash", "pdf_metadata", "extract_figure"],
-    "research-coder": ["read_file", "write_file", "bash"],
-    "figure-stylist": ["read_file", "write_file", "bash", "check_figure"],
+    "paper-writer": _ESSENTIALS + ["check_language", "citation_lint"],
+    "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure"],
+    "scout": _ESSENTIALS + ["pdf_metadata", "citation_lookup", "citation_verify", "citation_manifest"],
+    "deep-reader": _ESSENTIALS + ["pdf_metadata", "extract_figure"],
+    "research-coder": _ESSENTIALS + [],
+    "figure-stylist": _ESSENTIALS + ["check_figure"],
 }
 
-DEFAULT_TOOLS = ["read_file", "write_file", "bash"]
+DEFAULT_TOOLS = _ESSENTIALS
 
 
 # ── Tool dispatch ─────────────────────────────────────────────

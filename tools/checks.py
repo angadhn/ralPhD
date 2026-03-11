@@ -1,4 +1,5 @@
-"""Check tools: check_language, check_journal, check_figure, citation_lint.
+"""Check tools: check_language, check_journal, check_figure, citation_lint,
+citation_lookup, citation_verify, citation_manifest.
 
 Wrappers around scripts/ that enforce writing quality and publication readiness.
 """
@@ -41,6 +42,54 @@ def _handle_citation_lint(inp):
     cmd = ["python3", "scripts/citation_tools.py", "lint",
            "--bib-dir", inp["bib_dir"],
            "--output", "/dev/stdout"]
+    return _run_cmd(cmd)
+
+
+def _handle_citation_lookup(inp):
+    if inp.get("input_file"):
+        # Batch mode
+        cmd = ["python3", "scripts/citation_tools.py", "batch-lookup",
+               "--input", inp["input_file"],
+               "--output", inp.get("output_file", "corpus/batch_results.jsonl")]
+        return _run_cmd(cmd)
+    # Single lookup
+    cmd = ["python3", "scripts/citation_tools.py", "lookup",
+           "--title", inp["title"]]
+    if inp.get("authors"):
+        cmd.extend(["--authors", inp["authors"]])
+    return _run_cmd(cmd)
+
+
+def _handle_citation_verify(inp):
+    cmd = ["python3", "scripts/citation_tools.py", "verify",
+           "--doi", inp["doi"]]
+    return _run_cmd(cmd)
+
+
+def _handle_citation_manifest(inp):
+    if inp.get("file"):
+        # Add mode
+        cmd = ["python3", "scripts/citation_tools.py", "manifest-add",
+               "--file", inp["file"]]
+        if inp.get("doi"):
+            cmd.extend(["--doi", inp["doi"]])
+        if inp.get("scout"):
+            cmd.extend(["--scout", inp["scout"]])
+        if inp.get("title"):
+            cmd.extend(["--title", inp["title"]])
+        if inp.get("papers_dir"):
+            cmd.extend(["--papers-dir", inp["papers_dir"]])
+        if inp.get("ntrs_id"):
+            cmd.extend(["--ntrs-id", inp["ntrs_id"]])
+        return _run_cmd(cmd)
+    # Check mode
+    cmd = ["python3", "scripts/citation_tools.py", "manifest-check"]
+    if inp.get("doi"):
+        cmd.extend(["--doi", inp["doi"]])
+    if inp.get("title"):
+        cmd.extend(["--title", inp["title"]])
+    if inp.get("papers_dir"):
+        cmd.extend(["--papers-dir", inp["papers_dir"]])
     return _run_cmd(cmd)
 
 
@@ -109,5 +158,60 @@ TOOLS = {
             "required": ["bib_dir"],
         },
         "function": _handle_citation_lint,
+    },
+    "citation_lookup": {
+        "name": "citation_lookup",
+        "description": (
+            "Look up papers by title via Semantic Scholar/CrossRef/OpenAlex. "
+            "Single mode: provide title (and optional authors) to find one paper. "
+            "Batch mode: provide input_file (one title per line) to look up many papers at once."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Paper title to look up (single mode)"},
+                "authors": {"type": "string", "description": "Author names, comma-separated (optional, improves matching)"},
+                "input_file": {"type": "string", "description": "Path to file with one title per line (batch mode)"},
+                "output_file": {"type": "string", "description": "Output JSONL path for batch results (default: corpus/batch_results.jsonl)"},
+            },
+            "required": [],
+        },
+        "function": _handle_citation_lookup,
+    },
+    "citation_verify": {
+        "name": "citation_verify",
+        "description": (
+            "Verify a DOI against Semantic Scholar/CrossRef/OpenAlex. "
+            "Returns verified metadata (title, authors, year, venue) with match confidence."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "doi": {"type": "string", "description": "DOI to verify (e.g. '10.1016/j.jcp.2024.01.001')"},
+            },
+            "required": ["doi"],
+        },
+        "function": _handle_citation_verify,
+    },
+    "citation_manifest": {
+        "name": "citation_manifest",
+        "description": (
+            "Check or update the paper download manifest. "
+            "Check mode (no 'file'): see if a paper is already downloaded by DOI or title. "
+            "Add mode (with 'file'): register a newly downloaded PDF in the manifest."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "doi": {"type": "string", "description": "DOI of the paper"},
+                "title": {"type": "string", "description": "Paper title (for fuzzy matching in check mode)"},
+                "file": {"type": "string", "description": "PDF filename to add (triggers add mode, e.g. 'Author2024_Title.pdf')"},
+                "scout": {"type": "string", "description": "Which agent downloaded it (add mode)"},
+                "papers_dir": {"type": "string", "description": "Papers directory (default: 'papers/')"},
+                "ntrs_id": {"type": "string", "description": "NTRS ID if applicable (add mode)"},
+            },
+            "required": [],
+        },
+        "function": _handle_citation_manifest,
     },
 }
