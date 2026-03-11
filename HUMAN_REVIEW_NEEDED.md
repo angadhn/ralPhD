@@ -1,38 +1,33 @@
-# Human Review — Phase 2 → Phase 3 Gate
+# Human Review Needed — Phase 3 → Phase 4 Gate
 
-## What was completed (Phase 2: Editor Cycle)
+## Completed: Phase 3 — Analysis Agents
 
-All 5 tasks in Phase 2 are done:
+All 6 tasks in Phase 3 are done:
 
-| Task | File | Summary |
-|------|------|---------|
-| 4. Editor agent | `.claude/agents/editor.md` | Substantiated editing agent — section-by-section, every edit requires justification from 6 categories. Pre/post `check_language` diagnostics. |
-| 5. Editor output format | `specs/editor-output-format.md` | `change_log.md` template with per-edit justification, 6 justification categories, commit gates, minimal edit principle. |
-| 6. Coherence reviewer agent | `.claude/agents/coherence-reviewer.md` | Read-only whole-manuscript consistency checker. Four ordered checks: promise-delivery alignment, terminology consistency, internal contradictions, novelty claims vs related work. Skim-first approach. |
-| 7. Coherence reviewer output format | `specs/coherence-reviewer-output-format.md` | `coherence_review.md` template with severity levels (CRITICAL/MODERATE/MINOR), verdict logic, term/acronym registries, commit gates. |
-| 8. Paper-writer REVIEW-EDITS mode | `.claude/agents/paper-writer.md` (updated) | Third mode for reviewing editor changes. Accept-by-default (≥80%), per-change decisions with reasoning, `edit_review.md` output. |
+| Task | Deliverable | Status |
+|------|------------|--------|
+| 9 | `.claude/agents/provocateur.md` — 3 lenses: negative space, inverted assumptions, cross-domain bridges | ✅ |
+| 10 | `specs/provocateur-output-format.md` — provocations.md template, impact levels, priority ranking | ✅ |
+| 11 | `.claude/agents/synthesizer.md` — merges deep-reader + critic + provocateur into synthesis narrative | ✅ |
+| 12 | `specs/synthesizer-output-format.md` — synthesis.md, master.bib, section_outline.md templates | ✅ |
+| 13 | `.claude/agents/triage.md` — corpus deduplication, grade conflicts, reading plan generation | ✅ |
+| 14 | `specs/triage-output-format.md` — triage_report.md, reading_plan.md, corpus_index_deduped.jsonl templates | ✅ |
 
-### Tool registrations (from Phase 1, already done)
-- `coherence-reviewer` registered in `tools/__init__.py` with `check_claims` + `check_language`
-- `editor` registered with `check_claims` + `check_language` + `citation_lint` + `citation_verify_all`
+All agents registered in `tools/__init__.py` AGENT_TOOLS with appropriate tool access.
 
-## What comes next (Phase 3: Analysis Agents)
+## Next: Phase 4 — Critic Update
 
-Phase 3 creates three new analysis agents and their output format specs:
+Two tasks:
 
-| Task | What | Key design choices |
-|------|------|--------------------|
-| 9. Provocateur agent | `.claude/agents/provocateur.md` | Finds gaps no other agent covers — cross-domain bridges, inverted assumptions, negative space. `_ESSENTIALS` only. |
-| 10. Provocateur output format | `specs/provocateur-output-format.md` | `provocations.md` output format. |
-| 11. Synthesizer agent | `.claude/agents/synthesizer.md` | Merges critic + deep-reader reports into section outline, merged master.bib, synthesis narrative. Tools: `citation_lint`, `citation_verify_all`. |
-| 12. Synthesizer output format | `specs/synthesizer-output-format.md` | Synthesizer output format. |
-| 13. Triage agent | `.claude/agents/triage.md` | Between scout and deep-reader. Corpus dedup, grade conflict resolution, reading plan. Tools: `pdf_metadata`, `citation_verify_all`. |
-| 14. Triage output format | `specs/triage-output-format.md` | Triage output format. |
+- **Task 15:** Update `.claude/agents/critic.md` — add FIGURE-PROPOSAL mode. After reviewing deep-reader reports, identify claims needing visual support. Output `figure_proposals.md`.
+- **Task 16:** Update `specs/critic-output-format.md` — add figure proposal format section.
 
-## Review questions
+This modifies an existing agent (critic) rather than creating new ones.
 
-1. Are the Phase 2 agent definitions (editor, coherence-reviewer, paper-writer REVIEW-EDITS) aligned with your intended workflow?
-2. Should any design choices be adjusted before building the analysis agents?
-3. Ready to proceed to Phase 3?
+## Overall Progress
 
-Delete this file to proceed.
+- Phases 1-3: ✅ Complete (14/21 tasks)
+- Phase 4: Next (2 tasks — critic update)
+- Phase 5: Pending (2 tasks — venue + housekeeping)
+- Phase 6: Pending (1 task — prompt audit)
+- Phase 7: Pending (2 tasks — verification)
