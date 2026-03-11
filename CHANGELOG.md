@@ -56,3 +56,9 @@
 
 ## Iteration 40 — 2026-03-11
 - Complete task 14: triage output format spec. Phase 3 complete. Stage gate for Phase 4.
+
+## Iteration 4 — 2026-03-11
+- task 6 complete: checkpoint + plan updated, task summary written
+
+## Reflection — Iteration 3 — 2026-03-11
+- Trajectory: on track. See ai-generated-outputs/reflections/reflection-iter-3.md
