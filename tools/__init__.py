@@ -36,6 +36,7 @@ AGENT_TOOLS = {
     "editor": _ESSENTIALS + ["check_claims", "check_language", "citation_lint", "citation_verify_all"],
     "coherence-reviewer": _ESSENTIALS + ["check_claims", "check_language"],
     "provocateur": _ESSENTIALS + [],
+    "synthesizer": _ESSENTIALS + ["citation_lint", "citation_verify_all"],
 }
 
 DEFAULT_TOOLS = _ESSENTIALS
