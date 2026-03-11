@@ -57,6 +57,15 @@ on:
         options:
           - build
           - plan
+      commit_mode:
+        description: "How to push results back: branch (ralph/<thread>), direct (push to target_ref), none (artifact only)"
+        required: false
+        default: "branch"
+        type: choice
+        options:
+          - branch
+          - direct
+          - none
 
 permissions:
   contents: write
@@ -197,7 +206,52 @@ jobs:
           cd workspace
           bash "$RALPH_HOME/ralph-loop.sh" -p "$INPUT_LOOP_MODE" "$INPUT_MAX_ITER"
 
-      # ── 7. Upload outputs as artifact ─────────────────────────
+      # ── 7. Commit results back to project repo ───────────────
+      #    Pushes all agent-produced changes (AI outputs, checkpoint,
+      #    implementation plan, source changes) back to the target repo.
+      #    Mode: branch (ralph/<thread>), direct (target_ref), or none.
+      - name: Commit results back
+        if: ${{ inputs.target_repo != '' && inputs.commit_mode != 'none' }}
+        env:
+          INPUT_THREAD: ${{ inputs.thread }}
+          INPUT_COMMIT_MODE: ${{ inputs.commit_mode }}
+          INPUT_TARGET_REF: ${{ inputs.target_ref }}
+        run: |
+          cd workspace
+
+          # Check for any uncommitted changes from the agent run
+          if git diff --quiet HEAD && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+            echo "=== No uncommitted changes to push ==="
+          else
+            # Stage all changes (agents may have left unstaged work)
+            git add -A
+            git commit -m "ralph: agent outputs for thread '${INPUT_THREAD}'" \
+              --author="ralph[bot] <ralph-bot@users.noreply.github.com>" \
+              || echo "  (nothing new to commit)"
+          fi
+
+          # Count commits made during this run (by ralph[bot])
+          COMMIT_COUNT=$(git log --author="ralph\[bot\]" --oneline "origin/${INPUT_TARGET_REF}..HEAD" 2>/dev/null | wc -l | tr -d '[:space:]')
+          if [ "$COMMIT_COUNT" = "0" ]; then
+            echo "=== No new commits to push ==="
+            exit 0
+          fi
+          echo "=== ${COMMIT_COUNT} commit(s) to push ==="
+
+          if [ "$INPUT_COMMIT_MODE" = "branch" ]; then
+            # Push to a ralph/<thread> branch
+            BRANCH_NAME="ralph/${INPUT_THREAD}"
+            echo "  Pushing to branch: ${BRANCH_NAME}"
+            git push origin "HEAD:refs/heads/${BRANCH_NAME}" --force
+            echo "  ✓ Pushed ${COMMIT_COUNT} commit(s) to ${BRANCH_NAME}"
+          elif [ "$INPUT_COMMIT_MODE" = "direct" ]; then
+            # Push directly to the target ref
+            echo "  Pushing directly to: ${INPUT_TARGET_REF}"
+            git push origin "HEAD:refs/heads/${INPUT_TARGET_REF}"
+            echo "  ✓ Pushed ${COMMIT_COUNT} commit(s) to ${INPUT_TARGET_REF}"
+          fi
+
+      # ── 8. Upload outputs as artifact ─────────────────────────
       - name: Upload AI outputs
         if: always()
         uses: actions/upload-artifact@v4
@@ -210,7 +264,7 @@ jobs:
             workspace/logs/
           retention-days: 30
 
-      # ── 8. Summary ────────────────────────────────────────────
+      # ── 9. Summary ────────────────────────────────────────────
       - name: Generate run summary
         if: always()
         env:
@@ -220,6 +274,7 @@ jobs:
           INPUT_MAX_ITER: ${{ inputs.max_iterations }}
           INPUT_TARGET: ${{ inputs.target_repo }}
           INPUT_TARGET_REF: ${{ inputs.target_ref }}
+          INPUT_COMMIT_MODE: ${{ inputs.commit_mode }}
         run: |
           cd workspace
 
@@ -230,6 +285,7 @@ jobs:
             echo "- **Mode:** ${INPUT_MODE}"
             echo "- **Autonomy:** ${INPUT_AUTONOMY}"
             echo "- **Max iterations:** ${INPUT_MAX_ITER}"
+            echo "- **Commit mode:** ${INPUT_COMMIT_MODE}"
             if [ -n "${INPUT_TARGET}" ]; then
               echo "- **Target repo:** ${INPUT_TARGET}@${INPUT_TARGET_REF}"
             else
