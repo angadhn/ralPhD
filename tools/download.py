@@ -1,7 +1,7 @@
 """Download tools: citation_download.
 
 Fetches PDFs by DOI from open-access sources (Unpaywall) with optional SciHub
-fallback. Saves to papers/ and registers in the manifest.
+fallback. Saves to papers/ and registers in the manifest via tools._citation.
 
 Legal note: Unpaywall is always legal (indexes OA copies). SciHub is opt-in
 only — set SCIHUB_MIRROR env var to enable. This file should be gitignored.
@@ -10,11 +10,11 @@ only — set SCIHUB_MIRROR env var to enable. This file should be gitignored.
 import json
 import os
 import re
-import subprocess
 import time
 import urllib.error
 import urllib.request
 
+from tools._citation import manifest_add
 from tools._paths import scripts_dir as _scripts_dir
 
 
@@ -101,16 +101,15 @@ def _try_scihub(doi: str, mirror: str) :
 
 
 def _register_manifest(doi: str, filename: str, papers_dir: str, title: str = "") -> str:
-    """Register downloaded PDF in the manifest via citation_tools.py."""
-    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "manifest-add",
-           "--file", filename,
-           "--doi", doi,
-           "--scout", "scout",
-           "--papers-dir", papers_dir]
-    if title:
-        cmd.extend(["--title", title])
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    return (result.stdout + result.stderr).strip()
+    """Register downloaded PDF in the manifest via tools._citation."""
+    result = manifest_add(
+        doi=doi,
+        file=filename,
+        scout="scout",
+        title=title,
+        papers_dir=papers_dir,
+    )
+    return result.get("message", json.dumps(result))
 
 
 def _handle_citation_download(inp):
