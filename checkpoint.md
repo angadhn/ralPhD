@@ -3,14 +3,14 @@
 **Thread:** howler-port
 **Last updated:** 2026-03-11
 **Last agent:** research-coder
-**Status:** Phase 1 in progress — Task 1 done
+**Status:** Phase 1 in progress — Tasks 1-2 done
 
 ## Knowledge State
 
 | Task | Status | Notes |
 |------|--------|-------|
 | 1. evidence-format spec | done | specs/evidence-format.md — JSONL schema with 6 fields |
-| 2. check_claims tool | pending | tools/claims.py, follows checks.py pattern |
+| 2. check_claims tool | done | tools/claims.py — cross-refs .tex + ledger + .bib; registered for critic, editor, coherence-reviewer |
 | 3. citation_verify_all tool | pending | Extend tools/checks.py, batch DOI verify |
 | 4-8. Editor cycle | pending | editor + coherence-reviewer agents, paper-writer update |
 | 9-14. Analysis agents | pending | provocateur, synthesizer, triage |
@@ -20,8 +20,8 @@
 
 ## Last Reflection
 
-Iteration 1: On track. Clean transition to howler-port thread. Infrastructure solid. Next 5 iterations focus on Phase 1 (evidence-format spec, check_claims tool, citation_verify_all). No course corrections needed.
+Iteration 2: Task 2 complete. check_claims tool implemented with 3 flag categories (low-confidence inferences, stale entries, uncovered citations). Tested with synthetic data — all paths working. Tool registered for critic, editor, coherence-reviewer in __init__.py. No issues.
 
 ## Next Task
 
-2. Create `tools/claims.py` — check_claims tool research-coder
+3. Add `citation_verify_all` tool to `tools/checks.py` — research-coder

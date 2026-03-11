@@ -11,7 +11,7 @@ Interview decisions and full rationale are in this session's transcript.
 <!-- gate -->
 
 - [x] 1. Create `specs/evidence-format.md` — evidence-ledger JSONL schema (claim, source_key, extraction_type, confidence). Schema from `archive/plan-benchmarking-eval.md` section 3a. — **research-coder**
-- [ ] 2. Create `tools/claims.py` — `check_claims` tool. Reads a .tex file + `evidence-ledger.jsonl`, flags: claims with no ledger entry, low-confidence inferences, stale entries (source not in current bibliography). Register in `tools/__init__.py`: import `_claims_tools`, add to TOOLS, add to AGENT_TOOLS for editor, critic, coherence-reviewer. Follow pattern in `tools/checks.py`. — **research-coder**
+- [x] 2. Create `tools/claims.py` — `check_claims` tool. Reads a .tex file + `evidence-ledger.jsonl`, flags: claims with no ledger entry, low-confidence inferences, stale entries (source not in current bibliography). Register in `tools/__init__.py`: import `_claims_tools`, add to TOOLS, add to AGENT_TOOLS for editor, critic, coherence-reviewer. Follow pattern in `tools/checks.py`. — **research-coder**
 - [ ] 3. Add `citation_verify_all` tool to `tools/checks.py` — batch-verifies every entry in a .bib file via CrossRef/DOI (wraps `scripts/citation_tools.py verify` in a loop). Register in `tools/__init__.py` AGENT_TOOLS for scout, editor, critic, triage, synthesizer. — **research-coder**
 
 ## Phase 2: Editor Cycle
