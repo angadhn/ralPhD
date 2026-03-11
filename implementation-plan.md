@@ -23,6 +23,12 @@ Based on ghuntley's agent architecture: https://ghuntley.com/agent and https://g
 
 6. **Future vision: `toolsmith` agent.** Once `ralph_agent.py` works, a new agent could create new agents (from `agent-template.md`) and write tool wrappers, making ralph self-extending.
 
+7. **Howler precedent (research-companion):** Production system at ~9,200 LOC, 52 files, 21 agents, 8+ tools. Key architectural lessons: (a) tools as separate files in a directory — toolsmith drops files, not edits a monolith; (b) `agent-templates/` directory with an `index.ts` collector; (c) reusable prompt blocks (`prompts/blocks/`). Howler has NO per-agent tool control (any agent calls any script) — ralPhD's `AGENT_TOOLS` registry is strictly better.
+
+8. **Tool coverage gap:** `citation_tools.py` (715 lines, 7 subcommands) is the biggest script but only `lint` is wrapped as a tool. Scout references `batch-lookup` in its prompt but must fall back to bash. Also missing ghuntley's `list_files` and `code_search` primitives (2 of his 5 essential tools).
+
+9. **Growth path:** Benchmarking plan + Howler precedent point toward 15-20 agents and 15+ tools. The `tools/` directory split is motivated by this trajectory, not just current file length (464 lines).
+
 ## What exists already
 
 - `ralph_agent.py` — written, parses, untested (auth blocker)
@@ -60,8 +66,11 @@ Explicit `python scripts/check_language.py` commands → "run check_language on 
 - [x] 5. Update `critic.md` — all 6 script invocations simplified to tool names — **human**
 - [x] 6. Test: critic called `check_language` as registered tool (not bash) — **human**
 - [x] 7. Wire `ralph-loop.sh` line 336 to call `ralph_agent.py` — **human**
-- [ ] 8. End-to-end test through ralph-loop — **human**
-- [ ] 9. (Future) Create `toolsmith.md` agent + `tools/registry.json` for self-extending capability — **human**
+- [x] 8. Split `ralph_agent.py` into loop + `tools/` directory: `ralph_agent.py` keeps loop/auth/CLI (201 lines), `tools/__init__.py` has TOOLS registry + AGENT_TOOLS + `execute_tool()` + `get_tools_for_agent()`, `tools/core.py` has read_file/write_file/bash, `tools/checks.py` has check_language/check_journal/check_figure/citation_lint, `tools/pdf.py` has pdf_metadata/extract_figure — **research-coder**
+- [ ] 9. Complete tool inventory: wrap remaining `citation_tools.py` subcommands (`citation_lookup` for lookup+batch-lookup, `citation_verify` for verify, `citation_manifest` for manifest-check+manifest-add); add `list_files` and `code_search` (ripgrep) primitives per ghuntley's 5 essential tools; update AGENT_TOOLS (scout gets `citation_lookup`); fix figure-stylist mismatch (prompt doesn't reference `check_figure` but it's registered) — **research-coder**
+- [ ] 10. Interview user about which Howler agents to port — Howler has 15 agents ralPhD lacks (section editors, coherence-reviewer, triage, synthesizer, peer-reviewer, revision-agent, provocateur, etc.); determine priority and tool requirements for each — **human**
+- [ ] 11. End-to-end test through ralph-loop — **human**
+- [ ] 12. (Future) Create `toolsmith.md` agent + `tools/registry.json` for self-extending capability — toolsmith drops new files in `tools/`, adds entries to AGENT_TOOLS — **human**
 
 ## Key design decisions
 
@@ -74,3 +83,7 @@ Explicit `python scripts/check_language.py` commands → "run check_language on 
 **Why not just simplify prompts and keep `claude -p`?** That's a valid interim step (and works today with no auth blocker). But it doesn't give per-agent tool registries — every agent still sees Claude Code's full tool set, which is ghuntley's core criticism about context allocation.
 
 **What's lost vs Claude Code?** Permission management, context compression, subagent spawning, the TUI, git safety checks. This is a prototype — trades those for control over tool registration.
+
+**Why split into `tools/` now?** Not because 464 lines is too long today, but because the growth path demands it. Toolsmith needs to drop files, not edit a monolith. Howler's production system (21 agents, 8+ tools) uses separate tool files. The split is: `tools/__init__.py` (registry + AGENT_TOOLS), `tools/core.py` (read/write/bash), `tools/checks.py` (language/journal/figure/citation), `tools/pdf.py` (metadata/extract). ralph_agent.py keeps loop + auth + CLI.
+
+**Why complete `citation_tools.py` wrapping?** Scout's prompt references `batch-lookup` but must use bash — violates the colocated design. At 715 lines and 7 subcommands, it's our biggest script and the most tool-ready. Also: ghuntley's 5 essential tools include `list_files` and `code_search` — we're missing both.
