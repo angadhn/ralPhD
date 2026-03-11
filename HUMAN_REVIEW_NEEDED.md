@@ -1,15 +1,25 @@
-# Human Review Needed
+# Human Review: Phase 2 Complete — Stage Gate for Phase 3
 
-## Completed: Phase 1 — Create shared citation module
+## What was completed (Phase 2: Rewrite tools/checks.py)
 
-**Task 1** is done. `tools/_citation.py` (679 lines) extracts all 17 implementation functions from `scripts/citation_tools.py` into a shared internal module. No TOOLS dict — it's an import-only module used by `tools/checks.py` and `tools/download.py`.
+All 8 tools in `tools/checks.py` now operate without subprocess calls:
 
-- Import verification: all 17 functions importable
-- Full test suite: 72/72 passed
-- Commit: `1bb9534`
+- **Task 2**: Inlined `check_language.py` — 16 functions (strip_latex_commands through check_file), handler uses io.StringIO capture
+- **Task 3**: Inlined `check_journal.py` — 5 functions (_journal_parse_pub_reqs, count_words_tex, check_bib_fields, collect_tex_files, collect_bib_files), handler builds text report directly
+- **Task 4**: Inlined `check_figure.py` — 4 functions (_figure_parse_pub_reqs, check_raster, check_pdf_figure, collect_figure_files), PIL/fitz imported lazily inside functions
+- **Task 5**: Rewired 5 citation handlers to import from `tools._citation` instead of subprocess. Removed `subprocess` import and `_run_cmd` helper entirely.
 
-## Next: Phase 2 — Rewrite tools/checks.py
+**Test results**: 72/72 tests pass after each task.
 
-Tasks 2–5 will inline `check_language.py`, `check_journal.py`, `check_figure.py` into `tools/checks.py` and rewire the 5 citation handlers to import from `tools/_citation` instead of shelling out via subprocess.
+`tools/checks.py` grew from 323 lines (all subprocess wrappers) to ~890 lines (all self-contained).
 
-This is a large change to `tools/checks.py` (currently 323 lines, will grow substantially). Please confirm to proceed.
+## What Phase 3 will do (Rewrite tools/pdf.py)
+
+- **Task 6**: Inline `pdf_metadata.py` into `tools/pdf.py` — fitz lazy-imported
+- **Task 7**: Inline `extract_figure.py` into `tools/pdf.py` — io.StringIO capture
+
+These are the same pattern as Phase 2 but for the PDF tools module.
+
+## To proceed
+
+Delete this file to approve Phase 3.

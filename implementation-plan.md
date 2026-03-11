@@ -28,9 +28,9 @@ Tools have two layers: `tools/*.py` (thin subprocess wrappers with schemas) and 
 ## Phase 2 — Rewrite tools/checks.py
 
 - [x] 2. Inline `check_language.py` into `tools/checks.py` — all functions from strip_latex_commands through check_file. Remove subprocess call in `_handle_check_language`, call `check_file()` directly with `io.StringIO` capture — **coder**
-- [ ] 3. Inline `check_journal.py` into `tools/checks.py` — `_journal_parse_pub_reqs`, `count_words_tex`, `check_bib_fields`, `collect_tex_files`, `collect_bib_files`. Rewrite `_handle_check_journal` to call directly. Note: `strip_latex_commands`/`extract_body` are now local (no `sys.path` hack) — **coder**
-- [ ] 4. Inline `check_figure.py` into `tools/checks.py` — `FIGURE_DEFAULTS`, `_figure_parse_pub_reqs`, `check_raster`, `check_pdf`, `collect_figure_files`. PIL/fitz imported lazily inside handlers. Rewrite `_handle_check_figure` — **coder**
-- [ ] 5. Rewire 5 citation handlers in `tools/checks.py` — import from `tools._citation`, rewrite `_handle_citation_lint`, `_handle_citation_lookup`, `_handle_citation_verify`, `_handle_citation_verify_all`, `_handle_citation_manifest` to call functions directly (no subprocess). Keep report-reading summary logic in lint handler — **coder**
+- [x] 3. Inline `check_journal.py` into `tools/checks.py` — `_journal_parse_pub_reqs`, `count_words_tex`, `check_bib_fields`, `collect_tex_files`, `collect_bib_files`. Rewrite `_handle_check_journal` to call directly. Note: `strip_latex_commands`/`extract_body` are now local (no `sys.path` hack) — **coder**
+- [x] 4. Inline `check_figure.py` into `tools/checks.py` — `FIGURE_DEFAULTS`, `_figure_parse_pub_reqs`, `check_raster`, `check_pdf`, `collect_figure_files`. PIL/fitz imported lazily inside handlers. Rewrite `_handle_check_figure` — **coder**
+- [x] 5. Rewire 5 citation handlers in `tools/checks.py` — import from `tools._citation`, rewrite `_handle_citation_lint`, `_handle_citation_lookup`, `_handle_citation_verify`, `_handle_citation_verify_all`, `_handle_citation_manifest` to call functions directly (no subprocess). Keep report-reading summary logic in lint handler — **coder**
 
 <!-- gate -->
 
