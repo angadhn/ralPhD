@@ -35,3 +35,21 @@
 
 ## Iteration 5 — 2026-03-11
 - Create specs/evidence-format.md — evidence-ledger JSONL schema (howler-port Task 1)
+
+## Iteration 10 — 2026-03-11
+- Update checkpoint and plan: Task 1 (evidence-format spec) done
+
+## Iteration 12 — 2026-03-11
+- checkpoint: task 4 done (editor agent), yielding — next: task 5 (editor output format)
+
+## Iteration 13 — 2026-03-11
+- Complete task 5: editor-output-format.md — update checkpoint and plan
+
+## Iteration 38 — 2026-03-11
+- Update checkpoint and plan: tasks 9-11 complete, yielding before task 12
+
+## Iteration 39 — 2026-03-11
+- Complete tasks 12-13, yield before task 14
+
+## Reflection — Iteration 2 — 2026-03-11
+- Trajectory: on track. See ai-generated-outputs/reflections/reflection-iter-2.md
