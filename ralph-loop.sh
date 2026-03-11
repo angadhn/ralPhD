@@ -156,8 +156,9 @@ detect_agent() {
   # No task: "none", template placeholder, or empty — fall back to implementation-plan.md
   case "$next_task" in
     none*|None*|"<"*|"")
-      # Try first unchecked task from implementation-plan.md
+      # Try first unchecked task from implementation-plan.md (skip template placeholders)
       next_task=$(grep '^\- \[ \]' implementation-plan.md 2>/dev/null \
+        | grep -v '<task description>\|<agent>' \
         | head -1 | sed 's/^- \[ \] [0-9]*\. *//' | sed 's/\*//g')
       next_task=$(echo "$next_task" | sed 's/^ *//; s/ *$//')
       if [ -z "$next_task" ]; then
@@ -169,6 +170,10 @@ detect_agent() {
   # Agent name is the last word (strip any trailing punctuation)
   local agent="${next_task##* }"
   agent=$(echo "$agent" | sed 's/[^a-zA-Z0-9_-]//g')
+  # Empty after cleanup means template placeholder — treat as no task
+  if [ -z "$agent" ]; then
+    echo ""; return
+  fi
   echo "$agent"
 }
 
