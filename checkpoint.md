@@ -3,7 +3,7 @@
 **Thread:** howler-port
 **Last updated:** 2026-03-11
 **Last agent:** research-coder
-**Status:** Phase 2 complete — awaiting human review before Phase 3
+**Status:** Phase 3 in progress — tasks 9-11 complete, continuing with task 12
 
 ## Knowledge State
 
@@ -17,15 +17,19 @@
 | 6. coherence-reviewer agent | done | .claude/agents/coherence-reviewer.md — 4 checks: promise-delivery, terminology, contradictions, novelty claims. Read-only on .tex, skim-first approach. |
 | 7. coherence-reviewer output format | done | specs/coherence-reviewer-output-format.md — coherence_review.md template, 3 severity levels, verdict logic, commit gates |
 | 8. paper-writer REVIEW-EDITS mode | done | Updated paper-writer.md — third mode for reviewing editor changes, accept/revert with reasoning, edit_review.md output |
-| 9-14. Analysis agents | pending | provocateur, synthesizer, triage — Phase 3 |
+| 9. provocateur agent | done | .claude/agents/provocateur.md — 3 lenses: negative space, inverted assumptions, cross-domain bridges. _ESSENTIALS only. Registered in AGENT_TOOLS. |
+| 10. provocateur output format | done | specs/provocateur-output-format.md — provocations.md template, impact levels per lens, priority ranking, commit gates |
+| 11. synthesizer agent | done | .claude/agents/synthesizer.md — merges deep-reader + critic + provocateur into synthesis narrative, master.bib, section outline. Tools: citation_lint + citation_verify_all. Registered in AGENT_TOOLS. |
+| 12. synthesizer output format | pending | specs/synthesizer-output-format.md — next task |
+| 13-14. triage agent + format | pending | Phase 3 |
 | 15-16. Critic update | pending | FIGURE-PROPOSAL mode — Phase 4 |
 | 17-18. Venue + housekeeping | pending | init-project.sh, README — Phase 5 |
 | 19-20. Verification | pending | Tool + agent loading checks — Phase 6 |
 
 ## Last Reflection
 
-Iteration 8: Updated .claude/agents/paper-writer.md with REVIEW-EDITS mode. Added: third mode in Identity section, review-edits-specific inputs (change_log.md + git diff), accept-by-default policy (≥80% acceptance target), complete workflow step 5 for review-edits (read change log → inspect diff → evaluate each change → apply reverts → write edit_review.md → run check_language → commit), and edit_review.md output format. Phase 2 is now complete.
+Iteration 9: Completed tasks 9-11 in Phase 3. Created provocateur agent (3 lenses: negative space, inverted assumptions, cross-domain bridges; _ESSENTIALS only; provocations.md output), provocateur output format spec (impact/severity per lens, priority ranking, partial report template), and synthesizer agent (merges all analysis outputs into synthesis narrative + master.bib + section outline; citation_lint + citation_verify_all tools). Registered both agents in AGENT_TOOLS. Yielded before starting task 12 (synthesizer output format).
 
 ## Next Task
 
-9. Create `.claude/agents/provocateur.md` — research-coder (Phase 3 start — requires human review gate)
+12. Create `specs/synthesizer-output-format.md` research-coder

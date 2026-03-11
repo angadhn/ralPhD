@@ -26,9 +26,9 @@ Interview decisions and full rationale are in this session's transcript.
 ## Phase 3: Analysis Agents
 <!-- gate -->
 
-- [ ] 9. Create `.claude/agents/provocateur.md` — finds gaps no other agent covers. Cross-domain bridges, inverted assumptions, negative space. Reads deep-reader reports + critic output. Outputs `provocations.md`. Tools: `_ESSENTIALS` only. — **research-coder**
-- [ ] 10. Create `specs/provocateur-output-format.md` — provocations output format. — **research-coder**
-- [ ] 11. Create `.claude/agents/synthesizer.md` — merges critic review + deep-reader reports into section outline, merged master.bib, synthesis narrative. Tools: `_ESSENTIALS` + `citation_lint`, `citation_verify_all`. — **research-coder**
+- [x] 9. Create `.claude/agents/provocateur.md` — finds gaps no other agent covers. Cross-domain bridges, inverted assumptions, negative space. Reads deep-reader reports + critic output. Outputs `provocations.md`. Tools: `_ESSENTIALS` only. — **research-coder**
+- [x] 10. Create `specs/provocateur-output-format.md` — provocations output format. — **research-coder**
+- [x] 11. Create `.claude/agents/synthesizer.md` — merges critic review + deep-reader reports into section outline, merged master.bib, synthesis narrative. Tools: `_ESSENTIALS` + `citation_lint`, `citation_verify_all`. — **research-coder**
 - [ ] 12. Create `specs/synthesizer-output-format.md` — synthesizer output format. — **research-coder**
 - [ ] 13. Create `.claude/agents/triage.md` — sits between scout and deep-reader. Corpus deduplication, grade conflict resolution, reading plan generation. Tools: `_ESSENTIALS` + `pdf_metadata`, `citation_verify_all`. — **research-coder**
 - [ ] 14. Create `specs/triage-output-format.md` — triage output format. — **research-coder**
@@ -45,8 +45,13 @@ Interview decisions and full rationale are in this session's transcript.
 - [ ] 17. Update `scripts/init-project.sh` — create `inputs/` directory during project init. Add comment documenting the convention (feedback, prior submissions, venue-specific docs). — **research-coder**
 - [ ] 18. Update `.claude/agents/README.md` — add new agents (editor, coherence-reviewer, provocateur, synthesizer, triage) with tool summaries. Document `inputs/` convention. — **research-coder**
 
-## Phase 6: Verification
+## Phase 6: Prompt Audit
 <!-- gate -->
 
-- [ ] 19. Verify tool registration — run `python ralph_agent.py --agent editor --task "List your available tools"` and confirm check_claims + citation_verify_all appear. Run for all new agents. — **research-coder**
-- [ ] 20. Verify agent file loading — run `python ralph_agent.py --agent <name> --task "Confirm you loaded successfully"` for each new agent (editor, coherence-reviewer, provocateur, synthesizer, triage). — **research-coder**
+- [ ] 19. Audit all agent prompts against prompt quality checklist. For each `.claude/agents/*.md` file: (1) remove role-playing language — no "You are an expert X", just state the task; (2) convert negative prompts — change "Don't do X" to positive instructions; (3) compress — if a section can be shorter without losing meaning, shorten it; (4) check that mechanical procedures live in tools/specs, not baked into the prompt; (5) measure token cost of each prompt and report. Reference: Anthropic context engineering guide (https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), Claude 4 best practices (https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices), ghuntley principle: agents reason, tools do mechanical work. — **research-coder**
+
+## Phase 7: Verification
+<!-- gate -->
+
+- [ ] 20. Verify tool registration — run `python ralph_agent.py --agent editor --task "List your available tools"` and confirm check_claims + citation_verify_all appear. Run for all new agents. — **research-coder**
+- [ ] 21. Verify agent file loading — run `python ralph_agent.py --agent <name> --task "Confirm you loaded successfully"` for each new agent (editor, coherence-reviewer, provocateur, synthesizer, triage). — **research-coder**
