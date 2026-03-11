@@ -1,32 +1,68 @@
 {
   "scout": {
+    "model": "claude-sonnet-4-6",
     "max_step": 5,
     "max_tokens": 8096,
     "steps": {"search_score": 3, "verify": 5, "download": 3, "summary": 5}
   },
+  "triage": {
+    "model": "claude-sonnet-4-6",
+    "max_step": 5,
+    "max_tokens": 8096
+  },
   "deep-reader": {
+    "model": "claude-opus-4-6",
     "max_step": 10,
     "max_tokens": 12288,
     "steps": {"read_chunk": 6, "notes_synthesis": 10, "report": 5}
   },
   "critic": {
+    "model": "claude-opus-4-6",
     "max_step": 15,
     "max_tokens": 8096,
     "steps": {"skim": 10, "deep_read": 15, "style_check": 10, "compliance": 10}
   },
+  "provocateur": {
+    "model": "claude-opus-4-6",
+    "max_step": 10,
+    "max_tokens": 8096
+  },
+  "synthesizer": {
+    "model": "claude-opus-4-6",
+    "max_step": 10,
+    "max_tokens": 12288
+  },
   "paper-writer": {
+    "model": "claude-opus-4-6",
     "max_step": 5,
     "max_tokens": 16384,
     "steps": {"read_inputs": 5, "write_subsection": 5, "commit_gates": 5}
   },
+  "editor": {
+    "model": "claude-opus-4-6",
+    "max_step": 10,
+    "max_tokens": 12288
+  },
+  "coherence-reviewer": {
+    "model": "claude-opus-4-6",
+    "max_step": 10,
+    "max_tokens": 8096
+  },
   "research-coder": {
+    "model": "claude-sonnet-4-6",
     "max_step": 15,
     "max_tokens": 16384,
     "steps": {"read_inputs": 5, "write_script": 10, "run_script": 10, "summary": 15}
   },
   "figure-stylist": {
+    "model": "claude-sonnet-4-6",
     "max_step": 5,
     "max_tokens": 8096,
     "steps": {"read_figure": 3, "write_feedback": 5, "checkpoint_update": 2}
+  },
+  "coder": {
+    "model": "claude-sonnet-4-6",
+    "max_step": 15,
+    "max_tokens": 16384
   }
 }

@@ -54,7 +54,7 @@ build mode how to execute. CLI flags on build mode can override for benchmarking
 
 - [x] 11. Update tests in `tests/test-workflow-local.sh` — add tests for: Architecture field parsing, parallel phase detection, eval.jsonl output format, --serial/--parallel/--single flag parsing — **coder**
 - [x] 12. Update `README.md` — document benchmarking workflow: how to plan with annotations, run three modes, compare results. Include example commands for the IFP benchmarking run — **coder**
-- [ ] 13. Add per-agent model config to `context-budgets.json` — add `model` field per agent (e.g., `"coder": {"model": "claude-sonnet-4-6", ...}`, `"critic": {"model": "claude-opus-4-6", ...}`). `ralph-loop.sh` reads model field for detected agent, passes to `ralph_agent.py --model`. Falls back to `CLAUDE_MODEL` env var if not set — **coder**
+- [x] 13. Add per-agent model config to `context-budgets.json` — add `model` field per agent (e.g., `"coder": {"model": "claude-sonnet-4-6", ...}`, `"critic": {"model": "claude-opus-4-6", ...}`). `ralph-loop.sh` reads model field for detected agent, passes to `ralph_agent.py --model`. Falls back to `CLAUDE_MODEL` env var if not set — **coder**
 
 ## Files Changed
 
@@ -70,7 +70,7 @@ build mode how to execute. CLI flags on build mode can override for benchmarking
 | `tests/test-workflow-local.sh` | MODIFY (new tests) |
 | `README.md` | MODIFY (benchmarking docs) |
 
-| `context-budgets.json` | MODIFY (add per-agent model field) |
-| `ralph_agent.py` | MODIFY (accept --model override from loop) |
+| `context-budgets.json` | MODIFY (add per-agent model field) ✅ |
+| `ralph_agent.py` | no change needed (already accepts --model from loop) |
 
 **No changes to:** `tools/`, `.claude/agents/`, `specs/*-output-format.md`

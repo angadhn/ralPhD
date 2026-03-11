@@ -135,6 +135,20 @@ detect_agent() {
   echo "$agent"
 }
 
+resolve_model() {
+  # Resolve model for a given agent: context-budgets.json > CLAUDE_MODEL env > default.
+  local agent_name="${1:-}"
+  local budgets_file="${RALPH_HOME}/context-budgets.json"
+  local model=""
+  if [ -n "$agent_name" ] && [ -f "$budgets_file" ] && command -v jq >/dev/null 2>&1; then
+    model=$(jq -r --arg a "$agent_name" '.[$a].model // empty' "$budgets_file" 2>/dev/null || true)
+  fi
+  if [ -z "$model" ]; then
+    model="${CLAUDE_MODEL:-claude-opus-4-6}"
+  fi
+  echo "$model"
+}
+
 estimate_input_cost() {
   # Estimate context % that reading input files will consume for a given agent.
   # Returns integer percentage via stdout.
@@ -406,13 +420,14 @@ run_parallel_phase() {
       continue
     fi
 
-    echo "  Spawning parallel agent: $agent_name (task $task_idx)"
+    local agent_model
+    agent_model=$(resolve_model "$agent_name")
+    echo "  Spawning parallel agent: $agent_name (task $task_idx, model $agent_model)"
 
-    CLAUDE_MODEL="${CLAUDE_MODEL:-claude-opus-4-6}"
     local task_prompt
     task_prompt=$(cat "$PROMPT_FILE")
 
-    echo "$task_prompt" | python3 "${RALPH_HOME}/ralph_agent.py"       --agent "$agent_name" --task - --model "$CLAUDE_MODEL"       --output-json "${output_dir}/output.json" &
+    echo "$task_prompt" | python3 "${RALPH_HOME}/ralph_agent.py"       --agent "$agent_name" --task - --model "$agent_model"       --output-json "${output_dir}/output.json" &
     pids+=($!)
     agents+=("$agent_name")
   done < <(collect_phase_tasks "$phase_line")
@@ -581,7 +596,7 @@ while true; do
 
   if $PIPE_MODE; then
     # Non-interactive: pipe prompt, background claude, poll for context via JSONL monitor
-    CLAUDE_MODEL="${CLAUDE_MODEL:-claude-opus-4-6}"
+    CLAUDE_MODEL=$(resolve_model "$CURRENT_AGENT")
     echo "  Model: $CLAUDE_MODEL"
 
     # Create start marker for JSONL monitor (before launching claude)
@@ -711,7 +726,7 @@ while true; do
     monitor_context "$$" "$ITER_START" "$IGNORE_UNTIL" "$CURRENT_AGENT" &
     MONITOR_PID=$!
 
-    CLAUDE_MODEL="${CLAUDE_MODEL:-claude-opus-4-6}"
+    CLAUDE_MODEL=$(resolve_model "$CURRENT_AGENT")
     SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
     echo "$PROMPT" | claude --model "$CLAUDE_MODEL" --session-id "$SESSION_ID" --dangerously-skip-permissions
     EXIT_CODE=$?

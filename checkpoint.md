@@ -3,7 +3,7 @@
 **Thread:** benchmarking-infra
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 4 in progress — tasks 1-12 done. Task 13 (per-agent model config) next.
+**Status:** Phase 4 complete — all 13 tasks done. Benchmarking infrastructure ready.
 
 ## Knowledge State
 
@@ -21,6 +21,7 @@
 | 10. Update prompt-build.md | ✅ done | Architecture awareness section |
 | 11. Update tests in test-workflow-local.sh | ✅ done | 116/116 pass — tests 12-15 cover arch parsing, parallel phases, eval.jsonl, single mode |
 | 12. Update README.md | ✅ done | Benchmarking section, architecture modes, eval metrics, comparison workflow |
+| 13. Add per-agent model config | ✅ done | model field in context-budgets.json, resolve_model() in ralph-loop.sh |
 
 ## Last Reflection
 
@@ -28,4 +29,4 @@
 
 ## Next Task
 
-13. Add per-agent model config to `context-budgets.json` — add `model` field per agent, ralph-loop.sh reads and passes to ralph_agent.py --model — coder
+none — all tasks complete

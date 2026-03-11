@@ -1,19 +1,28 @@
-# Task Summary — Task 12: Update README.md with benchmarking docs
+# Task Summary — Task 13: Per-agent model config
 
 ## Changes
 
-Added benchmarking documentation to `README.md`:
+### context-budgets.json
+- Added `"model"` field to all 12 agents
+- Reasoning-heavy agents (critic, deep-reader, paper-writer, provocateur, synthesizer, editor, coherence-reviewer) → `claude-opus-4-6`
+- Mechanical/code agents (scout, triage, research-coder, figure-stylist, coder) → `claude-sonnet-4-6`
+- Added missing agents (triage, provocateur, synthesizer, editor, coherence-reviewer, coder) that previously had no budget entry
 
-- **Benchmarking section** — architecture modes table (serial/parallel/single), CLI flags, plan annotations, evaluation metrics overview, full benchmark comparison workflow with example commands
-- **Flags table** — added `--serial`, `--parallel`, `--single` flags
-- **Structure diagram** — added `prompt-build-single.md` and `scripts/evaluate_iteration.py`, `scripts/evaluate_run.py`
+### ralph-loop.sh
+- Added `resolve_model()` function: reads per-agent model from context-budgets.json, falls back to `$CLAUDE_MODEL` env var, then to `claude-opus-4-6` default
+- Updated 3 call sites (parallel mode, pipe mode, interactive mode) to use `resolve_model` instead of hardcoded `${CLAUDE_MODEL:-claude-opus-4-6}`
+
+### ralph_agent.py
+- No changes needed — already accepts `--model` from CLI. The loop resolves the model and passes it via `--model`.
 
 ## Files Changed
 | File | Action |
 |------|--------|
-| `README.md` | MODIFIED — added ~75 lines (benchmarking section, updated flags/structure) |
-| `checkpoint.md` | MODIFIED — marked task 12 done, set next task 13 |
-| `implementation-plan.md` | MODIFIED — checked off task 12 |
+| `context-budgets.json` | MODIFIED — added model field to all agents, added 6 missing agent entries |
+| `ralph-loop.sh` | MODIFIED — added resolve_model(), updated 3 call sites |
+| `checkpoint.md` | MODIFIED — marked all tasks done |
+| `implementation-plan.md` | MODIFIED — checked off task 13 |
 
 ## Test Results
-- 116/116 passed, 0 failed (no regressions)
+- 116/116 passed, 0 failed
+- resolve_model() verified: returns correct per-agent models, falls back for unknown agents
