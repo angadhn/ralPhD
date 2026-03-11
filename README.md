@@ -79,7 +79,7 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 
 ## Agents
 
-Eleven agents, each handling one type of work per iteration:
+Twelve agents, each handling one type of work per iteration:
 
 | Agent | What it does |
 |-------|-------------|
@@ -94,6 +94,7 @@ Eleven agents, each handling one type of work per iteration:
 | **coherence-reviewer** | Post-editing QA: promise-delivery, terminology, contradictions, novelty claims |
 | **research-coder** | Generates analysis scripts and figures |
 | **figure-stylist** | Reviews figures for visual clarity and print readiness |
+| **coder** | Reads, modifies, and tests application source code |
 
 Agent files live in `.claude/agents/`. Each inherits shared protocol from `agent-base.md` and has its own inputs, outputs, workflow steps, and yield protocol. The dispatcher never needs to know the details — it just routes.
 
@@ -159,7 +160,7 @@ ralPhD/
 ├── prompt-build.md             # Build-mode dispatcher
 ├── prompt-plan.md              # Plan-mode dispatcher
 ├── context-budgets.json        # Per-agent context budget config
-├── .claude/agents/             # 11 agent prompts + agent-base.md shared protocol
+├── .claude/agents/             # 12 agent prompts + agent-base.md shared protocol
 ├── tools/                      # Tool registry + per-agent tool implementations
 │   ├── __init__.py             # Merged registry, AGENT_TOOLS, dispatch
 │   ├── core.py                 # read_file, write_file, bash
@@ -218,6 +219,7 @@ Tools are defined in `tools/` and registered per-agent in `tools/__init__.py`:
 | coherence-reviewer | check_claims, check_language |
 | research-coder | (essentials only) |
 | figure-stylist | check_figure |
+| coder | (essentials only) |
 
 Every agent gets 5 essentials: `read_file`, `write_file`, `bash`, `list_files`, `code_search`. 17 tools total across 7 modules.
 
@@ -238,6 +240,56 @@ steps:
     with: { repository: you/ralPhD, path: .ralph-engine }
   - run: RALPH_HOME=$GITHUB_WORKSPACE/.ralph-engine ./ralphd -p build 5
 ```
+
+## GitHub Actions (ralph-as-engine)
+
+ralPhD can run as a reusable engine via GitHub Actions. External systems (Howler, API, `gh` CLI) trigger a `workflow_dispatch` event, and ralPhD runs `ralph-loop.sh` against a target project repo.
+
+### Quick trigger
+
+```bash
+gh workflow run ralph-run.yml \
+  -f thread="my-thread" \
+  -f prompt="Write the introduction section" \
+  -f autonomy="stage-gates" \
+  -f target_repo="myorg/my-paper" \
+  -f max_iterations="5"
+```
+
+### Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `thread` | yes | — | Thread name (checkpoint ID, output dir, branch name) |
+| `prompt` | yes | — | Task prompt — written to `inbox.md` |
+| `autonomy` | no | `stage-gates` | `autopilot`, `stage-gates`, `step-by-step` |
+| `target_repo` | no | `""` | Target repo (`owner/name`). Empty = run against self |
+| `target_ref` | no | `main` | Branch to check out |
+| `max_iterations` | no | `5` | Safety cap on loop iterations |
+| `loop_mode` | no | `build` | `build` or `plan` |
+| `commit_mode` | no | `branch` | `branch` (ralph/\<thread\>), `direct`, `none` |
+| `callback_url` | no | `""` | Webhook URL for JSON result summary |
+
+### How it works
+
+1. Checks out ralPhD as `ralph-home/` (the engine)
+2. Checks out target repo as `workspace/` (or symlinks ralph-home if no target)
+3. Runs `init-project.sh --ci` on first run (copies templates, agents, specs)
+4. Injects thread/prompt/autonomy into workspace files
+5. Runs `ralph-loop.sh -p <mode> <max_iterations>`
+6. Commits results to `ralph/<thread>` branch (or direct, or artifact-only)
+7. POSTs webhook callback with run summary (if `callback_url` set)
+8. Uploads outputs as GitHub Actions artifact
+
+### Secrets
+
+| Secret | Required | Description |
+|--------|----------|-------------|
+| `ANTHROPIC_API_KEY` | yes | API key for Claude |
+| `TARGET_REPO_TOKEN` | conditional | PAT with `contents:write` on target repo |
+| `CALLBACK_SECRET` | no | HMAC-SHA256 key for signing webhook payloads |
+
+See `specs/api-contract.md` for the full API contract, webhook payload schema, and code examples.
 
 ## Design decisions
 

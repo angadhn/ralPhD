@@ -1,28 +1,22 @@
-# Task 12 Summary — End-to-End Pipeline Integration Test
+# Task 12+13 Summary — E2E Test + README Updates
 
-## What was done
+## Task 12: End-to-End Pipeline Integration Test
 
-Added Test 11 (End-to-End Pipeline Integration) to `tests/test-workflow-local.sh`. This test chains all 10 workflow steps together in a single workspace, simulating the complete GitHub Actions pipeline without API calls.
+Added Test 11 to `tests/test-workflow-local.sh` — chains all 10 workflow steps in a single workspace simulating the full GitHub Actions pipeline. Sub-tests 11a–11j cover: bare origin setup, CI init, template injection, agent detection, simulated agent outputs, commit-back to branch, webhook payload validation, artifact paths, run summary generation, and re-init idempotency. **72/72 tests pass.**
 
-## Sub-tests (11a–11j)
+## Task 13: README Updates
 
-- **11a**: Create bare origin repo + clone as workspace (simulates actions/checkout)
-- **11b**: Run `init-project.sh --ci` — verifies all workspace artifacts created
-- **11c**: Template injection — thread, prompt, autonomy injected correctly
-- **11d**: Agent detection — checkpoint parsed, `coder` agent detected
-- **11e**: Simulated agent work — task-summary, sections/, checkpoint update
-- **11f**: Commit-back — pushes to `ralph/<thread>` branch, verifies content on origin
-- **11g**: Webhook payload — correct structure, field types, values from pipeline state
-- **11h**: Artifact verification — all upload paths exist
-- **11i**: Run summary — includes all config fields and checkpoint state
-- **11j**: Subsequent run — re-init preserves checkpoint, accepts new prompt
+Updated `README.md`:
+- Agent table: 11 → 12 agents (added coder)
+- Agent count in Structure section: 11 → 12
+- Tool registry table: added coder entry
+- New "GitHub Actions (ralph-as-engine)" section: trigger example, inputs table, workflow steps, secrets table, link to API contract
+
+Agents README (`.claude/agents/README.md`) was already up to date with 12 agents.
 
 ## Files modified
 
-- `tests/test-workflow-local.sh` — added Test 11 (e2e pipeline integration, ~200 lines)
-- `implementation-plan.md` — marked tasks 11 and 12 as done
-- `checkpoint.md` — updated status, next task is 13
-
-## Test results
-
-72/72 tests pass (62 existing + 10 new e2e sub-tests).
+- `tests/test-workflow-local.sh` — added Test 11 (~200 lines)
+- `README.md` — 12-agent table, GitHub Actions section
+- `implementation-plan.md` — all 13 tasks marked done
+- `checkpoint.md` — status: all complete, next task: none

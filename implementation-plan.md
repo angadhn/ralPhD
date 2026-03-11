@@ -42,7 +42,7 @@ Howler v2's research companion duplicates ralPhD's agent roster in TypeScript ed
 ## Phase 4 — Verification
 
 - [x] 12. End-to-end test: trigger the workflow from a test repo, verify ralph-loop runs, agents execute, outputs are committed, and summary is available — **coder**
-- [ ] 13. Update README and agents README to document the new 12-agent system and GitHub Actions invocation — **coder**
+- [x] 13. Update README and agents README to document the new 12-agent system and GitHub Actions invocation — **coder**
 
 ## Tasks
 
