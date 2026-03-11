@@ -20,21 +20,21 @@ Produces actionable review items. Each mode **appends** its labeled section to `
 **Style check mode:**
 - The section just written by paper-writer (path from checkpoint)
 - `specs/writing-style.md` — the style rules to check against
-- Run `python scripts/check_language.py <section-file>` — programmatic check
+- Run `check_language` on the section file — programmatic check
 
 **Journal compliance mode** (conditional: `specs/publication-requirements.md` must exist):
-- Run `python scripts/check_journal.py --pub-reqs specs/publication-requirements.md --json sections/` — word counts, page estimate, bib field checks
+- Run `check_journal` on sections/ with pub-reqs — word counts, page estimate, bib field checks
 - `specs/publication-requirements.md` — skim for non-linter context (citation style, formatting notes)
 
 **Figure compliance mode** (conditional: `specs/publication-requirements.md` + figures must exist):
-- Run `python scripts/check_figure.py --pub-reqs specs/publication-requirements.md --json figures/` — DPI, dimensions, file size checks
+- Run `check_figure` on figures/ with pub-reqs — DPI, dimensions, file size checks
 - `specs/publication-requirements.md` — skim for non-linter context (color policy, max figures)
 
 ## Operational Guardrails
 
 - **Pre-estimate:** Survey: ~8-10% context per report skim, ~15% for deep-reads. Style check: ~10% total. Journal/figure compliance: ~10% total.
 - **Priority order (survey):** (1) skim all reports, (2) flag contradictions, (3) deep-read flagged sections, (4) scan Figure Opportunities, (5) write figure_proposals.md, (6) write HUMAN_REVIEW_NEEDED.md
-- **Priority order (style check):** (1) read section, (2) run check_language.py, (3) check claim calibration against writing-style.md, (4) append results to HUMAN_REVIEW_NEEDED.md
+- **Priority order (style check):** (1) read section, (2) run check_language, (3) check claim calibration against writing-style.md, (4) append results to HUMAN_REVIEW_NEEDED.md
 - **Context check:** After reading all inputs, check context. If >35%, write outputs from notes without re-reading inputs.
 - **Yield check:** Before each major step, read `/tmp/ralph-budget-info`. Follow the recommendation (PROCEED/CAUTION/YIELD).
 - **Incremental commit:** After each major step (each report skimmed, deep-read notes, HUMAN_REVIEW_NEEDED.md written), commit all modified output files immediately (`git add <outputs> && git commit`). This caps work loss to one step if context is exhausted.
@@ -68,17 +68,17 @@ Full `HUMAN_REVIEW_NEEDED.md` templates (all 4 modes): see `specs/critic-output-
    g. Read `specs/critic-output-format.md` — load HUMAN_REVIEW template. Write `HUMAN_REVIEW_NEEDED.md` — Survey Assessment section
 3. **Style check mode:**
    a. Read the section file from checkpoint
-   b. Run `python scripts/check_language.py <section-file>`
+   b. Run `check_language` on the section file
    c. Read `specs/writing-style.md`
    d. Check claim calibration: match modal verb strength to evidence
    e. Read `specs/critic-output-format.md` — load template. Append "Style Check — [Section Name]" section to `HUMAN_REVIEW_NEEDED.md`
 4. **Journal compliance mode:**
-   a. Run `python scripts/check_journal.py --pub-reqs specs/publication-requirements.md --json sections/`
+   a. Run `check_journal` on sections/ with pub-reqs specs/publication-requirements.md
    b. Parse JSON output — extract word counts, page estimate, bib issues, pass/fail
    c. Skim `specs/publication-requirements.md` for non-linter context (citation style, formatting notes)
    d. Read `specs/critic-output-format.md` — load template. Append "Journal Compliance Check" section to `HUMAN_REVIEW_NEEDED.md` with script results + any non-linter observations
 5. **Figure compliance mode:**
-   a. Run `python scripts/check_figure.py --pub-reqs specs/publication-requirements.md --json figures/`
+   a. Run `check_figure` on figures/ with pub-reqs specs/publication-requirements.md
    b. Parse JSON output — extract per-figure DPI, dimensions, file size, pass/fail
    c. Skim `specs/publication-requirements.md` for non-linter context (color policy, max figures, accepted formats)
    d. Read `specs/critic-output-format.md` — load template. Append "Figure Compliance Check" section to `HUMAN_REVIEW_NEEDED.md` with script results + any non-linter observations

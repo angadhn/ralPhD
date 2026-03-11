@@ -5,3 +5,4 @@ plans/
 __pycache__/
 iteration_count
 .env
+*.swp

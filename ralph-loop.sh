@@ -332,8 +332,8 @@ while true; do
       echo "  JSONL context monitor started (pid $JSONL_MONITOR_PID)"
     fi
 
-    # Launch Claude (stdout is clean — no OTEL hijacking)
-    echo "$PROMPT" | claude -p --model "$CLAUDE_MODEL" --output-format json --dangerously-skip-permissions > /tmp/ralph-output.json &
+    # Launch agent runner (ralph_agent.py with per-agent tool registries)
+    echo "$PROMPT" | python3 ralph_agent.py --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json &
     CLAUDE_PID=$!
 
     # Wait for first context reading (after ignore window) and print it

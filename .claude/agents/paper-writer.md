@@ -89,7 +89,7 @@ Full `outline.md` template: see `specs/paper-writer-output-format.md` (read at s
    - Cross-references to other sections where relevant
    - Place figures per outline *(write mode)*
    - Apply only approved changes, preserve paragraph structure where possible *(revise mode)*
-8. Run commit gates on the section before committing.
+8. Run commit gates: `check_language` on the section, `citation_lint` on references/.
 9. Update `references/cited_tracker.jsonl` with DOIs cited in this section
 10. Update `checkpoint.md` — set Next Task to `STYLE-CHECK critic` (triggers style review of this section)
 11. Commit all outputs. Yield — critic runs style check before next section.
@@ -97,7 +97,7 @@ Full `outline.md` template: see `specs/paper-writer-output-format.md` (read at s
 ### Final Iteration — Assembly *(write mode only)*
 
 12. Assemble `main.tex` from all section files
-13. Run full commit gates across all .bib files and sections
+13. Run `check_language` on all sections, `citation_lint` on all .bib files
 14. `pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex`
 
 ## Ralph Loop Yield Protocol

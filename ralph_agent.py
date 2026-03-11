@@ -88,17 +88,62 @@ TOOL_DEFS = {
             "required": ["command"],
         },
     },
+    "check_journal": {
+        "name": "check_journal",
+        "description": (
+            "Check manuscript sections against publication requirements: "
+            "word count per section, total word count vs limit, page estimate, "
+            "required .bib fields. Returns PASS/FAIL with details."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sections_dir": {"type": "string", "description": "Path to sections directory (e.g. 'sections/')"},
+                "pub_reqs": {"type": "string", "description": "Path to publication-requirements.md (optional)"},
+            },
+            "required": ["sections_dir"],
+        },
+    },
+    "check_figure": {
+        "name": "check_figure",
+        "description": (
+            "Check figure files for publication readiness: DPI, pixel dimensions, "
+            "color mode, file size, format. Returns PASS/FAIL per figure."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "figures_dir": {"type": "string", "description": "Path to figures directory (e.g. 'figures/')"},
+                "pub_reqs": {"type": "string", "description": "Path to publication-requirements.md (optional)"},
+            },
+            "required": ["figures_dir"],
+        },
+    },
+    "citation_lint": {
+        "name": "citation_lint",
+        "description": (
+            "Lint .bib files against Semantic Scholar/CrossRef/OpenAlex to verify "
+            "citation metadata. Returns verification report with unverified entries."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "bib_dir": {"type": "string", "description": "Path to bib directory (e.g. 'references/')"},
+            },
+            "required": ["bib_dir"],
+        },
+    },
 }
 
 # ── Per-agent tool registries ──────────────────────────────────
 
 AGENT_TOOLS = {
-    "paper-writer": ["read_file", "write_file", "bash", "check_language"],
-    "critic": ["read_file", "write_file", "bash", "check_language"],
+    "paper-writer": ["read_file", "write_file", "bash", "check_language", "citation_lint"],
+    "critic": ["read_file", "write_file", "bash", "check_language", "check_journal", "check_figure"],
     "scout": ["read_file", "write_file", "bash"],
     "deep-reader": ["read_file", "write_file", "bash"],
     "research-coder": ["read_file", "write_file", "bash"],
-    "figure-stylist": ["read_file", "write_file", "bash"],
+    "figure-stylist": ["read_file", "write_file", "bash", "check_figure"],
 }
 
 DEFAULT_TOOLS = ["read_file", "write_file", "bash"]
@@ -142,6 +187,32 @@ def execute_tool(name: str, tool_input: dict) -> str:
             return f"(exit code {result.returncode})\n{output}"
         return output if output.strip() else "(no output)"
 
+    elif name == "check_journal":
+        cmd = ["python3", "scripts/check_journal.py"]
+        if tool_input.get("pub_reqs"):
+            cmd.extend(["--pub-reqs", tool_input["pub_reqs"]])
+        cmd.append(tool_input["sections_dir"])
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        output = result.stdout + result.stderr
+        return output if output.strip() else f"(exit code {result.returncode}, no output)"
+
+    elif name == "check_figure":
+        cmd = ["python3", "scripts/check_figure.py", "--json"]
+        if tool_input.get("pub_reqs"):
+            cmd.extend(["--pub-reqs", tool_input["pub_reqs"]])
+        cmd.append(tool_input["figures_dir"])
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        output = result.stdout + result.stderr
+        return output if output.strip() else f"(exit code {result.returncode}, no output)"
+
+    elif name == "citation_lint":
+        cmd = ["python3", "scripts/citation_tools.py", "lint",
+               "--bib-dir", tool_input["bib_dir"],
+               "--output", "/dev/stdout"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        output = result.stdout + result.stderr
+        return output if output.strip() else f"(exit code {result.returncode}, no output)"
+
     return f"Unknown tool: {name}"
 
 
@@ -183,7 +254,10 @@ def get_client() -> anthropic.Anthropic:
     )
 
 
-def run_agent(agent_name: str, system_prompt: str, task: str, model: str, max_tokens: int):
+def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
+              max_tokens: int, output_json: str = None):
+    import time as _time
+    start_ms = int(_time.time() * 1000)
     client = get_client()
 
     # Build tool list for this agent
@@ -196,6 +270,11 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str, max_to
     print("", file=sys.stderr)
 
     messages = [{"role": "user", "content": task}]
+    num_turns = 0
+    total_input = 0
+    total_output = 0
+    total_cache_create = 0
+    total_cache_read = 0
 
     while True:
         response = client.messages.create(
@@ -205,6 +284,11 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str, max_to
             tools=tools,
             messages=messages,
         )
+        num_turns += 1
+        total_input += response.usage.input_tokens
+        total_output += response.usage.output_tokens
+        total_cache_create += getattr(response.usage, 'cache_creation_input_tokens', 0) or 0
+        total_cache_read += getattr(response.usage, 'cache_read_input_tokens', 0) or 0
 
         # Add assistant response to conversation
         messages.append({"role": "assistant", "content": response.content})
@@ -234,13 +318,32 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str, max_to
         # Feed results back, loop again
         messages.append({"role": "user", "content": tool_results})
 
-    # Output usage stats as JSON for ralph-loop.sh to parse
+    duration_ms = int(_time.time() * 1000) - start_ms
+
+    # Write usage JSON compatible with ralph-loop.sh's jq parsing
     usage = {
-        "input_tokens": response.usage.input_tokens,
-        "output_tokens": response.usage.output_tokens,
-        "stop_reason": response.stop_reason,
-        "model": model,
+        "is_error": False,
+        "num_turns": num_turns,
+        "duration_ms": duration_ms,
+        "result": response.content[0].text if response.content and response.content[0].type == "text" else "",
+        "usage": {
+            "input_tokens": total_input,
+            "output_tokens": total_output,
+            "cache_creation_input_tokens": total_cache_create,
+            "cache_read_input_tokens": total_cache_read,
+        },
+        "modelUsage": {
+            model: {
+                "inputTokens": total_input,
+                "outputTokens": total_output,
+                "cacheCreationInputTokens": total_cache_create,
+                "cacheReadInputTokens": total_cache_read,
+            }
+        },
     }
+    if output_json:
+        with open(output_json, "w") as f:
+            json.dump(usage, f)
     print(json.dumps(usage), file=sys.stderr)
 
 
@@ -253,6 +356,7 @@ def main():
     parser.add_argument("--model", default=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
                         help="Model to use")
     parser.add_argument("--max-tokens", type=int, default=8096, help="Max output tokens")
+    parser.add_argument("--output-json", help="Write usage JSON to this path (compatible with ralph-loop.sh)")
     args = parser.parse_args()
 
     # Load agent prompt
@@ -266,7 +370,7 @@ def main():
     # Read task from stdin if -
     task = sys.stdin.read() if args.task == "-" else args.task
 
-    run_agent(args.agent, system_prompt, task, args.model, args.max_tokens)
+    run_agent(args.agent, system_prompt, task, args.model, args.max_tokens, args.output_json)
 
 
 if __name__ == "__main__":

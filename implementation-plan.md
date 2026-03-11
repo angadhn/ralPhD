@@ -56,10 +56,10 @@ Explicit `python scripts/check_language.py` commands → "run check_language on 
 - [x] 1. Write `ralph_agent.py` with tool-calling loop, `check_language`, `read_file`, `write_file`, `bash` — **human**
 - [x] 2. ~~BLOCKER~~: OAuth token works via `X-Api-Key` header (not `Authorization: Bearer`). Keychain auth, no API key needed — **human**
 - [x] 3. Test `ralph_agent.py` standalone: `python ralph_agent.py --agent paper-writer --task "Read checkpoint.md"` — **human**
-- [ ] 4. Update `paper-writer.md` commit gate references (lines 42-44, 94-96) — **human**
-- [ ] 5. Update `critic.md` check_language references (lines 22-23, 37, 71) — **human**
-- [ ] 6. Test simplified prompts trigger check_language via tool call — **human**
-- [ ] 7. Wire `ralph-loop.sh` to call `ralph_agent.py` instead of `claude -p` — **human**
+- [x] 4. Update `paper-writer.md` commit gate references — **human**
+- [x] 5. Update `critic.md` — all 6 script invocations simplified to tool names — **human**
+- [x] 6. Test: critic called `check_language` as registered tool (not bash) — **human**
+- [x] 7. Wire `ralph-loop.sh` line 336 to call `ralph_agent.py` — **human**
 - [ ] 8. End-to-end test through ralph-loop — **human**
 - [ ] 9. (Future) Create `toolsmith.md` agent + `tools/registry.json` for self-extending capability — **human**
 
