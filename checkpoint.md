@@ -3,7 +3,7 @@
 **Thread:** benchmarking-infra
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 1 in progress — tasks 1-2 complete
+**Status:** Phase 1 in progress — tasks 1-3 complete
 
 ## Knowledge State
 
@@ -11,6 +11,7 @@
 |------|--------|-------|
 | 1. Create specs/evaluation-metrics.md | ✅ done | 15 metrics across 5 categories, eval.jsonl format defined |
 | 2. Create scripts/evaluate_iteration.py | ✅ done | Collects from usage.jsonl, git diff, quality gates, context %, task completion |
+| 3. Create scripts/evaluate_run.py | ✅ done | Aggregates eval.jsonl, --compare for side-by-side, --list-tags, --markdown |
 
 ## Last Reflection
 
@@ -18,4 +19,4 @@
 
 ## Next Task
 
-3. Create `scripts/evaluate_run.py` — aggregates eval.jsonl across a full run: total cost, iterations, wall-clock time, quality gate pass rate, cost per completed task, context utilization distribution. Supports `--compare mode1 mode2 mode3` to produce side-by-side comparison from tagged runs — coder
+4. Wire `evaluate_iteration.py` into `ralph-loop.sh` — call after each iteration, after usage logging. Tag each eval entry with the current architecture mode. ~5 lines — coder
