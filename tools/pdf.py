@@ -1,14 +1,14 @@
 """PDF tools: pdf_metadata, extract_figure.
 
-pdf_metadata is implemented inline (get_fast_metadata, get_section_headings,
-estimate_reading_chunks). extract_figure still delegates to scripts/.
+All implementation is inline — no subprocess calls.
 """
 
+import io
 import json
 import math
 import os
 import re
-import subprocess
+import sys
 
 from pathlib import Path
 
@@ -161,11 +161,127 @@ def estimate_reading_chunks(pages: int, image_density: float) -> int:
     return base
 
 
-def _run_cmd(cmd):
-    """Run a subprocess, return combined stdout+stderr."""
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    output = result.stdout + result.stderr
-    return output if output.strip() else f"(exit code {result.returncode}, no output)"
+def parse_page_range(page_str: str, total_pages: int) -> list:
+    """Parse page range string like '1-5' or '3' or '1,3,5' into 0-indexed page numbers."""
+    pages = []
+    for part in page_str.split(","):
+        part = part.strip()
+        if "-" in part:
+            start, end = part.split("-", 1)
+            start = max(1, int(start))
+            end = min(total_pages, int(end))
+            pages.extend(range(start - 1, end))
+        else:
+            page_num = int(part) - 1
+            if 0 <= page_num < total_pages:
+                pages.append(page_num)
+    return sorted(set(pages))
+
+
+def list_images(pdf_path: str) -> str:
+    """List all images in a PDF without extracting. Returns report text."""
+    import fitz  # lazy import — PyMuPDF
+
+    buf = io.StringIO()
+    doc = fitz.open(pdf_path)
+    buf.write(f"\nImages in: {pdf_path}\n")
+    buf.write(f"Total pages: {len(doc)}\n")
+    buf.write(f"{'='*60}\n")
+
+    total_images = 0
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        images = page.get_images(full=True)
+        if images:
+            buf.write(f"\nPage {page_num + 1}: {len(images)} image(s)\n")
+            for i, img in enumerate(images):
+                xref = img[0]
+                base_image = doc.extract_image(xref)
+                buf.write(f"  [{i+1}] {base_image['width']}x{base_image['height']} "
+                          f"({base_image['ext']}, {len(base_image['image'])//1024}KB)\n")
+            total_images += len(images)
+
+    buf.write(f"\n{'='*60}\n")
+    buf.write(f"Total: {total_images} images across {len(doc)} pages\n")
+    doc.close()
+    return buf.getvalue()
+
+
+def extract_images(pdf_path: str, output_dir: str, pages: list = None,
+                   min_width: int = 100, min_height: int = 100) -> str:
+    """Extract images from a PDF to the output directory. Returns report text."""
+    import fitz  # lazy import — PyMuPDF
+
+    buf = io.StringIO()
+    doc = fitz.open(pdf_path)
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    pdf_stem = Path(pdf_path).stem
+    prefix = pdf_stem.replace(" ", "_")[:40]
+
+    if pages is None:
+        pages = list(range(len(doc)))
+
+    extracted = 0
+    skipped = 0
+
+    for page_num in pages:
+        if page_num >= len(doc):
+            buf.write(f"  Warning: Page {page_num + 1} doesn't exist (PDF has {len(doc)} pages)\n")
+            continue
+
+        page = doc[page_num]
+        images = page.get_images(full=True)
+
+        for i, img in enumerate(images):
+            xref = img[0]
+            base_image = doc.extract_image(xref)
+            width = base_image["width"]
+            height = base_image["height"]
+
+            if width < min_width or height < min_height:
+                skipped += 1
+                continue
+
+            ext = base_image["ext"]
+            image_bytes = base_image["image"]
+
+            filename = f"{prefix}_p{page_num+1}_img{i+1}.{ext}"
+            filepath = output_path / filename
+
+            with open(filepath, "wb") as f:
+                f.write(image_bytes)
+
+            buf.write(f"  Extracted: {filename} ({width}x{height}, {len(image_bytes)//1024}KB)\n")
+            extracted += 1
+
+    doc.close()
+    buf.write(f"\nDone: {extracted} images extracted, {skipped} small images skipped\n")
+    buf.write(f"Output: {output_path}\n")
+    return buf.getvalue()
+
+
+def extract_page_as_image(pdf_path: str, page_num: int, output_path: str, dpi: int = 200) -> str:
+    """Render a full PDF page as a high-res image. Returns report text."""
+    import fitz  # lazy import — PyMuPDF
+
+    doc = fitz.open(pdf_path)
+    if page_num < 1 or page_num > len(doc):
+        doc.close()
+        return f"Error: Page {page_num} doesn't exist (PDF has {len(doc)} pages)"
+
+    page = doc[page_num - 1]
+    zoom = dpi / 72
+    mat = fitz.Matrix(zoom, zoom)
+    pix = page.get_pixmap(matrix=mat)
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    pix.save(str(output))
+    result = f"  Rendered page {page_num} at {dpi}dpi: {output} ({pix.width}x{pix.height})"
+    doc.close()
+    return result
 
 
 def _handle_pdf_metadata(inp):
@@ -174,20 +290,25 @@ def _handle_pdf_metadata(inp):
 
 
 def _handle_extract_figure(inp):
+    pdf_path = inp["pdf_path"]
     if inp.get("list_only"):
-        cmd = ["python3", str(_scripts_dir() / "extract_figure.py"), "--list", inp["pdf_path"]]
+        return list_images(pdf_path)
     elif inp.get("render_page"):
-        cmd = ["python3", str(_scripts_dir() / "extract_figure.py"), inp["pdf_path"],
-               "--render-page", str(inp["render_page"]),
-               "--output", inp.get("output_dir", "figures/")]
-        if inp.get("dpi"):
-            cmd.extend(["--dpi", str(inp["dpi"])])
+        import fitz  # lazy import — PyMuPDF
+        output_dir = inp.get("output_dir", "figures/")
+        dpi = inp.get("dpi", 200)
+        pdf_stem = Path(pdf_path).stem.replace(" ", "_")[:40]
+        output_file = str(Path(output_dir) / f"{pdf_stem}_p{inp['render_page']}.png")
+        return extract_page_as_image(pdf_path, inp["render_page"], output_file, dpi)
     else:
-        cmd = ["python3", str(_scripts_dir() / "extract_figure.py"), inp["pdf_path"],
-               "--output", inp.get("output_dir", "figures/")]
+        pages = None
         if inp.get("pages"):
-            cmd.extend(["--pages", inp["pages"]])
-    return _run_cmd(cmd)
+            import fitz  # lazy import — PyMuPDF
+            doc = fitz.open(pdf_path)
+            total = len(doc)
+            doc.close()
+            pages = parse_page_range(inp["pages"], total)
+        return extract_images(pdf_path, inp.get("output_dir", "figures/"), pages)
 
 
 TOOLS = {
