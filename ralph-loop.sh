@@ -89,16 +89,26 @@ HEARTBEAT_INTERVAL=90  # seconds between heartbeat prints
 
 detect_agent() {
   local next_task
-  next_task=$(grep -i '^\*\*Next Task\|^Next Task\|^## Next' checkpoint.md 2>/dev/null \
+  # Try inline format first: "**Next Task:** value" or "Next Task: value"
+  next_task=$(grep -i '^\*\*Next Task\*\*:\|^Next Task:' checkpoint.md 2>/dev/null \
     | head -1 | sed 's/.*: *//' | sed 's/\*//g')
-  next_task=$(echo "$next_task" | tr -d '[:space:]')
+  # If not found, try heading format: "## Next Task" with value on the next non-empty line
+  if [ -z "$next_task" ]; then
+    next_task=$(awk '/^## Next Task/{found=1; next} found && /[^ ]/{print; exit}' checkpoint.md 2>/dev/null)
+  fi
+
+  # Strip parentheticals, markdown formatting, and trim whitespace
+  next_task=$(echo "$next_task" | sed 's/([^)]*)//g; s/\*//g; s/^ *//; s/ *$//')
 
   # No task: "none", template placeholder, or empty
   case "$next_task" in
     none*|None*|"<"*|"") echo ""; return ;;
   esac
 
-  echo "${next_task##* }"
+  # Agent name is the last word (strip any trailing punctuation)
+  local agent="${next_task##* }"
+  agent=$(echo "$agent" | sed 's/[^a-zA-Z0-9_-]//g')
+  echo "$agent"
 }
 
 estimate_input_cost() {

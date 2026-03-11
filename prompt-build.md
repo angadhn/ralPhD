@@ -21,6 +21,20 @@ IMPORTANT:
 - when checks pass, commit all modified files
 - update checkpoint.md with what you did and what comes next
 
+## Autonomy Gates
+
+Read the `**Autonomy:**` field in `implementation-plan.md`.
+
+- **autopilot** — proceed to the next task without pausing.
+- **stage-gates** — after completing a task, check if the next task
+  crosses a phase boundary (marked with `## Phase` headings or
+  `<!-- gate -->` comments in the plan). If it does, create
+  `HUMAN_REVIEW_NEEDED.md` with a summary of what was completed and
+  what the next phase will do. The loop will pause for user review.
+- **step-by-step** — after every task, create `HUMAN_REVIEW_NEEDED.md`.
+
+If the field is missing, default to **stage-gates**.
+
 ## Status Reporting
 
 - Start: `>>> Starting: [task name] — [1-sentence description]`
