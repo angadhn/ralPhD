@@ -3,7 +3,7 @@
 **Thread:** howler-port
 **Last updated:** 2026-03-11
 **Last agent:** research-coder
-**Status:** Phase 3 in progress — tasks 9-12 complete, continuing with task 13
+**Status:** Phase 3 in progress — tasks 9-13 complete, continuing with task 14
 
 ## Knowledge State
 
@@ -21,7 +21,8 @@
 | 10. provocateur output format | done | specs/provocateur-output-format.md — provocations.md template, impact levels per lens, priority ranking, commit gates |
 | 11. synthesizer agent | done | .claude/agents/synthesizer.md — merges deep-reader + critic + provocateur into synthesis narrative, master.bib, section outline. Tools: citation_lint + citation_verify_all. Registered in AGENT_TOOLS. |
 | 12. synthesizer output format | done | specs/synthesizer-output-format.md — synthesis.md (themes, conflicts, provocateur integration, story arc), master.bib (deduplicated, lint-clean), section_outline.md (claims→evidence mapping, word budgets). 16 commit gates. |
-| 13-14. triage agent + format | pending | Phase 3 |
+| 13. triage agent | done | .claude/agents/triage.md — corpus deduplication, grade conflict resolution, reading plan generation. Tools: pdf_metadata + citation_verify_all. Registered in AGENT_TOOLS. |
+| 14. triage output format | pending | specs/triage-output-format.md — next task |
 | 15-16. Critic update | pending | FIGURE-PROPOSAL mode — Phase 4 |
 | 17-18. Venue + housekeeping | pending | init-project.sh, README — Phase 5 |
 | 19. Prompt audit | pending | Phase 6 |
@@ -29,8 +30,8 @@
 
 ## Last Reflection
 
-Iteration 10: Completed task 12 (synthesizer output format spec). Created specs/synthesizer-output-format.md with templates for all 3 synthesizer outputs: synthesis.md (themed narrative with consensus/contested/gaps structure, [CONFLICT] tags, provocateur integration table, open questions, story arc), master.bib (deduplicated, source-annotated, lint-clean, DOI-verified), and section_outline.md (per-section claims with evidence strength mapping to manuscript language, figure opportunities, word budgets, claim-evidence summary table). Defined evidence strength levels (Strong/Moderate/Weak), conflict tag format, provocateur disposition codes (Addressed/Acknowledged/Out-of-scope), 16 commit gates, and partial report yield protocol. Follows patterns from provocateur, editor, and coherence-reviewer output format specs.
+Iteration 11: Completed tasks 12-13 in Phase 3. Created specs/synthesizer-output-format.md with templates for all 3 synthesizer outputs: synthesis.md (themed narrative with consensus/contested/gaps, [CONFLICT] tags, provocateur integration, story arc), master.bib (deduplicated, source-annotated, lint-clean), section_outline.md (claims→evidence with strength levels, word budgets). Also created triage agent (.claude/agents/triage.md) — sits between scout and deep-reader, handles corpus deduplication (DOI/title/author+year matching), grade conflict resolution, and reading plan generation with context cost estimation. Registered triage in AGENT_TOOLS with pdf_metadata + citation_verify_all. Yielded before starting task 14 (triage output format spec).
 
 ## Next Task
 
-13. Create `.claude/agents/triage.md` research-coder
+14. Create `specs/triage-output-format.md` research-coder
