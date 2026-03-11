@@ -68,9 +68,10 @@ Explicit `python scripts/check_language.py` commands → "run check_language on 
 - [x] 7. Wire `ralph-loop.sh` line 336 to call `ralph_agent.py` — **human**
 - [x] 8. Split `ralph_agent.py` into loop + `tools/` directory: `ralph_agent.py` keeps loop/auth/CLI (201 lines), `tools/__init__.py` has TOOLS registry + AGENT_TOOLS + `execute_tool()` + `get_tools_for_agent()`, `tools/core.py` has read_file/write_file/bash, `tools/checks.py` has check_language/check_journal/check_figure/citation_lint, `tools/pdf.py` has pdf_metadata/extract_figure — **research-coder**
 - [x] 9. Complete tool inventory: wrapped `citation_lookup` (single+batch), `citation_verify`, `citation_manifest` (check+add); added `list_files` and `code_search` (ripgrep) as ghuntley's essential primitives; all agents now get 5 essentials; scout gets citation_lookup/verify/manifest; fixed figure-stylist to reference check_figure in workflow. 14 tools total, 6 agents. — **research-coder**
-- [ ] 10. Interview user about which Howler agents to port — Howler has 15 agents ralPhD lacks (section editors, coherence-reviewer, triage, synthesizer, peer-reviewer, revision-agent, provocateur, etc.); determine priority and tool requirements for each — **human**
-- [ ] 11. End-to-end test through ralph-loop — **human**
-- [ ] 12. (Future) Create `toolsmith.md` agent + `tools/registry.json` for self-extending capability — toolsmith drops new files in `tools/`, adds entries to AGENT_TOOLS — **human**
+- [x] 10. Add `citation_download` tool: Unpaywall (open-access) first, SciHub fallback (opt-in via SCIHUB_MIRROR env var). Saves to papers/ with Author2024_ShortTitle.pdf naming, auto-registers in manifest. tools/download.py gitignored. 15 tools total, scout has 10. — **research-coder**
+- [ ] 11. Interview user about which Howler agents to port — Howler has 15 agents ralPhD lacks (section editors, coherence-reviewer, triage, synthesizer, peer-reviewer, revision-agent, provocateur, etc.); determine priority and tool requirements for each — **human**
+- [ ] 12. End-to-end test through ralph-loop — **human**
+- [ ] 13. (Future) Create `toolsmith.md` agent + `tools/registry.json` for self-extending capability — toolsmith drops new files in `tools/`, adds entries to AGENT_TOOLS — **human**
 
 ## Key design decisions
 
