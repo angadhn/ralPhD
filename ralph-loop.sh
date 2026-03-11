@@ -15,6 +15,19 @@ for arg in "$@"; do
   esac
 done
 
+# --- RALPH_HOME resolution ---
+# RALPH_HOME points to the ralPhD framework directory.
+# Default: the directory containing this script (backward compatible).
+if [ -z "${RALPH_HOME:-}" ]; then
+  RALPH_HOME="$(cd "$(dirname "$0")" && pwd)"
+fi
+if [ ! -f "${RALPH_HOME}/ralph_agent.py" ]; then
+  echo "Error: RALPH_HOME (${RALPH_HOME}) does not contain ralph_agent.py"
+  exit 1
+fi
+export RALPH_HOME
+PROMPT_FILE="${RALPH_HOME}/${PROMPT_FILE}"
+
 if [ ! -f "$PROMPT_FILE" ]; then
   echo "Error: $PROMPT_FILE not found"
   exit 1
@@ -168,15 +181,15 @@ compute_budget_info() {
   local input_cost=0
 
   # Look up max_step from context-budgets.json
-  if [ -f "context-budgets.json" ] && command -v jq &>/dev/null; then
-    max_step=$(jq -r --arg a "$agent_name" '.[$a].max_step // 0' context-budgets.json 2>/dev/null || echo 0)
+  if [ -f "${RALPH_HOME}/context-budgets.json" ] && command -v jq &>/dev/null; then
+    max_step=$(jq -r --arg a "$agent_name" '.[$a].max_step // 0' "${RALPH_HOME}/context-budgets.json" 2>/dev/null || echo 0)
   fi
 
   # Estimate input file cost and adjust max_step if inputs are larger than expected
   input_cost=$(estimate_input_cost "$agent_name")
   if [ "$input_cost" -gt 0 ]; then
     local static_read_cost
-    static_read_cost=$(jq -r --arg a "$agent_name" '.[$a].steps.read_inputs // .[$a].steps.read_chunk // 0' context-budgets.json 2>/dev/null || echo 0)
+    static_read_cost=$(jq -r --arg a "$agent_name" '.[$a].steps.read_inputs // .[$a].steps.read_chunk // 0' "${RALPH_HOME}/context-budgets.json" 2>/dev/null || echo 0)
     # If actual input cost exceeds the static estimate, inflate max_step by the difference
     if [ "$input_cost" -gt "$static_read_cost" ]; then
       max_step=$(( max_step + input_cost - static_read_cost ))
@@ -315,9 +328,9 @@ while true; do
   # --- Detect agent for budget computation ---
   CURRENT_AGENT=$(detect_agent)
   if [ -n "$CURRENT_AGENT" ] && [ "$CURRENT_AGENT" != "" ]; then
-    if [ ! -f ".claude/agents/${CURRENT_AGENT}.md" ]; then
+    if [ ! -f "${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md" ]; then
       RAW_LINE=$(grep -i '^\*\*Next Task\|^Next Task\|^## Next' checkpoint.md 2>/dev/null | head -1)
-      echo "  ⚠  Agent file not found: .claude/agents/${CURRENT_AGENT}.md"
+      echo "  ⚠  Agent file not found: ${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md"
       echo "     Raw Next Task line: $RAW_LINE"
       echo "     Skipping iteration (fix checkpoint.md or agent name)."
       sleep 5
@@ -359,7 +372,7 @@ while true; do
     fi
 
     # Launch agent runner (ralph_agent.py with per-agent tool registries)
-    echo "$PROMPT" | python3 ralph_agent.py --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json &
+    echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json &
     CLAUDE_PID=$!
 
     # Wait for first context reading (after ignore window) and print it
@@ -477,7 +490,7 @@ while true; do
     SESSION_FILE="$HOME/.claude/projects/${PROJECT_DIR}/${SESSION_ID}.jsonl"
     if [ -f "$SESSION_FILE" ]; then
       mkdir -p "$(dirname "$USAGE_LOG")"
-      python3 scripts/extract_session_usage.py "$SESSION_FILE" \
+      python3 "${RALPH_HOME}/scripts/extract_session_usage.py" "$SESSION_FILE" \
         | jq -c --arg iter "$ITERATION" --arg agent "$AGENT_NAME" --arg mode "$LOOP_MODE" \
             --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '. + {iteration: ($iter|tonumber), timestamp: $ts, agent: $agent, loop_mode: $mode}' \
