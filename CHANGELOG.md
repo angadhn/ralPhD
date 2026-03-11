@@ -65,3 +65,9 @@
 
 ## Iteration 5 — 2026-03-11
 - Task 7 complete: agent prompt path audit — added build_path_preamble() to ralph_agent.py, Path Resolution docs to agent-base.md
+
+## Iteration 5 — 2026-03-11
+- task 7 complete: agent prompt path audit — checkpoint + plan updated
+
+## Iteration 8 — 2026-03-11
+- checkpoint: task 9 complete, next: task 10 (webhook callback)

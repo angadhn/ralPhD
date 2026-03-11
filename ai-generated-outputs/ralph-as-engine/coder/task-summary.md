@@ -1,39 +1,71 @@
-# Task 7 Summary — Audit agent prompts for path assumptions
+# Task 10 Summary — Webhook Callback Step
 
 ## What was done
 
-Audited all 12 agent prompts, prompt-build.md, prompt-plan.md, and supporting specs for path references. Identified the two-root path resolution challenge (RALPH_HOME vs CWD) and implemented a runtime solution.
+Added an optional webhook/callback step to `ralph-run.yml` that POSTs a JSON summary to an external URL when a run completes. This enables Howler (or any external system) to receive results without polling.
 
-### Key findings
+## Changes
 
-1. **~50+ references to `specs/` files** across agent prompts — these are framework files that live in RALPH_HOME
-2. **init-project.sh already handles most cases** by symlinking (local) or copying (CI) specs/ and templates/ to the project CWD
-3. **Gap**: `.claude/agents/` is NOT symlinked in local mode, and references in prompt-build.md and prompt-plan.md would break
-4. **Gap**: If init-project.sh isn't run, all `specs/` references break when RALPH_HOME ≠ CWD
+### `.github/workflows/ralph-run.yml`
+- Added `callback_url` input (optional, default empty, type string)
+- Added **Step 8: Webhook callback** between commit-back and upload steps
+  - Runs on `always()` — fires even if the loop fails
+  - Only runs when `callback_url` is non-empty
+  - Builds a structured JSON payload via `jq` with:
+    - Event type: `ralph.run.completed`
+    - Thread name, status (`completed` or `review_needed`)
+    - Config block (mode, autonomy, max_iterations, target, commit_mode)
+    - Result block (last_agent, next_task, tasks_done/total, review_needed, checkpoint_summary)
+    - Run metadata (run_id, run_url, timestamp)
+  - HMAC-SHA256 signature via `CALLBACK_SECRET` secret (optional, sent as `X-Ralph-Signature` header)
+  - 3 retries with 5s backoff; failure is non-fatal
+  - Uses `curl -sf` for clean error handling
+- Updated summary step (now step 10) to include callback info
+- Fixed `LAST_AGENT` extraction: `sed 's/.*: *//'` → `sed 's/.*:\*\* *//'` to strip markdown bold markers
 
-### Solution implemented
-
-**Runtime path context injection** (zero-change to agent prompts):
-
-- `ralph_agent.py`: Added `build_path_preamble()` that detects when RALPH_HOME ≠ CWD and prepends a "Path Context" section to the system prompt telling the LLM to prefix framework file paths with RALPH_HOME
-- Self-hosted mode (RALPH_HOME == CWD): no preamble injected, backward compatible
-- Engine mode: preamble injected with explicit RALPH_HOME path and file categorization
-
-**Documentation**:
-- `agent-base.md`: Added "Path Resolution" section documenting the two-root model
-- `prompt-build.md`: Annotated framework file references
-- `prompt-plan.md`: Annotated `.claude/agents/README.md` reference
-
-## Files changed
-
-| File | Change |
-|------|--------|
-| `ralph_agent.py` | Added `build_path_preamble()` + inject into system prompt |
-| `.claude/agents/agent-base.md` | Added "Path Resolution" section |
-| `prompt-build.md` | Annotated framework file references |
-| `prompt-plan.md` | Annotated `.claude/agents/README.md` reference |
-| `tests/test-workflow-local.sh` | Added 3 path preamble tests |
+### `tests/test-workflow-local.sh`
+- Added **Test 10: Webhook Callback Step** with 15 new test cases (10a-10j):
+  - YAML input validation
+  - Step conditions and env vars
+  - Script content inspection (jq, curl, event type, HMAC, retry, non-fatal)
+  - JSON payload simulation with field type verification
+  - HMAC signature determinism test
+  - review_needed payload variation
+  - Summary step callback info
+  - Step ordering verification
 
 ## Test results
 
-34/34 tests pass (31 original + 3 new path preamble tests)
+**62/62 tests pass** (47 existing + 15 new webhook tests)
+
+## JSON Payload Schema
+
+```json
+{
+  "event": "ralph.run.completed",
+  "timestamp": "2026-03-11T12:00:00Z",
+  "thread": "my-thread",
+  "status": "completed|review_needed",
+  "config": {
+    "mode": "build|plan",
+    "autonomy": "autopilot|stage-gates|step-by-step",
+    "max_iterations": 5,
+    "target_repo": "owner/repo",
+    "target_ref": "main",
+    "commit_mode": "branch|direct|none"
+  },
+  "result": {
+    "last_agent": "coder",
+    "next_task": "11. Document API contract — coder",
+    "tasks_done": 10,
+    "tasks_total": 13,
+    "review_needed": false,
+    "review_body": null,
+    "checkpoint_summary": "..."
+  },
+  "run": {
+    "id": "12345",
+    "url": "https://github.com/owner/repo/actions/runs/12345"
+  }
+}
+```

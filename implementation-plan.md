@@ -34,7 +34,7 @@ Howler v2's research companion duplicates ralPhD's agent roster in TypeScript ed
 ## Phase 3 — Result delivery
 
 - [x] 9. Add a post-run step to the workflow that commits AI-generated outputs back to the project repo (on a branch or directly, configurable) — **coder**
-- [ ] 10. Add an optional webhook/callback step that posts a summary back to a URL (for Howler to pick up results and display in chat) — **coder**
+- [x] 10. Add an optional webhook/callback step that posts a summary back to a URL (for Howler to pick up results and display in chat) — **coder**
 - [ ] 11. Document the workflow_dispatch API contract — inputs, outputs, expected repo structure — so Howler's edge functions can trigger it — **coder**
 
 --- STAGE GATE: review delivery mechanism before proceeding ---
