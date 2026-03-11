@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-check_language.py — Structural LLM-speak detector for LaTeX documents.
+check_language.py — Structural LLM-speak detector for LaTeX and Markdown documents.
 
 Checks for structural patterns that indicate machine-generated writing:
 1. Paragraphs with zero inline citations (factual claims need sources)
@@ -11,6 +11,7 @@ Checks for structural patterns that indicate machine-generated writing:
 
 Usage:
   python scripts/check_language.py report.tex
+  python scripts/check_language.py draft.md
   python scripts/check_language.py --strict report.tex    # Fail on warnings too
   python scripts/check_language.py --verbose report.tex   # Show passing checks too
 
@@ -22,6 +23,13 @@ import re
 import sys
 from pathlib import Path
 import statistics
+
+
+# ── Format detection ─────────────────────────────────────────────
+
+def _is_markdown(filepath: str) -> bool:
+    """Detect if a file is Markdown based on extension."""
+    return Path(filepath).suffix.lower() in ('.md', '.markdown', '.mdown', '.mkd')
 
 
 # ── LaTeX text extraction ────────────────────────────────────────
@@ -56,7 +64,7 @@ def extract_body(latex_content: str) -> str:
 
 
 def split_sections(body: str) -> list:
-    """Split body into sections, returning (section_name, content) pairs."""
+    """Split LaTeX body into sections, returning (section_name, content) pairs."""
     pattern = r'\\(?:section|subsection|subsubsection)\{([^}]*)\}'
     parts = re.split(pattern, body)
     sections = []
@@ -69,17 +77,72 @@ def split_sections(body: str) -> list:
     return sections
 
 
+# ── Markdown text extraction ─────────────────────────────────────
+
+def strip_markdown_formatting(text: str) -> str:
+    """Remove markdown formatting but keep text content."""
+    # Remove fenced code blocks
+    text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+    # Remove inline code
+    text = re.sub(r'`[^`]+`', '', text)
+    # Remove images (before links, since images start with !)
+    text = re.sub(r'!\[([^\]]*)\]\([^)]*\)', r'\1', text)
+    # Remove links but keep text (won't match [@cite] since no (...) follows)
+    text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)
+    # Remove header markers
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    # Remove bold/italic markers
+    text = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', text)
+    text = re.sub(r'_{1,3}([^_]+)_{1,3}', r'\1', text)
+    # Remove horizontal rules
+    text = re.sub(r'^[-*_]{3,}\s*$', '', text, flags=re.MULTILINE)
+    # Remove HTML comments
+    text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+    # Clean up whitespace
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
+def extract_markdown_body(content: str) -> str:
+    """Extract body content, stripping YAML frontmatter if present."""
+    if content.startswith('---'):
+        match = re.match(r'^---\s*\n.*?\n---\s*\n', content, re.DOTALL)
+        if match:
+            return content[match.end():]
+    return content
+
+
+def split_markdown_sections(body: str) -> list:
+    """Split markdown body into sections by headers."""
+    pattern = r'^(#{1,3})\s+(.+)$'
+    parts = re.split(pattern, body, flags=re.MULTILINE)
+    sections = []
+    if parts[0].strip():
+        sections.append(("Preamble", parts[0]))
+    # Each match produces 3 items: hash-marks, header text, content after
+    for i in range(1, len(parts), 3):
+        name = parts[i + 1] if i + 1 < len(parts) else "Unknown"
+        content = parts[i + 2] if i + 2 < len(parts) else ""
+        sections.append((name, content))
+    return sections
+
+
+# ── Shared helpers ───────────────────────────────────────────────
+
 def split_paragraphs(text: str) -> list:
     """Split text into paragraphs (separated by blank lines)."""
     paras = re.split(r'\n\s*\n', text)
     return [p.strip() for p in paras if p.strip() and len(p.strip()) > 50]
 
 
-def split_sentences(text: str) -> list:
+def split_sentences(text: str, is_md: bool = False) -> list:
     """Split text into sentences (simple heuristic)."""
     # Remove citations for sentence splitting
-    clean = re.sub(r'\\cite\{[^}]*\}', '', text)
-    clean = re.sub(r'~', ' ', clean)
+    if is_md:
+        clean = re.sub(r'\[(?:[^\]]*@[^\]]+)\]', '', text)
+    else:
+        clean = re.sub(r'\\cite\{[^}]*\}', '', text)
+        clean = re.sub(r'~', ' ', clean)
     # Split on sentence-ending punctuation
     sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', clean)
     return [s.strip() for s in sentences if len(s.strip()) > 10]
@@ -114,22 +177,28 @@ BALANCED_CLAUSE_PATTERNS = [
 ]
 
 
-def check_citation_density(paragraphs: list, section_name: str) -> list:
+def check_citation_density(paragraphs: list, section_name: str, is_md: bool = False) -> list:
     """Check that paragraphs containing factual claims have inline citations."""
     issues = []
     for i, para in enumerate(paragraphs):
         # Skip very short paragraphs and non-prose content
         if len(para) < 100:
             continue
-        # Skip paragraphs that are mainly lists or tables
-        if para.count('\\item') > 2 or para.count('&') > 3:
-            continue
 
-        cite_count = len(re.findall(r'\\cite\{[^}]*\}', para))
+        if is_md:
+            # Skip markdown lists and tables
+            if para.count('\n- ') > 2 or para.count('|') > 3:
+                continue
+            cite_count = len(re.findall(r'\[(?:[^\]]*@[^\]]+)\]', para))
+        else:
+            # Skip LaTeX lists and tables
+            if para.count('\\item') > 2 or para.count('&') > 3:
+                continue
+            cite_count = len(re.findall(r'\\cite\{[^}]*\}', para))
+
         if cite_count == 0:
-            # Check if this paragraph actually makes factual claims
-            # (has declarative sentences, not just definitions or introductions)
-            sentences = split_sentences(strip_latex_commands(para))
+            strip_fn = strip_markdown_formatting if is_md else strip_latex_commands
+            sentences = split_sentences(strip_fn(para), is_md=is_md)
             if len(sentences) >= 2:
                 issues.append({
                     "type": "error",
@@ -142,12 +211,13 @@ def check_citation_density(paragraphs: list, section_name: str) -> list:
     return issues
 
 
-def check_sentence_length_variance(paragraphs: list, section_name: str) -> list:
+def check_sentence_length_variance(paragraphs: list, section_name: str, is_md: bool = False) -> list:
     """Check that sentence lengths within paragraphs vary enough."""
     issues = []
+    strip_fn = strip_markdown_formatting if is_md else strip_latex_commands
     for i, para in enumerate(paragraphs):
-        clean_para = strip_latex_commands(para)
-        sentences = split_sentences(clean_para)
+        clean_para = strip_fn(para)
+        sentences = split_sentences(clean_para, is_md=is_md)
         if len(sentences) < 3:
             continue
 
@@ -210,7 +280,7 @@ def check_balanced_clauses(text: str, section_name: str) -> list:
     return issues
 
 
-def check_citation_free_generalizations(text: str, section_name: str) -> list:
+def check_citation_free_generalizations(text: str, section_name: str, is_md: bool = False) -> list:
     """Check for generalizations that should have citations."""
     patterns = [
         (r'[Ii]t is (?:well )?known that [^.]*\.', "Citation-free generalization: 'It is known that...'"),
@@ -223,13 +293,15 @@ def check_citation_free_generalizations(text: str, section_name: str) -> list:
          "Citation-free generalization: 'As many studies have shown...'"),
     ]
 
+    cite_token = '@' if is_md else '\\cite'
+
     issues = []
     for pattern, description in patterns:
         for match in re.finditer(pattern, text):
-            # Check if there's a \cite nearby (within 20 chars after the match)
+            # Check if there's a citation nearby (within 20 chars after the match)
             end_pos = match.end()
             nearby = text[max(0, match.start() - 10):min(len(text), end_pos + 30)]
-            if '\\cite' not in nearby:
+            if cite_token not in nearby:
                 line_num = text[:match.start()].count('\n') + 1
                 issues.append({
                     "type": "error",
@@ -245,26 +317,32 @@ def check_citation_free_generalizations(text: str, section_name: str) -> list:
 # ── Main ─────────────────────────────────────────────────────────
 
 def check_file(filepath: str, strict: bool = False, verbose: bool = False) -> bool:
-    """Run all checks on a LaTeX file. Returns True if pass."""
+    """Run all checks on a LaTeX or Markdown file. Returns True if pass."""
     path = Path(filepath)
     if not path.exists():
         print(f"Error: {filepath} not found", file=sys.stderr)
         return False
 
     content = path.read_text(encoding="utf-8")
-    body = extract_body(content)
-    sections = split_sections(body)
+    is_md = _is_markdown(filepath)
+
+    if is_md:
+        body = extract_markdown_body(content)
+        sections = split_markdown_sections(body)
+    else:
+        body = extract_body(content)
+        sections = split_sections(body)
 
     all_issues = []
 
     for section_name, section_content in sections:
         paragraphs = split_paragraphs(section_content)
 
-        all_issues.extend(check_citation_density(paragraphs, section_name))
-        all_issues.extend(check_sentence_length_variance(paragraphs, section_name))
+        all_issues.extend(check_citation_density(paragraphs, section_name, is_md=is_md))
+        all_issues.extend(check_sentence_length_variance(paragraphs, section_name, is_md=is_md))
         all_issues.extend(check_stock_framings(section_content, section_name))
         all_issues.extend(check_balanced_clauses(section_content, section_name))
-        all_issues.extend(check_citation_free_generalizations(section_content, section_name))
+        all_issues.extend(check_citation_free_generalizations(section_content, section_name, is_md=is_md))
 
     errors = [i for i in all_issues if i["type"] == "error"]
     warnings = [i for i in all_issues if i["type"] == "warning"]
@@ -315,8 +393,8 @@ def check_file(filepath: str, strict: bool = False, verbose: bool = False) -> bo
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Structural LLM-speak detector for LaTeX")
-    parser.add_argument("file", help="LaTeX file to check")
+    parser = argparse.ArgumentParser(description="Structural LLM-speak detector for LaTeX and Markdown")
+    parser.add_argument("file", help="LaTeX or Markdown file to check")
     parser.add_argument("--strict", action="store_true", help="Fail on warnings too")
     parser.add_argument("--verbose", action="store_true", help="Show passing checks")
     args = parser.parse_args()

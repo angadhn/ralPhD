@@ -41,7 +41,7 @@ TOOL_DEFS = {
     "check_language": {
         "name": "check_language",
         "description": (
-            "Check a LaTeX file for citation density, sentence length variance, "
+            "Check a LaTeX or Markdown file for citation density, sentence length variance, "
             "stock framings, balanced clauses, and citation-free generalizations. "
             "Returns PASS/FAIL with specific violations."
         ),
@@ -133,6 +133,40 @@ TOOL_DEFS = {
             "required": ["bib_dir"],
         },
     },
+    "pdf_metadata": {
+        "name": "pdf_metadata",
+        "description": (
+            "Extract metadata from a PDF: page count, table of contents, figure/table counts, "
+            "section headings, image density, scanned-PDF detection, and estimated reading chunks. "
+            "Returns JSON. Use before reading a paper to plan reading budget."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pdf_path": {"type": "string", "description": "Path to the PDF file"},
+            },
+            "required": ["pdf_path"],
+        },
+    },
+    "extract_figure": {
+        "name": "extract_figure",
+        "description": (
+            "Extract figures from a PDF file. Can list images without extracting, "
+            "extract embedded images from specific pages, or render a full page as a high-res PNG."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pdf_path": {"type": "string", "description": "Path to the PDF file"},
+                "output_dir": {"type": "string", "description": "Output directory for extracted images (default: 'figures/')"},
+                "pages": {"type": "string", "description": "Page range to extract from (e.g. '1-5', '3', '1,3,5')"},
+                "list_only": {"type": "boolean", "description": "List images without extracting (default false)"},
+                "render_page": {"type": "integer", "description": "Render a specific page number as a full PNG image"},
+                "dpi": {"type": "integer", "description": "DPI for page rendering (default: 200)"},
+            },
+            "required": ["pdf_path"],
+        },
+    },
 }
 
 # ── Per-agent tool registries ──────────────────────────────────
@@ -140,8 +174,8 @@ TOOL_DEFS = {
 AGENT_TOOLS = {
     "paper-writer": ["read_file", "write_file", "bash", "check_language", "citation_lint"],
     "critic": ["read_file", "write_file", "bash", "check_language", "check_journal", "check_figure"],
-    "scout": ["read_file", "write_file", "bash"],
-    "deep-reader": ["read_file", "write_file", "bash"],
+    "scout": ["read_file", "write_file", "bash", "pdf_metadata"],
+    "deep-reader": ["read_file", "write_file", "bash", "pdf_metadata", "extract_figure"],
     "research-coder": ["read_file", "write_file", "bash"],
     "figure-stylist": ["read_file", "write_file", "bash", "check_figure"],
 }
@@ -209,6 +243,30 @@ def execute_tool(name: str, tool_input: dict) -> str:
         cmd = ["python3", "scripts/citation_tools.py", "lint",
                "--bib-dir", tool_input["bib_dir"],
                "--output", "/dev/stdout"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        output = result.stdout + result.stderr
+        return output if output.strip() else f"(exit code {result.returncode}, no output)"
+
+    elif name == "pdf_metadata":
+        cmd = ["python3", "scripts/pdf_metadata.py", "--json", tool_input["pdf_path"]]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        output = result.stdout + result.stderr
+        return output if output.strip() else f"(exit code {result.returncode}, no output)"
+
+    elif name == "extract_figure":
+        if tool_input.get("list_only"):
+            cmd = ["python3", "scripts/extract_figure.py", "--list", tool_input["pdf_path"]]
+        elif tool_input.get("render_page"):
+            cmd = ["python3", "scripts/extract_figure.py", tool_input["pdf_path"],
+                   "--render-page", str(tool_input["render_page"]),
+                   "--output", tool_input.get("output_dir", "figures/")]
+            if tool_input.get("dpi"):
+                cmd.extend(["--dpi", str(tool_input["dpi"])])
+        else:
+            cmd = ["python3", "scripts/extract_figure.py", tool_input["pdf_path"],
+                   "--output", tool_input.get("output_dir", "figures/")]
+            if tool_input.get("pages"):
+                cmd.extend(["--pages", tool_input["pages"]])
         result = subprocess.run(cmd, capture_output=True, text=True)
         output = result.stdout + result.stderr
         return output if output.strip() else f"(exit code {result.returncode}, no output)"
