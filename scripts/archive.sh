@@ -46,11 +46,18 @@ if [ ! -f "$RALPH_HOME/templates/checkpoint.md" ] || [ ! -f "$RALPH_HOME/templat
   echo "Expected: $RALPH_HOME/templates/checkpoint.md and $RALPH_HOME/templates/implementation-plan.md" >&2
   exit 1
 fi
+if [ ! -f "$RALPH_HOME/templates/HUMAN_REVIEW_NEEDED.md" ]; then
+  echo "Error: templates/HUMAN_REVIEW_NEEDED.md missing" >&2
+  exit 1
+fi
 
 # --- Archive ---
 mkdir -p "$ARCHIVE_DIR"
 mv checkpoint.md "$ARCHIVE_DIR/"
 mv implementation-plan.md "$ARCHIVE_DIR/"
+if [ -f HUMAN_REVIEW_NEEDED.md ]; then
+  mv HUMAN_REVIEW_NEEDED.md "$ARCHIVE_DIR/"
+fi
 
 # Also archive iteration_count for the record
 if [ -f iteration_count ]; then
@@ -62,6 +69,7 @@ echo "Archived to $ARCHIVE_DIR/"
 # --- Restore blank templates ---
 cp "$RALPH_HOME/templates/checkpoint.md" checkpoint.md
 cp "$RALPH_HOME/templates/implementation-plan.md" implementation-plan.md
+cp "$RALPH_HOME/templates/HUMAN_REVIEW_NEEDED.md" HUMAN_REVIEW_NEEDED.md
 
 echo "Restored blank templates to root"
 
