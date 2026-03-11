@@ -339,6 +339,134 @@ echo "Context yield threshold: ${CONTEXT_THRESHOLD}%"
 echo "Double Ctrl+C to stop"
 echo ""
 
+# --- Parallel execution helpers ---
+detect_current_phase() {
+  # Find which phase the first unchecked task belongs to.
+  # Returns the phase heading line (e.g., "## Phase 2 — Build (parallel)")
+  local in_phase=""
+  while IFS= read -r line; do
+    if echo "$line" | grep -q '^## Phase'; then
+      in_phase="$line"
+    fi
+    if echo "$line" | grep -q '^\- \[ \]'; then
+      echo "$in_phase"
+      return
+    fi
+  done < implementation-plan.md
+  echo ""
+}
+
+is_parallel_phase() {
+  # Check if a phase heading contains "(parallel)" annotation
+  local phase_line="$1"
+  echo "$phase_line" | grep -qi '(parallel)' && return 0 || return 1
+}
+
+collect_phase_tasks() {
+  # Collect all unchecked tasks in the current phase.
+  # Outputs one line per task: "agent_name|task_description"
+  local target_phase="$1"
+  local in_target=false
+  while IFS= read -r line; do
+    if echo "$line" | grep -q '^## Phase'; then
+      if [ "$line" = "$target_phase" ]; then
+        in_target=true
+      elif $in_target; then
+        # Reached next phase — stop
+        break
+      fi
+    fi
+    if $in_target && echo "$line" | grep -q '^\- \[ \]'; then
+      # Extract agent name (last word) and task description
+      local task_desc
+      task_desc=$(echo "$line" | sed 's/^- \[ \] [0-9]*\. *//' | sed 's/\*//g')
+      local agent_name="${task_desc##* }"
+      agent_name=$(echo "$agent_name" | sed 's/[^a-zA-Z0-9_-]//g')
+      echo "${agent_name}|${task_desc}"
+    fi
+  done < implementation-plan.md
+}
+
+run_parallel_phase() {
+  # Spawn one ralph_agent.py per task concurrently, wait for all.
+  local phase_line="$1"
+  local pids=()
+  local agents=()
+  local task_idx=0
+
+  echo "  ⚡ Parallel phase detected: $phase_line"
+
+  while IFS='|' read -r agent_name task_desc; do
+    task_idx=$((task_idx + 1))
+    local output_dir="/tmp/ralph-parallel-${ITERATION}-${task_idx}"
+    mkdir -p "$output_dir"
+
+    if [ ! -f "${RALPH_HOME}/.claude/agents/${agent_name}.md" ]; then
+      echo "  ⚠  Skipping parallel task (agent not found): $agent_name"
+      continue
+    fi
+
+    echo "  Spawning parallel agent: $agent_name (task $task_idx)"
+
+    CLAUDE_MODEL="${CLAUDE_MODEL:-claude-opus-4-6}"
+    local task_prompt
+    task_prompt=$(cat "$PROMPT_FILE")
+
+    echo "$task_prompt" | python3 "${RALPH_HOME}/ralph_agent.py"       --agent "$agent_name" --task - --model "$CLAUDE_MODEL"       --output-json "${output_dir}/output.json" &
+    pids+=($!)
+    agents+=("$agent_name")
+  done < <(collect_phase_tasks "$phase_line")
+
+  if [ ${#pids[@]} -eq 0 ]; then
+    echo "  No parallel tasks to run."
+    return 1
+  fi
+
+  echo "  Waiting for ${#pids[@]} parallel agents..."
+  local failed=0
+  for i in "${!pids[@]}"; do
+    if wait "${pids[$i]}" 2>/dev/null; then
+      echo "  ✓ ${agents[$i]} completed"
+    else
+      echo "  ✗ ${agents[$i]} failed (exit $?)"
+      failed=$((failed + 1))
+    fi
+  done
+
+  echo "  Parallel phase complete: $((${#pids[@]} - failed))/${#pids[@]} succeeded"
+
+  # Log usage for each parallel agent
+  for i in "${!agents[@]}"; do
+    local idx=$((i + 1))
+    local output_file="/tmp/ralph-parallel-${ITERATION}-${idx}/output.json"
+    if [ -f "$output_file" ]; then
+      mkdir -p "$(dirname "$USAGE_LOG")"
+      jq -c --arg iter "$ITERATION" --arg agent "${agents[$i]}" --arg mode "$LOOP_MODE" \
+        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg thread "$CURRENT_THREAD" \
+        --arg sub "$idx" '
+        if .is_error then
+          {iteration: ($iter|tonumber), timestamp: $ts, thread: $thread,
+           agent: $agent, loop_mode: $mode, parallel_sub: ($sub|tonumber),
+           error: true, message: .result}
+        else
+          {iteration: ($iter|tonumber), timestamp: $ts, thread: $thread,
+           agent: $agent, loop_mode: $mode, parallel_sub: ($sub|tonumber),
+           model: (.modelUsage // {} | keys[0] // "unknown"),
+           num_turns: .num_turns, duration_ms: .duration_ms,
+           input_tokens: .usage.input_tokens,
+           cache_read_input_tokens: .usage.cache_read_input_tokens,
+           cache_creation_input_tokens: .usage.cache_creation_input_tokens,
+           output_tokens: .usage.output_tokens,
+           cost_usd: .total_cost_usd}
+        end
+      ' "$output_file" >> "$USAGE_LOG" 2>/dev/null
+    fi
+  done
+
+  return 0
+}
+
+
 while true; do
   ITERATION=$((ITERATION + 1))
   echo "$ITERATION" > "$COUNTER_FILE"
@@ -401,6 +529,34 @@ while true; do
       echo "  or 'bash \"$RALPH_HOME/scripts/archive.sh\"' to archive."
     fi
     break
+  fi
+
+  # --- Parallel mode: run all tasks in current phase concurrently ---
+  if [ "$ARCH_MODE" = "parallel" ] && [ "$LOOP_MODE" = "build" ]; then
+    CURRENT_PHASE=$(detect_current_phase)
+    if [ -n "$CURRENT_PHASE" ] && is_parallel_phase "$CURRENT_PHASE"; then
+      run_parallel_phase "$CURRENT_PHASE"
+      PARALLEL_RC=$?
+
+      # Eval capture for parallel iteration
+      python3 "${RALPH_HOME}/scripts/evaluate_iteration.py" \
+        --iteration "$ITERATION" \
+        --arch-mode "$ARCH_MODE" \
+        --run-tag "${RUN_TAG:-}" \
+        2>/dev/null || true
+
+      echo ""
+      echo "=== Iteration $ITERATION complete (parallel phase). Fresh context in 3s... ==="
+      sleep 3
+
+      if [ -n "${MAX_ITERATIONS:-}" ] && [ "$ITERATION" -ge "$MAX_ITERATIONS" ]; then
+        echo "=== Max iterations ($MAX_ITERATIONS) reached. Exiting. ==="
+        break
+      fi
+      continue
+    fi
+    # Not a parallel phase — fall through to serial execution
+    echo "  Phase not marked (parallel) — running serially"
   fi
 
   # --- Build prompt ---
