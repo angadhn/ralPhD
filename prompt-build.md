@@ -4,7 +4,7 @@ Study checkpoint.md and implementation-plan.md.
 Pick the highest-priority task to do.
 
 The last word in the task name is the agent.
-Read `.claude/agents/{agent}.md` and follow its Workflow.
+Read the agent prompt at `.claude/agents/{agent}.md` (framework file — see Path Context if present) and follow its Workflow.
 
 If the task has a mode prefix (STYLE-CHECK critic,
 GAP-FILL scout), the agent is still the last word.
@@ -12,7 +12,7 @@ GAP-FILL scout), the agent is still the last word.
 One iteration = one agent = one task.
 
 IMPORTANT:
-- if /tmp/ralph-reflect exists, read specs/reflection-template.md and complete the reflection BEFORE starting the task
+- if /tmp/ralph-reflect exists, read `specs/reflection-template.md` (framework file) and complete the reflection BEFORE starting the task
 - if /tmp/ralph-yield exists, save state to checkpoint.md and exit immediately
 - before each major step, check `/tmp/ralph-budget-info`. If recommendation is YIELD, update checkpoint.md and exit. If CAUTION, finish current step only.
 - after each major step, commit all modified files immediately. Do not wait until the end. If the process dies, only the current step's work is lost.

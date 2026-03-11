@@ -93,8 +93,9 @@ After this intake, you have enough to proceed to Step 2.
 
 ## Step 2 — Agent inventory
 
-Read `.claude/agents/README.md` and the agent files. Do the right agents
-exist for this task, or does the session suggest new ones are needed?
+Read `.claude/agents/README.md` (framework file — see Path Context if present)
+and the agent files. Do the right agents exist for this task, or does the
+session suggest new ones are needed?
 
 ## Step 3 — Context
 

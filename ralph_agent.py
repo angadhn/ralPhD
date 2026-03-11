@@ -79,6 +79,40 @@ def load_env():
 load_env()
 
 
+# ── Path context ───────────────────────────────────────────────
+
+def build_path_preamble(ralph_home: Path) -> str:
+    """Build a preamble that tells the agent where framework vs project files are.
+
+    When RALPH_HOME == CWD, paths resolve either way — the preamble is still
+    injected for consistency but doesn't change behavior.
+    """
+    cwd = Path.cwd().resolve()
+    rh = ralph_home.resolve()
+
+    if rh == cwd:
+        # Self-hosted mode: framework IS the project. No prefix needed.
+        return ""
+
+    return (
+        "## Path Context\n"
+        "\n"
+        "ralPhD is running as an engine on a separate project.\n"
+        f"- **RALPH_HOME** (framework): `{rh}`\n"
+        f"- **Working directory** (project): `{cwd}`\n"
+        "\n"
+        "File paths in this prompt use short names. Resolve them as follows:\n"
+        "- **Framework files** — prefix with RALPH_HOME:\n"
+        "  `specs/*`, `templates/*`, `.claude/agents/*`, `prompt-*.md`\n"
+        f"  Example: `specs/writing-style.md` → `{rh}/specs/writing-style.md`\n"
+        "- **Project files** — use as-is (relative to working directory):\n"
+        "  `checkpoint.md`, `implementation-plan.md`, `inbox.md`,\n"
+        "  `AI-generated-outputs/*`, `sections/*`, `figures/*`, `corpus/*`,\n"
+        "  `references/*`, `papers/*`, `logs/*`\n"
+        "\n"
+    )
+
+
 # ── Agent loop ─────────────────────────────────────────────────
 
 def get_client() -> anthropic.Anthropic:
@@ -295,6 +329,11 @@ def main():
         sys.exit(1)
     with open(agent_path) as f:
         system_prompt = f.read()
+
+    # Prepend path context so agents resolve framework vs project files correctly
+    path_preamble = build_path_preamble(ralph_home)
+    if path_preamble:
+        system_prompt = path_preamble + system_prompt
 
     # Read task from stdin if -
     task = sys.stdin.read() if args.task == "-" else args.task

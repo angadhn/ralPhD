@@ -2,6 +2,17 @@
 
 All agents inherit these rules. Agent-specific prompts override when they conflict.
 
+## Path Resolution
+
+ralPhD may run as an engine on a separate project repo. Two roots exist:
+
+- **RALPH_HOME** (framework): contains `specs/`, `templates/`, `.claude/agents/`, `scripts/`, `tools/`
+- **Working directory** (project): contains `checkpoint.md`, `implementation-plan.md`, `inbox.md`, `AI-generated-outputs/`, `sections/`, `figures/`, `corpus/`, `references/`, `papers/`, `logs/`
+
+When a "Path Context" section is present at the top of this prompt, use its RALPH_HOME path to prefix framework file reads (e.g., `specs/writing-style.md` → `$RALPH_HOME/specs/writing-style.md`). Project files are always relative to the working directory.
+
+When no Path Context is present, RALPH_HOME equals the working directory — all paths resolve as-is.
+
 ## Budget and Yield
 
 - Before each major step, read `/tmp/ralph-budget-info`. Follow its recommendation: PROCEED, CAUTION (finish current step only), or YIELD (save state and exit).
