@@ -1,6 +1,6 @@
 # Agents — Planner's Menu
 
-Eleven agents forming the Ralph loop. Each reads `checkpoint.md`, produces outputs, updates checkpoint, and yields.
+Twelve agents forming the Ralph loop. Each reads `checkpoint.md`, produces outputs, updates checkpoint, and yields.
 All agents inherit shared protocol from `agent-base.md`.
 
 ## Agent Reference
@@ -17,7 +17,8 @@ All agents inherit shared protocol from `agent-base.md`.
 | editor | Substantiated edits to .tex with evidence backing | check_claims, check_language, citation_lint, citation_verify_all | paper-writer | coherence-reviewer, paper-writer (REVIEW-EDITS) | After paper-writer completes a section |
 | coherence-reviewer | Post-editing: promise-delivery, terminology, contradictions, novelty claims | check_claims, check_language | editor | editor (fixes) | After all sections are edited |
 | research-coder | Analysis scripts, simulations, figures from data | — | critic (FIGURE-PROPOSAL), planner | figure-stylist (figures), paper-writer (data) | When figures proposed or data analysis needed |
-| figure-stylist | Visual clarity + print readiness review | — | research-coder | research-coder (revise) or next phase | After each figure is generated |
+| figure-stylist | Visual clarity + print readiness review | check_figure | research-coder | research-coder (revise) or next phase | After each figure is generated |
+| coder | Read, modify, and test application code | — | planner | planner (task complete) | When implementation tasks require source code changes |
 
 ## Typical flow
 
