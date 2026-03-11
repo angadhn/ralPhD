@@ -35,6 +35,7 @@ AGENT_TOOLS = {
     "figure-stylist": _ESSENTIALS + ["check_figure"],
     "editor": _ESSENTIALS + ["check_claims", "check_language", "citation_lint", "citation_verify_all"],
     "coherence-reviewer": _ESSENTIALS + ["check_claims", "check_language"],
+    "provocateur": _ESSENTIALS + [],
 }
 
 DEFAULT_TOOLS = _ESSENTIALS
