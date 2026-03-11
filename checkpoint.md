@@ -1,14 +1,15 @@
-# Checkpoint — <thread name>
+# Checkpoint — colocated-tools-refactor
 
-**Thread:** <thread-name>
-**Last updated:** <date>
-**Last agent:** <agent>
-**Status:** <current status>
+**Thread:** colocated-tools-refactor
+**Last updated:** 2026-03-11
+**Last agent:** coder
+**Status:** Phase 1 complete
 
 ## Knowledge State
 
 | Task | Status | Notes |
 |------|--------|-------|
+| 1. Create `tools/_citation.py` | DONE | 679 lines, 17 functions extracted, all imports verified, 72/72 tests pass |
 
 ## Last Reflection
 
@@ -16,4 +17,5 @@
 
 ## Next Task
 
-<next task from implementation plan>
+Task 2: Inline `check_language.py` into `tools/checks.py` — coder
+(Phase 2 begins — stage gate: HUMAN_REVIEW_NEEDED required)

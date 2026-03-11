@@ -21,7 +21,7 @@ Tools have two layers: `tools/*.py` (thin subprocess wrappers with schemas) and 
 
 ## Phase 1 — Create shared citation module
 
-- [ ] 1. Create `tools/_citation.py` — extract all implementation from `scripts/citation_tools.py` minus CLI `main()` and argparse. Functions: `_score_candidate`, `_classify`, `_get_json`, `query_semantic_scholar`, `query_crossref`, `query_openalex`, `query_ntrs`, `verify_doi`, `lookup_paper`, `_score_entry`, `lint_bib_files`, `_manifest_path`, `manifest_check`, `manifest_add`, `cited_check`, `batch_verify_bib`. Verify import works: `python3 -c "from tools._citation import lookup_paper, verify_doi, manifest_add"` — **coder**
+- [x] 1. Create `tools/_citation.py` — extract all implementation from `scripts/citation_tools.py` minus CLI `main()` and argparse. Functions: `_score_candidate`, `_classify`, `_get_json`, `query_semantic_scholar`, `query_crossref`, `query_openalex`, `query_ntrs`, `verify_doi`, `lookup_paper`, `_score_entry`, `lint_bib_files`, `_manifest_path`, `manifest_check`, `manifest_add`, `cited_check`, `batch_verify_bib`. Verify import works: `python3 -c "from tools._citation import lookup_paper, verify_doi, manifest_add"` — **coder**
 
 <!-- gate -->
 
