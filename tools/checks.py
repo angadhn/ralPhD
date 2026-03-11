@@ -6,15 +6,8 @@ Wrappers around scripts/ that enforce writing quality and publication readiness.
 
 import os
 import subprocess
-from pathlib import Path
 
-
-def _scripts_dir() -> Path:
-    """Resolve scripts/ directory via RALPH_HOME, falling back to repo-relative."""
-    ralph_home = os.environ.get("RALPH_HOME", "")
-    if ralph_home:
-        return Path(ralph_home) / "scripts"
-    return Path(__file__).resolve().parent.parent / "scripts"
+from tools._paths import scripts_dir as _scripts_dir
 
 
 def _run_cmd(cmd):

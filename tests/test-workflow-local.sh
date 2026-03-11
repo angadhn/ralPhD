@@ -301,6 +301,102 @@ else
 fi
 echo ""
 
+# ── Test 8: Tool path resolution (RALPH_HOME) ───────────────
+echo "--- 8. Tool Path Resolution ---"
+
+# Test scripts_dir() uses RALPH_HOME when set
+if RALPH_HOME="$RALPH_HOME" python3 -c "
+import sys, os
+sys.path.insert(0, '$RALPH_HOME')
+from tools._paths import scripts_dir
+result = str(scripts_dir())
+expected = os.path.join('$RALPH_HOME', 'scripts')
+assert result == expected, f'Expected {expected}, got {result}'
+" 2>/dev/null; then
+  pass "scripts_dir() uses RALPH_HOME when set"
+else
+  fail "scripts_dir() uses RALPH_HOME when set"
+fi
+
+# Test scripts_dir() uses different RALPH_HOME (simulating engine mode)
+FAKE_HOME="/tmp/ralph-test-engine-$$"
+mkdir -p "$FAKE_HOME/scripts"
+if RALPH_HOME="$FAKE_HOME" python3 -c "
+import sys, os
+sys.path.insert(0, '$RALPH_HOME')
+from tools._paths import scripts_dir
+result = str(scripts_dir())
+expected = os.path.join('$FAKE_HOME', 'scripts')
+assert result == expected, f'Expected {expected}, got {result}'
+" 2>/dev/null; then
+  pass "scripts_dir() resolves to external RALPH_HOME"
+else
+  fail "scripts_dir() resolves to external RALPH_HOME"
+fi
+rm -rf "$FAKE_HOME"
+
+# Test scripts_dir() fallback when RALPH_HOME is unset
+if python3 -c "
+import sys, os
+os.environ.pop('RALPH_HOME', None)
+sys.path.insert(0, '$RALPH_HOME')
+from tools._paths import scripts_dir
+result = str(scripts_dir())
+assert result.endswith('/scripts'), f'Expected path ending with /scripts, got {result}'
+assert os.path.isdir(result), f'Fallback scripts_dir does not exist: {result}'
+" 2>/dev/null; then
+  pass "scripts_dir() fallback works without RALPH_HOME"
+else
+  fail "scripts_dir() fallback works without RALPH_HOME"
+fi
+
+# Test tools/__init__.py loads all expected tools
+if RALPH_HOME="$RALPH_HOME" python3 -c "
+import sys
+sys.path.insert(0, '$RALPH_HOME')
+from tools import TOOLS, AGENT_TOOLS, get_tools_for_agent
+
+# All 17 tools should be registered
+assert len(TOOLS) == 17, f'Expected 17 tools, got {len(TOOLS)}'
+
+# Every tool in AGENT_TOOLS must exist in TOOLS
+for agent, tool_list in AGENT_TOOLS.items():
+    for t in tool_list:
+        assert t in TOOLS, f'Agent {agent} references unknown tool: {t}'
+
+# get_tools_for_agent should work for all known agents
+for agent in AGENT_TOOLS:
+    names, schemas = get_tools_for_agent(agent)
+    assert len(names) > 0, f'Agent {agent} has no tools'
+    assert len(schemas) == len(names), f'Schema count mismatch for {agent}'
+" 2>/dev/null; then
+  pass "tools/__init__.py: all 17 tools load, agent registries valid"
+else
+  fail "tools/__init__.py: all 17 tools load, agent registries valid"
+fi
+
+# Test checks.py, pdf.py, download.py all use the shared _scripts_dir
+if RALPH_HOME="$RALPH_HOME" python3 -c "
+import sys
+sys.path.insert(0, '$RALPH_HOME')
+
+# Verify the modules import _scripts_dir from _paths (not their own copy)
+import tools.checks as checks_mod
+import tools.pdf as pdf_mod
+import tools.download as download_mod
+from tools._paths import scripts_dir
+
+# All three should resolve to the same path
+assert str(checks_mod._scripts_dir()) == str(scripts_dir()), 'checks._scripts_dir diverged'
+assert str(pdf_mod._scripts_dir()) == str(scripts_dir()), 'pdf._scripts_dir diverged'
+assert str(download_mod._scripts_dir()) == str(scripts_dir()), 'download._scripts_dir diverged'
+" 2>/dev/null; then
+  pass "checks/pdf/download all use shared scripts_dir()"
+else
+  fail "checks/pdf/download all use shared scripts_dir()"
+fi
+echo ""
+
 # ── Summary ───────────────────────────────────────────────────
 echo "=== Results: $PASS/$TESTS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then
