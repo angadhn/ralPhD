@@ -113,7 +113,10 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq jq
 
-      # ── 5. Initialize workspace ───────────────────────────────
+      # ── 5. Initialize workspace (.ralph init) ────────────────
+      #    If the target repo lacks checkpoint.md / implementation-plan.md,
+      #    run init-project.sh --ci to copy templates from RALPH_HOME.
+      #    For existing projects, just inject thread/prompt/autonomy.
       - name: Initialize workspace with ralph
         env:
           RALPH_HOME: ${{ github.workspace }}/ralph-home
@@ -123,15 +126,35 @@ jobs:
         run: |
           cd workspace
 
-          # Run init-project.sh if workspace lacks ralph files
+          # Run init-project.sh in CI mode if workspace lacks ralph files
           if [ ! -f checkpoint.md ] || [ ! -f implementation-plan.md ]; then
-            echo "Workspace missing ralph files — running init-project.sh"
-            bash "$RALPH_HOME/scripts/init-project.sh" .
+            echo "=== First-time init: workspace missing ralph files ==="
+            bash "$RALPH_HOME/scripts/init-project.sh" --ci .
+          else
+            echo "=== Existing workspace: ralph files already present ==="
           fi
 
           # Inject thread name into checkpoint.md if it's still a template
           if grep -q '<thread-name>' checkpoint.md 2>/dev/null; then
             sed -i "s/<thread-name>/${INPUT_THREAD}/g" checkpoint.md
+          fi
+          if grep -q '<thread name>' checkpoint.md 2>/dev/null; then
+            sed -i "s/<thread name>/${INPUT_THREAD}/g" checkpoint.md
+          fi
+
+          # Inject date
+          TODAY=$(date +%Y-%m-%d)
+          if grep -q '<date>' checkpoint.md 2>/dev/null; then
+            sed -i "s/<date>/${TODAY}/g" checkpoint.md
+          fi
+          if grep -q '<date>' implementation-plan.md 2>/dev/null; then
+            sed -i "s/<date>/${TODAY}/g" implementation-plan.md
+          fi
+          if grep -q '<thread-name>' implementation-plan.md 2>/dev/null; then
+            sed -i "s/<thread-name>/${INPUT_THREAD}/g" implementation-plan.md
+          fi
+          if grep -q '<thread name>' implementation-plan.md 2>/dev/null; then
+            sed -i "s/<thread name>/${INPUT_THREAD}/g" implementation-plan.md
           fi
 
           # Write operator prompt to inbox.md
@@ -141,7 +164,12 @@ jobs:
           if grep -q '^\*\*Autonomy:\*\*' implementation-plan.md 2>/dev/null; then
             sed -i "s/^\*\*Autonomy:\*\*.*/\*\*Autonomy:\*\* ${INPUT_AUTONOMY}/" implementation-plan.md
           else
-            sed -i "1a\\**Autonomy:** ${INPUT_AUTONOMY}" implementation-plan.md
+            # Insert after the Created line (or first line if not found)
+            if grep -q '^\*\*Created:\*\*' implementation-plan.md; then
+              sed -i '/^\*\*Created:\*\*/a\**Autonomy:** '"${INPUT_AUTONOMY}" implementation-plan.md
+            else
+              sed -i "1a\\**Autonomy:** ${INPUT_AUTONOMY}" implementation-plan.md
+            fi
           fi
 
           # Configure git for commits made by agents
@@ -152,6 +180,12 @@ jobs:
           if [ -z "${CLAUDE_MODEL:-}" ]; then
             echo "CLAUDE_MODEL=claude-sonnet-4-6" >> "$GITHUB_ENV"
           fi
+
+          echo "=== Workspace initialized ==="
+          echo "  Thread: ${INPUT_THREAD}"
+          echo "  Autonomy: ${INPUT_AUTONOMY}"
+          echo "  Files:"
+          ls -la checkpoint.md implementation-plan.md inbox.md 2>/dev/null || true
 
       # ── 6. Run the agent loop ─────────────────────────────────
       - name: Run ralph-loop.sh
