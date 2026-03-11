@@ -24,7 +24,7 @@ done
 # --- Architecture mode resolution ---
 # CLI flags override plan field; plan field overrides default.
 if [ -z "$ARCH_MODE" ]; then
-  ARCH_MODE=$(grep -i '^\*\*Architecture:\*\*\|^Architecture:' implementation-plan.md 2>/dev/null     | head -1 | sed 's/.*: *//' | sed 's/\*//g' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+  ARCH_MODE=$(grep -i '^\*\*Architecture:\*\*\|^Architecture:' implementation-plan.md 2>/dev/null | head -1 | sed 's/.*: *//' | sed 's/\*//g' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' || true)
 fi
 if [ -z "$ARCH_MODE" ] || ! echo "$ARCH_MODE" | grep -qE '^(serial|parallel|single|auto)$'; then
   ARCH_MODE="serial"
