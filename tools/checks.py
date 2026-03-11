@@ -1,8 +1,8 @@
 """Check tools: check_language, check_journal, check_figure, citation_lint,
 citation_lookup, citation_verify, citation_verify_all, citation_manifest.
 
-check_language and check_journal are implemented inline. check_figure and citation
-tools currently wrap scripts/ via subprocess (tasks 4-5 will inline these too).
+check_language, check_journal, and check_figure are implemented inline. Citation
+tools currently wrap scripts/ via subprocess (task 5 will inline these).
 """
 
 import io
@@ -587,15 +587,156 @@ def _handle_check_journal(inp):
     return "\n".join(lines)
 
 
-# ── Handler: check_figure (still subprocess) ─────────────────────────────
+# ── check_figure (inlined from scripts/check_figure.py) ──────────────────
+
+_FIGURE_DEFAULTS = {
+    "min_dpi": 300,
+    "max_width_px": 2400,
+    "max_height_px": 3600,
+    "max_file_size_mb": 10,
+}
+
+
+def _figure_parse_pub_reqs(path: str) -> dict:
+    """Parse specs/publication-requirements.md for figure thresholds."""
+    reqs = dict(_FIGURE_DEFAULTS)
+    text = Path(path).read_text(encoding="utf-8")
+    patterns = {
+        "min_dpi": r"(?:min[_\s-]*)?dpi\s*[:=]\s*(\d+)",
+        "max_width_px": r"max[_\s-]*width[_\s-]*(?:px|pixels?)?\s*[:=]\s*(\d+)",
+        "max_height_px": r"max[_\s-]*height[_\s-]*(?:px|pixels?)?\s*[:=]\s*(\d+)",
+        "max_file_size_mb": r"max[_\s-]*(?:file[_\s-]*)?size[_\s-]*(?:mb)?\s*[:=]\s*(\d+(?:\.\d+)?)",
+    }
+    for key, pat in patterns.items():
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            reqs[key] = float(m.group(1)) if "." in m.group(1) else int(m.group(1))
+    return reqs
+
+
+def check_raster(filepath: Path, reqs: dict) -> dict:
+    """Check a raster image (PNG, TIFF, JPEG). PIL imported lazily."""
+    from PIL import Image  # lazy import
+
+    result = {"file": str(filepath), "format": filepath.suffix.upper().lstrip(".")}
+    issues = []
+
+    img = Image.open(filepath)
+    w, h = img.size
+    result["width_px"] = w
+    result["height_px"] = h
+    result["color_mode"] = img.mode
+    result["file_size_mb"] = round(filepath.stat().st_size / (1024 * 1024), 2)
+
+    # DPI from metadata
+    dpi_info = img.info.get("dpi", (None, None))
+    if dpi_info and dpi_info[0]:
+        dpi = int(round(dpi_info[0]))
+    else:
+        dpi = None
+    result["dpi"] = dpi
+
+    # Checks
+    if dpi is not None and dpi < reqs["min_dpi"]:
+        issues.append(f"DPI {dpi} < minimum {reqs['min_dpi']}")
+    elif dpi is None:
+        issues.append(f"No DPI metadata found (expect >= {reqs['min_dpi']})")
+
+    if w > reqs["max_width_px"]:
+        issues.append(f"Width {w}px > maximum {reqs['max_width_px']}px")
+    if h > reqs["max_height_px"]:
+        issues.append(f"Height {h}px > maximum {reqs['max_height_px']}px")
+    if result["file_size_mb"] > reqs["max_file_size_mb"]:
+        issues.append(f"File size {result['file_size_mb']}MB > maximum {reqs['max_file_size_mb']}MB")
+
+    result["issues"] = issues
+    result["pass"] = len(issues) == 0
+    return result
+
+
+def check_pdf_figure(filepath: Path, reqs: dict) -> dict:
+    """Check a PDF figure (vector format). fitz imported lazily."""
+    try:
+        import fitz  # lazy import — PyMuPDF
+    except ImportError:
+        return {
+            "file": str(filepath),
+            "format": "PDF",
+            "issues": ["PyMuPDF not installed — cannot check PDF figures"],
+            "pass": False,
+        }
+
+    result = {"file": str(filepath), "format": "PDF (vector)"}
+    issues = []
+
+    doc = fitz.open(str(filepath))
+    result["pages"] = len(doc)
+    result["file_size_mb"] = round(filepath.stat().st_size / (1024 * 1024), 2)
+
+    if len(doc) > 0:
+        page = doc[0]
+        rect = page.rect
+        result["width_pt"] = round(rect.width, 1)
+        result["height_pt"] = round(rect.height, 1)
+        # Convert points to inches (72 pt = 1 inch)
+        result["width_in"] = round(rect.width / 72, 2)
+        result["height_in"] = round(rect.height / 72, 2)
+
+    if result["file_size_mb"] > reqs["max_file_size_mb"]:
+        issues.append(f"File size {result['file_size_mb']}MB > maximum {reqs['max_file_size_mb']}MB")
+    if len(doc) > 1:
+        issues.append(f"PDF has {len(doc)} pages (expected single-page figure)")
+
+    doc.close()
+    result["issues"] = issues
+    result["pass"] = len(issues) == 0
+    return result
+
+
+def collect_figure_files(paths: list) -> list:
+    """Expand directories and glob patterns into a flat list of figure files."""
+    extensions = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".pdf"}
+    files = []
+    for p in paths:
+        path = Path(p)
+        if path.is_dir():
+            for ext in extensions:
+                files.extend(sorted(path.glob(f"*{ext}")))
+        elif path.exists():
+            files.append(path)
+        else:
+            # Try glob from parent
+            for match in sorted(Path(".").glob(p)):
+                if match.suffix.lower() in extensions:
+                    files.append(match)
+    return files
+
+
+# ── Handler: check_figure ────────────────────────────────────────────────
 
 
 def _handle_check_figure(inp):
-    cmd = ["python3", str(_scripts_dir() / "check_figure.py"), "--json"]
-    if inp.get("pub_reqs"):
-        cmd.extend(["--pub-reqs", inp["pub_reqs"]])
-    cmd.append(inp["figures_dir"])
-    return _run_cmd(cmd)
+    """Run figure compliance checks directly (no subprocess)."""
+    import json as _json
+
+    # Build requirements
+    reqs = dict(_FIGURE_DEFAULTS)
+    if inp.get("pub_reqs") and Path(inp["pub_reqs"]).exists():
+        reqs = _figure_parse_pub_reqs(inp["pub_reqs"])
+
+    figures = collect_figure_files([inp["figures_dir"]])
+    if not figures:
+        return "No figure files found."
+
+    results = []
+    for fig in figures:
+        if fig.suffix.lower() == ".pdf":
+            results.append(check_pdf_figure(fig, reqs))
+        else:
+            results.append(check_raster(fig, reqs))
+
+    all_pass = all(r["pass"] for r in results)
+    return _json.dumps({"results": results, "pass": all_pass}, indent=2)
 
 
 # ── Handlers: citation tools (still subprocess) ─────────────────────────
