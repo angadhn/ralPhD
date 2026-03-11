@@ -3,7 +3,7 @@
 **Thread:** ralph-as-engine
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 2 complete — task 8 done, stage gate reached
+**Status:** Phase 3 in progress — task 9 done
 
 ## Knowledge State
 
@@ -17,7 +17,7 @@
 | 6. ralph-loop.sh path audit | done | Fixed monitor script search (RALPH_HOME first) + help message paths; all other refs already correct |
 | 7. Agent prompt path audit | done | Added build_path_preamble() to ralph_agent.py — injects Path Context when RALPH_HOME ≠ CWD; updated agent-base.md with Path Resolution docs |
 | 8. ralph_agent.py path audit | done | Consolidated _scripts_dir() into tools/_paths.py; 39/39 tests pass |
-| 9. Commit-back step | pending | push AI outputs to project repo |
+| 9. Commit-back step | done | New commit_mode input (branch/direct/none); step 7 pushes agent outputs to target repo; 47/47 tests pass |
 | 10. Webhook callback step | pending | summary delivery to Howler |
 | 11. API contract docs | pending | workflow_dispatch interface |
 | 12. End-to-end test | pending | full integration verification |
@@ -25,8 +25,8 @@
 
 ## Last Reflection
 
-Phase 2 (RALPH_HOME separation hardening) complete. 8/13 tasks done. All path resolution now goes through RALPH_HOME — agent prompts (task 7), tool scripts (task 8), and ralph-loop.sh (task 6) all verified. 39/39 tests pass.
+Phase 3 (Result delivery) started. Task 9 adds commit-back to the workflow: agents' changes are pushed to the target repo via configurable branch/direct/none mode. 47/47 tests pass including 8 new commit-back tests with full git origin/clone simulation.
 
 ## Next Task
 
-9. Add post-run commit-back step to workflow — **coder** (Phase 3, STAGE GATE — requires human review)
+10. Add optional webhook/callback step for result summary delivery — **coder**
