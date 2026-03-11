@@ -5,15 +5,31 @@ set -euo pipefail
 PIPE_MODE=false
 LOOP_MODE="build"
 PROMPT_FILE="prompt-build.md"
+ARCH_MODE=""
+RUN_TAG=""
 
 for arg in "$@"; do
   case "$arg" in
     -p) PIPE_MODE=true ;;
     plan) LOOP_MODE="plan"; PROMPT_FILE="prompt-plan.md" ;;
     build) LOOP_MODE="build"; PROMPT_FILE="prompt-build.md" ;;
+    --serial) ARCH_MODE="serial" ;;
+    --parallel) ARCH_MODE="parallel" ;;
+    --single) ARCH_MODE="single" ;;
+    --run-tag=*) RUN_TAG="${arg#--run-tag=}" ;;
     [0-9]*) MAX_ITERATIONS="$arg" ;;
   esac
 done
+
+# --- Architecture mode resolution ---
+# CLI flags override plan field; plan field overrides default.
+if [ -z "$ARCH_MODE" ]; then
+  ARCH_MODE=$(grep -i '^\*\*Architecture:\*\*\|^Architecture:' implementation-plan.md 2>/dev/null     | head -1 | sed 's/.*: *//' | sed 's/\*//g' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+fi
+if [ -z "$ARCH_MODE" ] || ! echo "$ARCH_MODE" | grep -qE '^(serial|parallel|single|auto)$'; then
+  ARCH_MODE="serial"
+fi
+export ARCH_MODE
 
 # --- RALPH_HOME resolution ---
 # RALPH_HOME points to the ralPhD framework directory.
@@ -317,6 +333,7 @@ if $PIPE_MODE; then
 else
   echo "IO mode: interactive"
 fi
+echo "Architecture mode: $ARCH_MODE"
 echo "Context yield threshold: ${CONTEXT_THRESHOLD}%"
 [ -n "${MAX_ITERATIONS:-}" ] && echo "Max iterations: $MAX_ITERATIONS"
 echo "Double Ctrl+C to stop"
