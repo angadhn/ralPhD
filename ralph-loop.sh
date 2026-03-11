@@ -100,9 +100,17 @@ detect_agent() {
   # Strip parentheticals, markdown formatting, and trim whitespace
   next_task=$(echo "$next_task" | sed 's/([^)]*)//g; s/\*//g; s/^ *//; s/ *$//')
 
-  # No task: "none", template placeholder, or empty
+  # No task: "none", template placeholder, or empty — fall back to implementation-plan.md
   case "$next_task" in
-    none*|None*|"<"*|"") echo ""; return ;;
+    none*|None*|"<"*|"")
+      # Try first unchecked task from implementation-plan.md
+      next_task=$(grep '^\- \[ \]' implementation-plan.md 2>/dev/null \
+        | head -1 | sed 's/^- \[ \] [0-9]*\. *//' | sed 's/\*//g')
+      next_task=$(echo "$next_task" | sed 's/^ *//; s/ *$//')
+      if [ -z "$next_task" ]; then
+        echo ""; return
+      fi
+      ;;
   esac
 
   # Agent name is the last word (strip any trailing punctuation)
