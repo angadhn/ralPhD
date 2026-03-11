@@ -3,7 +3,7 @@
 **Thread:** ralph-as-engine
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 1 complete — stage gate reached
+**Status:** Phase 2 in progress — task 6 complete
 
 ## Knowledge State
 
@@ -14,7 +14,7 @@
 | 3. GitHub Actions workflow | done | `.github/workflows/ralph-run.yml` — workflow_dispatch with 7 inputs |
 | 4. .ralph init step | done | `init-project.sh --ci` copies instead of symlinking; workflow injects thread/prompt/autonomy |
 | 5. Local workflow test | done | 31/31 tests pass (CI init, injection, RALPH_HOME, agent detection, YAML) |
-| 6. ralph-loop.sh path audit | pending | RALPH_HOME separation |
+| 6. ralph-loop.sh path audit | done | Fixed monitor script search (RALPH_HOME first) + help message paths; all other refs already correct |
 | 7. Agent prompt path audit | pending | specs/templates via RALPH_HOME |
 | 8. ralph_agent.py path audit | pending | tool resolution from RALPH_HOME |
 | 9. Commit-back step | pending | push AI outputs to project repo |
@@ -25,13 +25,8 @@
 
 ## Last Reflection
 
-Phase 1 complete. Created the GitHub Actions workflow (ralph-run.yml) with workflow_dispatch trigger, CI-aware init step, and comprehensive local tests. Key deliverables:
-- Workflow: dual checkout, 7 inputs, artifact upload, job summary
-- init-project.sh: --ci flag for copying instead of symlinking
-- Tests: 31/31 passing covering init, injection, resolution, detection, YAML
-
-Stage gate reached: Phase 2 (RALPH_HOME separation hardening) requires reviewing the workflow before proceeding.
+Task 6 complete. Audited ralph-loop.sh — found 2 hardcoded path issues (monitor script search, help message) and fixed them. All other paths already correctly separated: framework files use RALPH_HOME, project files use CWD. 31/31 tests still pass.
 
 ## Next Task
 
-6. Audit `ralph-loop.sh` for hardcoded paths — **coder** (Phase 2 — after stage gate review)
+7. Audit all agent prompts for path assumptions — **coder** (Phase 2)
