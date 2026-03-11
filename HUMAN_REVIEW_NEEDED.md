@@ -1,25 +1,23 @@
-# Human Review: Phase 2 Complete — Stage Gate for Phase 3
+# Human Review Needed — Phase 3 → Phase 4 Gate
 
-## What was completed (Phase 2: Rewrite tools/checks.py)
+## Completed: Phase 3 — Rewrite tools/pdf.py
 
-All 8 tools in `tools/checks.py` now operate without subprocess calls:
+- **Task 6:** Inlined `pdf_metadata.py` into `tools/pdf.py` — 3 functions (`get_fast_metadata`, `get_section_headings`, `estimate_reading_chunks`) + 3 regex patterns. `fitz` imported lazily. Handler returns `json.dumps(result, indent=2)`.
+- **Task 7:** Inlined `extract_figure.py` into `tools/pdf.py` — 4 functions (`parse_page_range`, `list_images`, `extract_images`, `extract_page_as_image`). All refactored from `print()` to return strings via `io.StringIO`. `subprocess` and `_run_cmd` removed entirely from `pdf.py`.
 
-- **Task 2**: Inlined `check_language.py` — 16 functions (strip_latex_commands through check_file), handler uses io.StringIO capture
-- **Task 3**: Inlined `check_journal.py` — 5 functions (_journal_parse_pub_reqs, count_words_tex, check_bib_fields, collect_tex_files, collect_bib_files), handler builds text report directly
-- **Task 4**: Inlined `check_figure.py` — 4 functions (_figure_parse_pub_reqs, check_raster, check_pdf_figure, collect_figure_files), PIL/fitz imported lazily inside functions
-- **Task 5**: Rewired 5 citation handlers to import from `tools._citation` instead of subprocess. Removed `subprocess` import and `_run_cmd` helper entirely.
+All 72/72 tests pass after each task.
 
-**Test results**: 72/72 tests pass after each task.
+## Next: Phase 4 — Modify tools/download.py
 
-`tools/checks.py` grew from 323 lines (all subprocess wrappers) to ~890 lines (all self-contained).
+- **Task 8:** Replace subprocess in `_register_manifest()` with `from tools._citation import manifest_add`. Remove `import subprocess`. Keep all Unpaywall/SciHub logic unchanged.
 
-## What Phase 3 will do (Rewrite tools/pdf.py)
+This is a small, targeted change — one handler in `download.py` currently shells out to `citation_tools.py manifest-add`. After this change it will call `manifest_add()` directly from the shared `tools/_citation.py` module.
 
-- **Task 6**: Inline `pdf_metadata.py` into `tools/pdf.py` — fitz lazy-imported
-- **Task 7**: Inline `extract_figure.py` into `tools/pdf.py` — io.StringIO capture
+## Status
 
-These are the same pattern as Phase 2 but for the PDF tools module.
+- 7/11 tasks complete
+- 72/72 tests passing
+- Files modified so far: `tools/_citation.py` (created), `tools/checks.py` (rewritten), `tools/pdf.py` (rewritten)
+- Scripts not yet deleted (that's Phase 5)
 
-## To proceed
-
-Delete this file to approve Phase 3.
+Delete this file to approve proceeding to Phase 4.

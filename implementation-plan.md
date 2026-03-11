@@ -36,8 +36,8 @@ Tools have two layers: `tools/*.py` (thin subprocess wrappers with schemas) and 
 
 ## Phase 3 — Rewrite tools/pdf.py
 
-- [ ] 6. Inline `pdf_metadata.py` into `tools/pdf.py` — `_FIG_PATTERN`, `_TABLE_PATTERN`, `_HEADING_PATTERNS`, `get_fast_metadata`, `get_section_headings`, `estimate_reading_chunks`. fitz imported lazily. Rewrite `_handle_pdf_metadata` to call `get_fast_metadata()` directly, return `json.dumps(result, indent=2)` — **coder**
-- [ ] 7. Inline `extract_figure.py` into `tools/pdf.py` — `parse_page_range`, `list_images`, `extract_images`, `extract_page_as_image`. Rewrite `_handle_extract_figure` with `io.StringIO` capture — **coder**
+- [x] 6. Inline `pdf_metadata.py` into `tools/pdf.py` — `_FIG_PATTERN`, `_TABLE_PATTERN`, `_HEADING_PATTERNS`, `get_fast_metadata`, `get_section_headings`, `estimate_reading_chunks`. fitz imported lazily. Rewrite `_handle_pdf_metadata` to call `get_fast_metadata()` directly, return `json.dumps(result, indent=2)` — **coder**
+- [x] 7. Inline `extract_figure.py` into `tools/pdf.py` — `parse_page_range`, `list_images`, `extract_images`, `extract_page_as_image`. Rewrite `_handle_extract_figure` with `io.StringIO` capture — **coder**
 
 <!-- gate -->
 
