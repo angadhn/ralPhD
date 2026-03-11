@@ -3,7 +3,7 @@
 **Thread:** benchmarking-infra
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 4 in progress — tasks 1-11 done. Task 12 (README docs) next.
+**Status:** Phase 4 in progress — tasks 1-12 done. Task 13 (per-agent model config) next.
 
 ## Knowledge State
 
@@ -20,6 +20,7 @@
 | 9. Update prompt-plan.md | ✅ done | Step 5 parallelism analysis, Architecture field |
 | 10. Update prompt-build.md | ✅ done | Architecture awareness section |
 | 11. Update tests in test-workflow-local.sh | ✅ done | 116/116 pass — tests 12-15 cover arch parsing, parallel phases, eval.jsonl, single mode |
+| 12. Update README.md | ✅ done | Benchmarking section, architecture modes, eval metrics, comparison workflow |
 
 ## Last Reflection
 
@@ -27,4 +28,4 @@
 
 ## Next Task
 
-12. Update `README.md` — document benchmarking workflow: how to plan with annotations, run three modes, compare results. Include example commands for the IFP benchmarking run — coder
+13. Add per-agent model config to `context-budgets.json` — add `model` field per agent, ralph-loop.sh reads and passes to ralph_agent.py --model — coder

@@ -69,6 +69,9 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 | `plan` | — | Use plan-mode prompt instead of build |
 | `build` | default | Build mode (explicit, same as no flag) |
 | `N` | unlimited | Max iterations before stopping |
+| `--serial` | — | Force serial architecture mode |
+| `--parallel` | — | Force parallel architecture mode |
+| `--single` | — | Force single-agent architecture mode |
 
 **Environment:**
 
@@ -159,6 +162,7 @@ ralPhD/
 ├── ralph_agent.py              # Python agent runner (replaces claude -p)
 ├── prompt-build.md             # Build-mode dispatcher
 ├── prompt-plan.md              # Plan-mode dispatcher
+├── prompt-build-single.md      # Single-agent combined prompt (benchmarking)
 ├── context-budgets.json        # Per-agent context budget config
 ├── .claude/agents/             # 12 agent prompts + agent-base.md shared protocol
 ├── tools/                      # Tool registry + per-agent tool implementations
@@ -170,7 +174,9 @@ ralPhD/
 │   ├── download.py             # citation_download
 │   └── search.py               # list_files, code_search
 ├── scripts/                    # Utility scripts + project scaffolding
-│   └── init-project.sh         # Scaffold a new project workspace
+│   ├── init-project.sh         # Scaffold a new project workspace
+│   ├── evaluate_iteration.py   # Post-iteration metric capture → eval.jsonl
+│   └── evaluate_run.py         # Run aggregation + --compare mode
 ├── specs/                      # Quality standards + output format templates
 └── templates/                  # Starter checkpoint.md + implementation-plan.md
 ```
@@ -290,6 +296,91 @@ gh workflow run ralph-run.yml \
 | `CALLBACK_SECRET` | no | HMAC-SHA256 key for signing webhook payloads |
 
 See `specs/api-contract.md` for the full API contract, webhook payload schema, and code examples.
+
+## Benchmarking
+
+Ralph supports three architecture modes for comparing multi-agent vs. single-agent execution on the same task.
+
+### Architecture modes
+
+| Mode | What happens |
+|------|-------------|
+| **serial** (default) | One agent per iteration, sequential relay |
+| **parallel** | Phases marked `(parallel)` in the plan run their tasks concurrently |
+| **single** | One combined prompt handles all agents — no agent detection, no relay |
+
+Set the mode via CLI flag or the `**Architecture:**` field in `implementation-plan.md`. CLI flags override the plan field.
+
+```bash
+./ralph-loop.sh -p --serial build 10    # serial relay (default)
+./ralph-loop.sh -p --parallel build 10  # parallel fan-out on annotated phases
+./ralph-loop.sh -p --single build 10    # single combined agent
+```
+
+### Plan annotations for parallelism
+
+Plan mode (`./ralph-loop.sh plan`) analyzes agent dependencies and marks independent phases with `(parallel)`:
+
+```markdown
+## Phase 2 — Literature review (parallel)
+
+- [ ] 3. Search ML databases — **scout**
+- [ ] 4. Search neuroscience databases — **scout**
+- [ ] 5. Search clinical databases — **scout**
+```
+
+The `**Architecture:**` field is set automatically:
+
+```markdown
+**Architecture:** parallel   # if any phases are annotatable
+**Architecture:** serial     # if all phases are strictly sequential
+```
+
+### Evaluation metrics
+
+Each iteration appends metrics to `logs/eval.jsonl` via `scripts/evaluate_iteration.py`. Metrics cover five categories: cost (tokens, USD), productivity (files/lines changed), quality gates (language + journal checks), context efficiency (peak %, yield), and task completion.
+
+After a run, aggregate and compare:
+
+```bash
+# Summary of a single run
+python3 scripts/evaluate_run.py logs/eval.jsonl
+
+# Compare three architecture modes
+python3 scripts/evaluate_run.py --compare \
+  logs/eval-serial.jsonl \
+  logs/eval-parallel.jsonl \
+  logs/eval-single.jsonl
+```
+
+### Running a benchmark comparison
+
+```bash
+# 1. Plan the task (sets Architecture field automatically)
+./ralph-loop.sh plan
+
+# 2. Run all three modes on the same plan
+cp logs/eval.jsonl logs/eval.jsonl.bak  # preserve any prior data
+
+./ralph-loop.sh -p --serial build 20
+cp logs/eval.jsonl logs/eval-serial.jsonl
+
+git checkout -- checkpoint.md           # reset state
+./ralph-loop.sh -p --parallel build 20
+cp logs/eval.jsonl logs/eval-parallel.jsonl
+
+git checkout -- checkpoint.md           # reset state
+./ralph-loop.sh -p --single build 20
+cp logs/eval.jsonl logs/eval-single.jsonl
+
+# 3. Compare results
+python3 scripts/evaluate_run.py --compare \
+  logs/eval-serial.jsonl \
+  logs/eval-parallel.jsonl \
+  logs/eval-single.jsonl
+```
+
+The comparison table shows total cost, iterations, wall-clock time, quality gate pass rate, cost per completed task, and context utilization for each mode.
 
 ## Design decisions
 
