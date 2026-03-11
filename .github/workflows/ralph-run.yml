@@ -1,0 +1,229 @@
+# ralph-run.yml — Run ralPhD agent loop via GitHub Actions
+#
+# Trigger: workflow_dispatch (from Howler, API, or manual)
+# Purpose: Run ralph-loop.sh against a target project repo with ralPhD
+#          as the engine (RALPH_HOME).
+#
+# Usage (gh CLI):
+#   gh workflow run ralph-run.yml \
+#     -f thread="my-thread" \
+#     -f prompt="Write the introduction section" \
+#     -f autonomy="stage-gates" \
+#     -f target_repo="" \
+#     -f max_iterations="3"
+
+name: Ralph Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      thread:
+        description: "Thread name (used for checkpoint, outputs directory)"
+        required: true
+        type: string
+      prompt:
+        description: "Task prompt or planning instruction for the agent"
+        required: true
+        type: string
+      autonomy:
+        description: "Autonomy level: autopilot, stage-gates, step-by-step"
+        required: false
+        default: "stage-gates"
+        type: choice
+        options:
+          - autopilot
+          - stage-gates
+          - step-by-step
+      target_repo:
+        description: "Target project repo (owner/name). Empty = run in ralPhD itself."
+        required: false
+        default: ""
+        type: string
+      target_ref:
+        description: "Branch/ref of the target repo to check out"
+        required: false
+        default: "main"
+        type: string
+      max_iterations:
+        description: "Max loop iterations (safety cap)"
+        required: false
+        default: "5"
+        type: string
+      loop_mode:
+        description: "Loop mode: build or plan"
+        required: false
+        default: "build"
+        type: choice
+        options:
+          - build
+          - plan
+
+permissions:
+  contents: write
+
+jobs:
+  ralph-loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+
+    steps:
+      # ── 1. Check out ralPhD (the engine) ──────────────────────
+      - name: Check out ralPhD
+        uses: actions/checkout@v4
+        with:
+          path: ralph-home
+          fetch-depth: 1
+
+      # ── 2. Check out target project repo ──────────────────────
+      - name: Check out target repo
+        if: ${{ inputs.target_repo != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target_repo }}
+          ref: ${{ inputs.target_ref }}
+          token: ${{ secrets.TARGET_REPO_TOKEN }}
+          path: workspace
+          fetch-depth: 0
+
+      - name: Use ralPhD as workspace (no target repo)
+        if: ${{ inputs.target_repo == '' }}
+        run: |
+          ln -s ralph-home workspace
+
+      # ── 3. Set up Python + dependencies ───────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install anthropic
+          if [ -f ralph-home/requirements.txt ]; then
+            pip install -r ralph-home/requirements.txt
+          fi
+
+      # ── 4. Install system tools ───────────────────────────────
+      - name: Install system tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq
+
+      # ── 5. Initialize workspace ───────────────────────────────
+      - name: Initialize workspace with ralph
+        env:
+          RALPH_HOME: ${{ github.workspace }}/ralph-home
+          INPUT_THREAD: ${{ inputs.thread }}
+          INPUT_PROMPT: ${{ inputs.prompt }}
+          INPUT_AUTONOMY: ${{ inputs.autonomy }}
+        run: |
+          cd workspace
+
+          # Run init-project.sh if workspace lacks ralph files
+          if [ ! -f checkpoint.md ] || [ ! -f implementation-plan.md ]; then
+            echo "Workspace missing ralph files — running init-project.sh"
+            bash "$RALPH_HOME/scripts/init-project.sh" .
+          fi
+
+          # Inject thread name into checkpoint.md if it's still a template
+          if grep -q '<thread-name>' checkpoint.md 2>/dev/null; then
+            sed -i "s/<thread-name>/${INPUT_THREAD}/g" checkpoint.md
+          fi
+
+          # Write operator prompt to inbox.md
+          printf '%s\n' "$INPUT_PROMPT" > inbox.md
+
+          # Set autonomy level in implementation-plan.md
+          if grep -q '^\*\*Autonomy:\*\*' implementation-plan.md 2>/dev/null; then
+            sed -i "s/^\*\*Autonomy:\*\*.*/\*\*Autonomy:\*\* ${INPUT_AUTONOMY}/" implementation-plan.md
+          else
+            sed -i "1a\\**Autonomy:** ${INPUT_AUTONOMY}" implementation-plan.md
+          fi
+
+          # Configure git for commits made by agents
+          git config user.name "ralph[bot]"
+          git config user.email "ralph-bot@users.noreply.github.com"
+
+          # Set default model if not configured via repository variable
+          if [ -z "${CLAUDE_MODEL:-}" ]; then
+            echo "CLAUDE_MODEL=claude-sonnet-4-6" >> "$GITHUB_ENV"
+          fi
+
+      # ── 6. Run the agent loop ─────────────────────────────────
+      - name: Run ralph-loop.sh
+        env:
+          RALPH_HOME: ${{ github.workspace }}/ralph-home
+          INPUT_LOOP_MODE: ${{ inputs.loop_mode }}
+          INPUT_MAX_ITER: ${{ inputs.max_iterations }}
+        run: |
+          cd workspace
+          bash "$RALPH_HOME/ralph-loop.sh" -p "$INPUT_LOOP_MODE" "$INPUT_MAX_ITER"
+
+      # ── 7. Upload outputs as artifact ─────────────────────────
+      - name: Upload AI outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ralph-outputs-${{ inputs.thread }}
+          path: |
+            workspace/ai-generated-outputs/
+            workspace/checkpoint.md
+            workspace/implementation-plan.md
+            workspace/logs/
+          retention-days: 30
+
+      # ── 8. Summary ────────────────────────────────────────────
+      - name: Generate run summary
+        if: always()
+        env:
+          INPUT_THREAD: ${{ inputs.thread }}
+          INPUT_MODE: ${{ inputs.loop_mode }}
+          INPUT_AUTONOMY: ${{ inputs.autonomy }}
+          INPUT_MAX_ITER: ${{ inputs.max_iterations }}
+          INPUT_TARGET: ${{ inputs.target_repo }}
+          INPUT_TARGET_REF: ${{ inputs.target_ref }}
+        run: |
+          cd workspace
+
+          {
+            echo "## Ralph Run Summary"
+            echo ""
+            echo "- **Thread:** ${INPUT_THREAD}"
+            echo "- **Mode:** ${INPUT_MODE}"
+            echo "- **Autonomy:** ${INPUT_AUTONOMY}"
+            echo "- **Max iterations:** ${INPUT_MAX_ITER}"
+            if [ -n "${INPUT_TARGET}" ]; then
+              echo "- **Target repo:** ${INPUT_TARGET}@${INPUT_TARGET_REF}"
+            else
+              echo "- **Target repo:** (self)"
+            fi
+            echo ""
+
+            # Include last checkpoint state
+            if [ -f checkpoint.md ]; then
+              echo "### Checkpoint"
+              echo '```'
+              head -30 checkpoint.md
+              echo '```'
+            fi
+
+            # Include usage stats if available
+            if [ -f logs/usage.jsonl ]; then
+              echo ""
+              echo "### Usage"
+              echo '```json'
+              tail -5 logs/usage.jsonl
+              echo '```'
+            fi
+
+            # Flag if human review was requested
+            if [ -f HUMAN_REVIEW_NEEDED.md ]; then
+              echo ""
+              echo "### ⚠️ Human Review Requested"
+              cat HUMAN_REVIEW_NEEDED.md
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
