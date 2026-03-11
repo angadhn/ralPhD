@@ -3,14 +3,14 @@
 **Thread:** ralph-as-engine
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 0, task 1 complete
+**Status:** Phase 0 complete, stage gate reached
 
 ## Knowledge State
 
 | Task | Status | Notes |
 |------|--------|-------|
 | 1. Archive all per-thread files | done | archive.sh now handles agent outputs, reflections, inbox |
-| 2. Audit for other stale files | pending | logs, ai-generated-outputs, root .md |
+| 2. Audit for other stale files | done | CHANGELOG.md archived+reset, /tmp/ralph-* cleaned |
 | 3. GitHub Actions workflow | pending | workflow_dispatch with inputs |
 | 4. .ralph init step | pending | template copying for new repos |
 | 5. Local workflow test | pending | verify with act or test repo |
@@ -29,4 +29,4 @@ Plan created from Howler v2 integration discussion. Phase 0 added to fix archive
 
 ## Next Task
 
-2. Audit for other files that should be reset/archived on thread completion — **coder**
+3. Create `.github/workflows/ralph-run.yml` — **coder** (Phase 1 — stage gate: review archive changes first)

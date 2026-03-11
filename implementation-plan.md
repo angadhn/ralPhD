@@ -11,7 +11,7 @@ Howler v2's research companion duplicates ralPhD's agent roster in TypeScript ed
 ## Phase 0 — Archive hygiene
 
 - [x] 1. Update `scripts/archive.sh` to archive all per-thread files that accumulate during a thread (e.g. `ai-generated-outputs/reflections/`, `inbox.md` content, any other files that currently persist stale after archiving) — **coder**
-- [ ] 2. Audit for other files that should be reset/archived on thread completion but currently aren't — check `logs/`, `ai-generated-outputs/`, and root-level `.md` files — **coder**
+- [x] 2. Audit for other files that should be reset/archived on thread completion but currently aren't — check `logs/`, `ai-generated-outputs/`, and root-level `.md` files — **coder**
 
 --- STAGE GATE: review archive changes before proceeding ---
 
