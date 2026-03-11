@@ -363,7 +363,8 @@ while true; do
     echo "  Agent detected: $CURRENT_AGENT"
   else
     echo "  No task found in checkpoint.md — nothing to do."
-    echo "  Run './ralphd plan' to plan next steps, or 'bash scripts/archive.sh' to archive."
+    echo "  Run 'bash \"$RALPH_HOME/ralph-loop.sh\" plan' to plan next steps,"
+    echo "  or 'bash \"$RALPH_HOME/scripts/archive.sh\"' to archive."
     break
   fi
 
@@ -386,8 +387,10 @@ while true; do
     touch /tmp/ralph-monitor-start
 
     # Launch JSONL context monitor in background
+    # Search: RALPH_HOME first (framework), then GITHUB_WORKSPACE, then CWD
     MONITOR_SCRIPT=""
-    for _s in "${GITHUB_WORKSPACE:-.}/.github/scripts/ralph-monitor.sh" \
+    for _s in "${RALPH_HOME}/.github/scripts/ralph-monitor.sh" \
+              "${GITHUB_WORKSPACE:-.}/.github/scripts/ralph-monitor.sh" \
               ".github/scripts/ralph-monitor.sh"; do
       if [ -x "$_s" ]; then MONITOR_SCRIPT="$_s"; break; fi
     done
