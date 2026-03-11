@@ -17,7 +17,8 @@ ai-generated-outputs/
 │   ├── writing/               # paper-writer: outline, sections (.tex), cited tracker
 │   ├── editor/                # editor: change logs, substantiated edits
 │   ├── coherence-review/      # coherence-reviewer: coherence reports
-│   └── research-code/         # research-coder: scripts, figures, data outputs
+│   ├── research-code/         # research-coder: scripts, figures, data outputs
+│   └── coder/                 # coder: task summaries for implementation work
 └── reflections/               # Loop reflections (every 5th iteration)
     └── reflection-iter-N.md
 ```
