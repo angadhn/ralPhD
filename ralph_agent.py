@@ -250,9 +250,12 @@ def main():
     parser.add_argument("--output-json", help="Write usage JSON to this path (compatible with ralph-loop.sh)")
     args = parser.parse_args()
 
+    # Resolve RALPH_HOME: env var > script directory
+    ralph_home = Path(os.environ.get("RALPH_HOME", str(Path(__file__).parent)))
+
     # Resolve max_tokens: CLI flag > context-budgets.json > 8096
     if args.max_tokens is None:
-        budgets_path = Path(__file__).parent / "context-budgets.json"
+        budgets_path = ralph_home / "context-budgets.json"
         if budgets_path.exists():
             try:
                 budgets = json.loads(budgets_path.read_text())
@@ -263,7 +266,7 @@ def main():
             args.max_tokens = 8096
 
     # Load agent prompt
-    agent_path = f".claude/agents/{args.agent}.md"
+    agent_path = str(ralph_home / ".claude" / "agents" / f"{args.agent}.md")
     if not os.path.exists(agent_path):
         print(f"Error: {agent_path} not found", file=sys.stderr)
         sys.exit(1)
