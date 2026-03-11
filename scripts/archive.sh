@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Archive current thread: move checkpoint + plan to archive/, restore blank templates.
+# Archive current thread: move all per-thread files to archive/, restore blank templates.
 #
 # Usage: ./scripts/archive.sh
 #   Reads thread name and date from checkpoint.md, creates archive/YYYY-MM-DD_thread/,
-#   moves checkpoint.md and implementation-plan.md there, copies templates back to root,
-#   and resets iteration_count.
+#   moves checkpoint.md, implementation-plan.md, agent outputs, reflections, inbox
+#   content, and usage log there, then copies templates back to root and resets state.
 
 # Framework home — defaults to script's parent dir (backward compatible).
 # In RALPH_HOME mode, templates come from the framework; project files stay in CWD.
@@ -63,6 +63,30 @@ fi
 if [ -f iteration_count ]; then
   cp iteration_count "$ARCHIVE_DIR/"
 fi
+
+# Archive per-thread agent outputs (ai-generated-outputs/<thread>/)
+if [ -d "ai-generated-outputs/$THREAD" ]; then
+  mkdir -p "$ARCHIVE_DIR/ai-generated-outputs"
+  mv "ai-generated-outputs/$THREAD" "$ARCHIVE_DIR/ai-generated-outputs/"
+  echo "Archived ai-generated-outputs/$THREAD/"
+fi
+
+# Archive reflections (ai-generated-outputs/reflections/*.md, preserve .gitkeep)
+REFLECTION_FILES=$(find ai-generated-outputs/reflections/ -name '*.md' -not -name '.gitkeep' 2>/dev/null || true)
+if [ -n "$REFLECTION_FILES" ]; then
+  mkdir -p "$ARCHIVE_DIR/reflections"
+  for f in $REFLECTION_FILES; do
+    mv "$f" "$ARCHIVE_DIR/reflections/"
+  done
+  echo "Archived reflections"
+fi
+
+# Archive inbox.md if it has content, then reset it
+if [ -f inbox.md ] && [ -s inbox.md ]; then
+  cp inbox.md "$ARCHIVE_DIR/"
+  echo "Archived inbox.md"
+fi
+> inbox.md
 
 echo "Archived to $ARCHIVE_DIR/"
 
