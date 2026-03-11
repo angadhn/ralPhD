@@ -11,7 +11,7 @@
 |------|--------|-------|
 | 1. RALPH_HOME in ralph-loop.sh | done | 7 framework refs prefixed, export RALPH_HOME, defaults to script dir |
 | 2. RALPH_HOME in ralph_agent.py | done | ralph_home var resolves from env, falls back to script dir; used for budgets_path and agent_path |
-| 3. _scripts_dir() in tools/*.py | pending | 14 occurrences across 3 files |
+| 3. _scripts_dir() in tools/*.py | done | Helper added to checks.py, pdf.py, download.py; 14 hardcoded paths replaced |
 | 4. RALPH_HOME in archive.sh | pending | template paths |
 | 5. init-project.sh | pending | new workspace scaffolding script |
 | 6. README.md update | pending | three usage modes + structure tree |
@@ -20,6 +20,6 @@
 
 ## Last Completed
 
-Task 2: Added `ralph_home` variable to `main()` in `ralph_agent.py` that resolves `RALPH_HOME` env var with fallback to `Path(__file__).parent` (backward compatible). Used it for `budgets_path` (context-budgets.json) and `agent_path` (.claude/agents/*.md). Syntax check passed, smoke tests confirmed both default and explicit RALPH_HOME paths work. `.env` loading and Python imports unchanged (already use __file__-relative paths).
+Task 3: Added `_scripts_dir()` helper function to `tools/checks.py`, `tools/pdf.py`, and `tools/download.py`. Each resolves `RALPH_HOME/scripts` from env var, falling back to `Path(__file__).resolve().parent.parent / "scripts"` (backward compatible). Replaced all 14 hardcoded `"scripts/..."` subprocess paths: 9 in checks.py (check_language, check_journal, check_figure, citation_tools x6), 4 in pdf.py (pdf_metadata, extract_figure x3), 1 in download.py (citation_tools manifest-add). Syntax check and smoke tests passed for both default and explicit RALPH_HOME paths.
 
-**Next Task:** Task 3: _scripts_dir() in tools/*.py — research-coder
+**Next Task:** Task 4: RALPH_HOME in archive.sh — research-coder
