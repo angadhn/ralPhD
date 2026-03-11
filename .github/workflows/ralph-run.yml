@@ -66,6 +66,11 @@ on:
           - branch
           - direct
           - none
+      callback_url:
+        description: "Optional webhook URL to POST a JSON summary when the run completes (for Howler integration)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -251,7 +256,143 @@ jobs:
             echo "  ✓ Pushed ${COMMIT_COUNT} commit(s) to ${INPUT_TARGET_REF}"
           fi
 
-      # ── 8. Upload outputs as artifact ─────────────────────────
+      # ── 8. Webhook callback ──────────────────────────────────
+      #    POST a JSON summary to callback_url so external systems
+      #    (e.g. Howler) can pick up results without polling.
+      - name: Webhook callback
+        if: ${{ always() && inputs.callback_url != '' }}
+        env:
+          INPUT_CALLBACK_URL: ${{ inputs.callback_url }}
+          INPUT_THREAD: ${{ inputs.thread }}
+          INPUT_MODE: ${{ inputs.loop_mode }}
+          INPUT_AUTONOMY: ${{ inputs.autonomy }}
+          INPUT_MAX_ITER: ${{ inputs.max_iterations }}
+          INPUT_TARGET: ${{ inputs.target_repo }}
+          INPUT_TARGET_REF: ${{ inputs.target_ref }}
+          INPUT_COMMIT_MODE: ${{ inputs.commit_mode }}
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+        run: |
+          cd workspace
+
+          # Determine run status from job outcome
+          STATUS="completed"
+          if [ -f HUMAN_REVIEW_NEEDED.md ]; then
+            STATUS="review_needed"
+          fi
+
+          # Extract checkpoint summary (first 20 lines, escaped for JSON)
+          CHECKPOINT_SUMMARY=""
+          if [ -f checkpoint.md ]; then
+            CHECKPOINT_SUMMARY=$(head -20 checkpoint.md | python3 -c "
+          import sys, json
+          print(json.dumps(sys.stdin.read()))" 2>/dev/null | sed 's/^"//;s/"$//')
+          fi
+
+          # Extract last task status from checkpoint
+          LAST_TASK=$(grep -m1 '## Next Task' checkpoint.md -A2 2>/dev/null | tail -1 | sed 's/^ *//' || echo "")
+          LAST_AGENT=$(grep -m1 '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null | sed 's/.*: *//' || echo "")
+
+          # Count tasks done vs total from Knowledge State table
+          TASKS_DONE=$(grep -c '| done |' checkpoint.md 2>/dev/null || echo "0")
+          TASKS_TOTAL=$(grep -c '| done \|| pending \|| in.progress |' checkpoint.md 2>/dev/null || echo "0")
+
+          # Check for human review request
+          REVIEW_NEEDED="false"
+          REVIEW_BODY=""
+          if [ -f HUMAN_REVIEW_NEEDED.md ]; then
+            REVIEW_NEEDED="true"
+            REVIEW_BODY=$(python3 -c "
+          import sys, json
+          print(json.dumps(open('HUMAN_REVIEW_NEEDED.md').read()))" 2>/dev/null | sed 's/^"//;s/"$//')
+          fi
+
+          # Build JSON payload using jq for proper escaping
+          PAYLOAD=$(jq -n \
+            --arg thread "$INPUT_THREAD" \
+            --arg status "$STATUS" \
+            --arg mode "$INPUT_MODE" \
+            --arg autonomy "$INPUT_AUTONOMY" \
+            --arg max_iter "$INPUT_MAX_ITER" \
+            --arg target_repo "${INPUT_TARGET:-}" \
+            --arg target_ref "$INPUT_TARGET_REF" \
+            --arg commit_mode "$INPUT_COMMIT_MODE" \
+            --arg last_agent "$LAST_AGENT" \
+            --arg next_task "$LAST_TASK" \
+            --arg tasks_done "$TASKS_DONE" \
+            --arg tasks_total "$TASKS_TOTAL" \
+            --argjson review_needed "$REVIEW_NEEDED" \
+            --arg review_body "$REVIEW_BODY" \
+            --arg checkpoint_summary "$CHECKPOINT_SUMMARY" \
+            --arg run_id "${GITHUB_RUN_ID:-local}" \
+            --arg run_url "${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-local}/actions/runs/${GITHUB_RUN_ID:-0}" \
+            --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+              event: "ralph.run.completed",
+              timestamp: $timestamp,
+              thread: $thread,
+              status: $status,
+              config: {
+                mode: $mode,
+                autonomy: $autonomy,
+                max_iterations: ($max_iter | tonumber),
+                target_repo: $target_repo,
+                target_ref: $target_ref,
+                commit_mode: $commit_mode
+              },
+              result: {
+                last_agent: $last_agent,
+                next_task: $next_task,
+                tasks_done: ($tasks_done | tonumber),
+                tasks_total: ($tasks_total | tonumber),
+                review_needed: $review_needed,
+                review_body: (if $review_needed then $review_body else null end),
+                checkpoint_summary: $checkpoint_summary
+              },
+              run: {
+                id: $run_id,
+                url: $run_url
+              }
+            }')
+
+          echo "=== Webhook callback ==="
+          echo "  URL: ${INPUT_CALLBACK_URL}"
+          echo "  Status: ${STATUS}"
+          echo "  Tasks: ${TASKS_DONE}/${TASKS_TOTAL}"
+
+          # Build curl args
+          CURL_ARGS=(
+            -sf
+            -X POST
+            -H "Content-Type: application/json"
+            -H "User-Agent: ralph-bot/1.0"
+          )
+
+          # Add HMAC signature if CALLBACK_SECRET is set
+          if [ -n "${CALLBACK_SECRET:-}" ]; then
+            SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" | sed 's/.*= //')
+            CURL_ARGS+=(-H "X-Ralph-Signature: sha256=${SIGNATURE}")
+          fi
+
+          CURL_ARGS+=(-d "$PAYLOAD" "$INPUT_CALLBACK_URL")
+
+          # POST with retry (3 attempts, 5s between)
+          for attempt in 1 2 3; do
+            if curl "${CURL_ARGS[@]}" -o /dev/null -w "HTTP %{http_code}" 2>/dev/null; then
+              echo ""
+              echo "  ✓ Callback delivered (attempt ${attempt})"
+              break
+            else
+              echo ""
+              echo "  ⚠ Attempt ${attempt} failed"
+              if [ "$attempt" -lt 3 ]; then
+                sleep 5
+              else
+                echo "  ✗ Callback delivery failed after 3 attempts (non-fatal)"
+              fi
+            fi
+          done
+
+      # ── 9. Upload outputs as artifact ─────────────────────────
       - name: Upload AI outputs
         if: always()
         uses: actions/upload-artifact@v4
@@ -264,7 +405,7 @@ jobs:
             workspace/logs/
           retention-days: 30
 
-      # ── 9. Summary ────────────────────────────────────────────
+      # ── 10. Summary ───────────────────────────────────────────
       - name: Generate run summary
         if: always()
         env:
@@ -275,6 +416,7 @@ jobs:
           INPUT_TARGET: ${{ inputs.target_repo }}
           INPUT_TARGET_REF: ${{ inputs.target_ref }}
           INPUT_COMMIT_MODE: ${{ inputs.commit_mode }}
+          INPUT_CALLBACK_URL: ${{ inputs.callback_url }}
         run: |
           cd workspace
 
@@ -290,6 +432,9 @@ jobs:
               echo "- **Target repo:** ${INPUT_TARGET}@${INPUT_TARGET_REF}"
             else
               echo "- **Target repo:** (self)"
+            fi
+            if [ -n "${INPUT_CALLBACK_URL}" ]; then
+              echo "- **Callback:** configured"
             fi
             echo ""
 
