@@ -26,7 +26,7 @@ Howler v2's research companion duplicates ralPhD's agent roster in TypeScript ed
 ## Phase 2 — RALPH_HOME separation hardening
 
 - [x] 6. Audit `ralph-loop.sh` for any remaining hardcoded paths that assume ralPhD is the project root (vs. RALPH_HOME pointing to the framework while CWD is the project) — **coder**
-- [ ] 7. Audit all agent prompts for path assumptions — ensure `specs/`, `templates/`, `tools/` references resolve via RALPH_HOME, while `checkpoint.md`, `implementation-plan.md`, `AI-generated-outputs/` resolve relative to CWD (the project) — **coder**
+- [x] 7. Audit all agent prompts for path assumptions — ensure `specs/`, `templates/`, `tools/` references resolve via RALPH_HOME, while `checkpoint.md`, `implementation-plan.md`, `AI-generated-outputs/` resolve relative to CWD (the project) — **coder**
 - [ ] 8. Audit `ralph_agent.py` and `tools/__init__.py` — ensure tool paths (scripts, checks) resolve from RALPH_HOME — **coder**
 
 --- STAGE GATE: review separation before proceeding ---

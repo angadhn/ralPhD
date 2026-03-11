@@ -62,3 +62,6 @@
 
 ## Reflection — Iteration 3 — 2026-03-11
 - Trajectory: on track. See ai-generated-outputs/reflections/reflection-iter-3.md
+
+## Iteration 5 — 2026-03-11
+- Task 7 complete: agent prompt path audit — added build_path_preamble() to ralph_agent.py, Path Resolution docs to agent-base.md
