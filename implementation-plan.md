@@ -36,7 +36,7 @@ build mode how to execute. CLI flags on build mode can override for benchmarking
 
 ## Phase 2 — Architecture modes in build
 
-- [ ] 5. Add `--serial`, `--parallel`, `--single` flags to `ralph-loop.sh` — parse in arg loop, set `ARCH_MODE` variable, default to reading `**Architecture:**` field from implementation-plan.md. If field missing, default to `serial` — **coder**
+- [x] 5. Add `--serial`, `--parallel`, `--single` flags to `ralph-loop.sh` — parse in arg loop, set `ARCH_MODE` variable, default to reading `**Architecture:**` field from implementation-plan.md. If field missing, default to `serial` — **coder**
 - [ ] 6. Implement parallel execution in `ralph-loop.sh` — when `ARCH_MODE=parallel` and current phase is marked `(parallel)`, collect all unchecked tasks in that phase, spawn one `ralph_agent.py` per task concurrently, wait for all to finish, then continue. Each parallel agent writes to its own output subdir. Handle: shared checkpoint conflicts (each agent updates its own task only), usage logging per agent, eval capture per agent — **coder**
 - [ ] 7. Create `prompt-build-single.md` — single combined prompt that includes all agent capabilities. Reads the same state files. Gets full tool registry (all 17 tools). No agent detection — runs as one iteration until task list is exhausted or context yields — **coder**
 - [ ] 8. Implement single-agent mode in `ralph-loop.sh` — when `ARCH_MODE=single`, use `prompt-build-single.md`, skip `detect_agent`, pass full tool registry. Still respects context yield and iteration limits — **coder**
