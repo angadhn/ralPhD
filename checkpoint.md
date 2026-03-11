@@ -3,7 +3,7 @@
 **Thread:** howler-port
 **Last updated:** 2026-03-11
 **Last agent:** research-coder
-**Status:** Phase 3 complete — all 14 tasks done. Phase 4 next (critic update).
+**Status:** Phase 4 complete — all 16 tasks done. Phase 5 next (venue convention + housekeeping).
 
 ## Knowledge State
 
@@ -23,7 +23,8 @@
 | 12. synthesizer output format | done | specs/synthesizer-output-format.md — synthesis.md (themes, conflicts, provocateur integration, story arc), master.bib (deduplicated, lint-clean), section_outline.md (claims→evidence mapping, word budgets). 16 commit gates. |
 | 13. triage agent | done | .claude/agents/triage.md — corpus deduplication, grade conflict resolution, reading plan generation. Tools: pdf_metadata + citation_verify_all. Registered in AGENT_TOOLS. |
 | 14. triage output format | done | specs/triage-output-format.md — templates for triage_report.md, reading_plan.md, corpus_index_deduped.jsonl |
-| 15-16. Critic update | pending | FIGURE-PROPOSAL mode — Phase 4 |
+| 15. Critic FIGURE-PROPOSAL mode | done | Updated critic.md — 5th mode: reads deep-reader notes/reports, inventories existing figs, evaluates data availability + visual impact + claim support, ranks by impact |
+| 16. Critic output format update | done | Updated critic-output-format.md — figure_proposals.md template (per-proposal entries with impact/type/sources/rationale), HUMAN_REVIEW figure approval section, 5 commit gates |
 | 17-18. Venue + housekeeping | pending | init-project.sh, README — Phase 5 |
 | 19. Prompt audit | pending | Phase 6 |
 | 20-21. Verification | pending | Tool + agent loading checks — Phase 7 |
@@ -31,6 +32,7 @@
 ## Last Reflection
 
 Iteration 2 reflection: On track. Phase 3 nearly complete (13/14 tasks done). Pattern of agent+spec creation is efficient and consistent. No course corrections needed. After task 14, phase boundary triggers stage-gate review.
+
 ## Next Task
 
-15. Update critic.md — add FIGURE-PROPOSAL mode research-coder
+17. Update scripts/init-project.sh — create inputs/ directory research-coder

@@ -1,33 +1,28 @@
-# Human Review Needed — Phase 3 → Phase 4 Gate
+# Human Review — Phase 4 → Phase 5 Gate
 
-## Completed: Phase 3 — Analysis Agents
+## Completed: Phase 4 (Critic Update)
 
-All 6 tasks in Phase 3 are done:
+**Tasks 15-16 completed:**
 
-| Task | Deliverable | Status |
-|------|------------|--------|
-| 9 | `.claude/agents/provocateur.md` — 3 lenses: negative space, inverted assumptions, cross-domain bridges | ✅ |
-| 10 | `specs/provocateur-output-format.md` — provocations.md template, impact levels, priority ranking | ✅ |
-| 11 | `.claude/agents/synthesizer.md` — merges deep-reader + critic + provocateur into synthesis narrative | ✅ |
-| 12 | `specs/synthesizer-output-format.md` — synthesis.md, master.bib, section_outline.md templates | ✅ |
-| 13 | `.claude/agents/triage.md` — corpus deduplication, grade conflicts, reading plan generation | ✅ |
-| 14 | `specs/triage-output-format.md` — triage_report.md, reading_plan.md, corpus_index_deduped.jsonl templates | ✅ |
+1. **Updated `.claude/agents/critic.md`** — Added FIGURE-PROPOSAL as 5th mode:
+   - Triggered by `FIGURE-PROPOSAL critic` in checkpoint's Next Task
+   - Reads deep-reader `notes.md` Figure Opportunities sections + `report.tex` quantitative claims
+   - Inventories existing figures to avoid duplication
+   - Evaluates candidates on: data availability, visual impact, claim support
+   - Ranks proposals by impact (HIGH/MEDIUM/LOW)
+   - Outputs `figure_proposals.md` + appends approval section to `HUMAN_REVIEW_NEEDED.md`
+   - Flow: critic proposes → human approves → research-coder implements → figure-stylist reviews
 
-All agents registered in `tools/__init__.py` AGENT_TOOLS with appropriate tool access.
+2. **Updated `specs/critic-output-format.md`** — Added figure proposal format:
+   - `figure_proposals.md` template: self-contained entries with impact level, chart type, data sources with paths, data points table, rationale, design notes
+   - Impact criteria: HIGH (central thesis, 3+ sources), MEDIUM (secondary, 2 sources), LOW (illustrative, single source)
+   - `HUMAN_REVIEW_NEEDED.md` Figure Proposals section: checkbox approval list
+   - 5 commit gates for figure proposal mode
 
-## Next: Phase 4 — Critic Update
+## Next: Phase 5 (Venue Convention + Housekeeping)
 
-Two tasks:
+**What Phase 5 will do:**
+- Task 17: Update `scripts/init-project.sh` to create `inputs/` directory during project init
+- Task 18: Update `.claude/agents/README.md` to document all new agents (editor, coherence-reviewer, provocateur, synthesizer, triage) with tool summaries + `inputs/` convention
 
-- **Task 15:** Update `.claude/agents/critic.md` — add FIGURE-PROPOSAL mode. After reviewing deep-reader reports, identify claims needing visual support. Output `figure_proposals.md`.
-- **Task 16:** Update `specs/critic-output-format.md` — add figure proposal format section.
-
-This modifies an existing agent (critic) rather than creating new ones.
-
-## Overall Progress
-
-- Phases 1-3: ✅ Complete (14/21 tasks)
-- Phase 4: Next (2 tasks — critic update)
-- Phase 5: Pending (2 tasks — venue + housekeeping)
-- Phase 6: Pending (1 task — prompt audit)
-- Phase 7: Pending (2 tasks — verification)
+These are low-risk infrastructure changes. No agent prompts or tool code will be modified.

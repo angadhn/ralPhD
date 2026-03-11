@@ -36,8 +36,8 @@ Interview decisions and full rationale are in this session's transcript.
 ## Phase 4: Critic Update
 <!-- gate -->
 
-- [ ] 15. Update `.claude/agents/critic.md` — add FIGURE-PROPOSAL mode. After reviewing deep-reader reports, identify claims needing visual support. Output `figure_proposals.md`: what figure, what data, why effective. research-coder implements, figure-stylist reviews. — **research-coder**
-- [ ] 16. Update `specs/critic-output-format.md` — add figure proposal format section. — **research-coder**
+- [x] 15. Update `.claude/agents/critic.md` — add FIGURE-PROPOSAL mode. After reviewing deep-reader reports, identify claims needing visual support. Output `figure_proposals.md`: what figure, what data, why effective. research-coder implements, figure-stylist reviews. — **research-coder**
+- [x] 16. Update `specs/critic-output-format.md` — add figure proposal format section. — **research-coder**
 
 ## Phase 5: Venue Convention + Housekeeping
 <!-- gate -->
