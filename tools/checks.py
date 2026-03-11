@@ -1,8 +1,8 @@
 """Check tools: check_language, check_journal, check_figure, citation_lint,
 citation_lookup, citation_verify, citation_verify_all, citation_manifest.
 
-check_language is implemented inline. check_journal, check_figure, and citation
-tools currently wrap scripts/ via subprocess (tasks 3-5 will inline these too).
+check_language and check_journal are implemented inline. check_figure and citation
+tools currently wrap scripts/ via subprocess (tasks 4-5 will inline these too).
 """
 
 import io
@@ -381,6 +381,111 @@ def check_file(filepath: str, strict: bool = False, verbose: bool = False) -> bo
         return True
 
 
+# ── check_journal (inlined from scripts/check_journal.py) ────────────────
+
+_JOURNAL_DEFAULTS = {
+    "word_limit": 6000,
+    "page_limit": 10,
+    "words_per_page": 250,  # single-column default
+    "required_bib_fields": ["author", "title", "year"],
+}
+
+
+def _journal_parse_pub_reqs(path: str) -> dict:
+    """Parse specs/publication-requirements.md for compliance thresholds."""
+    reqs = dict(_JOURNAL_DEFAULTS)
+    reqs["required_bib_fields"] = list(_JOURNAL_DEFAULTS["required_bib_fields"])
+    text = Path(path).read_text(encoding="utf-8")
+    patterns = {
+        "word_limit": r"word[_\s-]*limit\s*[:=]\s*(\d+)",
+        "page_limit": r"page[_\s-]*limit\s*[:=]\s*(\d+)",
+        "words_per_page": r"words[_\s-]*per[_\s-]*page\s*[:=]\s*(\d+)",
+    }
+    for key, pat in patterns.items():
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            reqs[key] = int(m.group(1))
+    # Check for double-column hint
+    if re.search(r"double[_\s-]*column", text, re.IGNORECASE):
+        reqs["words_per_page"] = 500
+    return reqs
+
+
+def count_words_tex(filepath: Path) -> tuple:
+    """Count words in a .tex file after stripping LaTeX. Returns (word_count, section_name)."""
+    content = filepath.read_text(encoding="utf-8")
+    body = extract_body(content)
+    stripped = strip_latex_commands(body)
+    # Remove citation markers left by strip_latex_commands
+    stripped = re.sub(r'\\cite\{[^}]*\}', '', stripped)
+    words = stripped.split()
+    return len(words), filepath.stem
+
+
+def check_bib_fields(bib_path: Path, required_fields: list) -> list:
+    """Check that each .bib entry has required fields."""
+    issues = []
+    content = bib_path.read_text(encoding="utf-8")
+
+    # Simple bib parser: split on @ entries
+    entries = re.split(r'(?=@\w+\{)', content)
+    for entry in entries:
+        entry = entry.strip()
+        if not entry or not entry.startswith("@"):
+            continue
+        # Skip @comment, @preamble, @string
+        entry_type_match = re.match(r'@(\w+)\{([^,]*)', entry)
+        if not entry_type_match:
+            continue
+        entry_type = entry_type_match.group(1).lower()
+        cite_key = entry_type_match.group(2).strip()
+        if entry_type in ("comment", "preamble", "string"):
+            continue
+
+        entry_lower = entry.lower()
+        missing = []
+        for field in required_fields:
+            # Check for field = or field={ patterns
+            if not re.search(rf'\b{field}\s*=', entry_lower):
+                missing.append(field)
+        if missing:
+            issues.append({
+                "cite_key": cite_key,
+                "file": str(bib_path),
+                "missing_fields": missing,
+            })
+    return issues
+
+
+def collect_tex_files(paths: list) -> list:
+    """Expand directories into .tex files."""
+    files = []
+    for p in paths:
+        path = Path(p)
+        if path.is_dir():
+            files.extend(sorted(path.glob("*.tex")))
+        elif path.exists() and path.suffix == ".tex":
+            files.append(path)
+    return files
+
+
+def collect_bib_files(paths: list) -> list:
+    """Find .bib files in references/ or alongside .tex files."""
+    bib_files = []
+    checked = set()
+    for p in paths:
+        path = Path(p)
+        search_dir = path if path.is_dir() else path.parent
+        if search_dir not in checked:
+            checked.add(search_dir)
+            bib_files.extend(sorted(search_dir.glob("*.bib")))
+    # Also check references/ directory
+    ref_dir = Path("references")
+    if ref_dir.exists() and ref_dir not in checked:
+        bib_files.extend(sorted(ref_dir.glob("*.bib")))
+    return bib_files
+
+
 # ── Handler: check_language ──────────────────────────────────────────────
 
 
@@ -400,15 +505,89 @@ def _handle_check_language(inp):
     return output if output.strip() else "(no output)"
 
 
-# ── Handlers: check_journal, check_figure (still subprocess) ────────────
+# ── Handler: check_journal ────────────────────────────────────────────────
 
 
 def _handle_check_journal(inp):
-    cmd = ["python3", str(_scripts_dir() / "check_journal.py")]
-    if inp.get("pub_reqs"):
-        cmd.extend(["--pub-reqs", inp["pub_reqs"]])
-    cmd.append(inp["sections_dir"])
-    return _run_cmd(cmd)
+    """Run journal compliance checks directly (no subprocess)."""
+    # Build requirements
+    reqs = dict(_JOURNAL_DEFAULTS)
+    reqs["required_bib_fields"] = list(_JOURNAL_DEFAULTS["required_bib_fields"])
+    if inp.get("pub_reqs") and Path(inp["pub_reqs"]).exists():
+        reqs = _journal_parse_pub_reqs(inp["pub_reqs"])
+
+    tex_files = collect_tex_files([inp["sections_dir"]])
+    if not tex_files:
+        return "No .tex files found."
+
+    # Word counts
+    section_counts = []
+    total_words = 0
+    for f in tex_files:
+        wc, name = count_words_tex(f)
+        section_counts.append({"file": str(f), "section": name, "word_count": wc})
+        total_words += wc
+
+    page_estimate = round(total_words / reqs["words_per_page"], 1)
+
+    # Bib checks
+    bib_files = collect_bib_files([inp["sections_dir"]])
+    bib_issues = []
+    for bf in bib_files:
+        bib_issues.extend(check_bib_fields(bf, reqs["required_bib_fields"]))
+
+    # Determine pass/fail
+    issues = []
+    if total_words > reqs["word_limit"]:
+        issues.append(f"Total word count {total_words} exceeds limit of {reqs['word_limit']} "
+                      f"(over by {total_words - reqs['word_limit']})")
+    if page_estimate > reqs["page_limit"]:
+        issues.append(f"Estimated {page_estimate} pages exceeds limit of {reqs['page_limit']}")
+    if bib_issues:
+        issues.append(f"{len(bib_issues)} bibliography entries missing required fields")
+
+    all_pass = len(issues) == 0
+
+    # Build text report
+    lines = []
+    lines.append(f"\n{'='*50}")
+    lines.append("Journal Compliance Check")
+    lines.append(f"{'='*50}")
+    lines.append(f"\nWord Counts by Section:")
+    for sc in section_counts:
+        lines.append(f"  {sc['section']}: {sc['word_count']} words")
+
+    total_line = f"\n  Total: {total_words} / {reqs['word_limit']} words"
+    if total_words > reqs["word_limit"]:
+        total_line += f"  [OVER by {total_words - reqs['word_limit']}]"
+    else:
+        total_line += f"  [OK — {reqs['word_limit'] - total_words} remaining]"
+    lines.append(total_line)
+
+    page_line = (f"\nPage Estimate: {page_estimate} / {reqs['page_limit']} pages "
+                 f"({reqs['words_per_page']} words/page)")
+    if page_estimate > reqs["page_limit"]:
+        page_line += "  [OVER]"
+    else:
+        page_line += "  [OK]"
+    lines.append(page_line)
+
+    if bib_issues:
+        lines.append(f"\nBibliography Issues:")
+        for bi in bib_issues:
+            lines.append(f"  {bi['cite_key']} ({bi['file']}): missing {', '.join(bi['missing_fields'])}")
+    elif bib_files:
+        lines.append(f"\nBibliography: {len(bib_files)} file(s) checked, all entries OK")
+    else:
+        lines.append(f"\nBibliography: No .bib files found")
+
+    lines.append(f"\n{'='*50}")
+    lines.append("PASS" if all_pass else "FAIL")
+
+    return "\n".join(lines)
+
+
+# ── Handler: check_figure (still subprocess) ─────────────────────────────
 
 
 def _handle_check_figure(inp):
