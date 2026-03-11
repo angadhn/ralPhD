@@ -91,7 +91,14 @@ detect_agent() {
   local next_task
   next_task=$(grep -i '^\*\*Next Task\|^Next Task\|^## Next' checkpoint.md 2>/dev/null \
     | head -1 | sed 's/.*: *//' | sed 's/\*//g')
-  echo "${next_task##* }" | tr -d '[:space:]'
+  next_task=$(echo "$next_task" | tr -d '[:space:]')
+
+  # No task: "none", template placeholder, or empty
+  case "$next_task" in
+    none*|None*|"<"*|"") echo ""; return ;;
+  esac
+
+  echo "${next_task##* }"
 }
 
 estimate_input_cost() {
@@ -327,7 +334,11 @@ while true; do
 
   # --- Detect agent for budget computation ---
   CURRENT_AGENT=$(detect_agent)
-  if [ -n "$CURRENT_AGENT" ] && [ "$CURRENT_AGENT" != "" ]; then
+  if [ "$LOOP_MODE" = "plan" ]; then
+    # Plan mode doesn't need an agent — it's an interactive session
+    CURRENT_AGENT="${CURRENT_AGENT:-plan}"
+    echo "  Plan mode (agent detection skipped)"
+  elif [ -n "$CURRENT_AGENT" ] && [ "$CURRENT_AGENT" != "" ]; then
     if [ ! -f "${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md" ]; then
       RAW_LINE=$(grep -i '^\*\*Next Task\|^Next Task\|^## Next' checkpoint.md 2>/dev/null | head -1)
       echo "  ⚠  Agent file not found: ${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md"
@@ -338,7 +349,9 @@ while true; do
     fi
     echo "  Agent detected: $CURRENT_AGENT"
   else
-    CURRENT_AGENT="unknown"
+    echo "  No task found in checkpoint.md — nothing to do."
+    echo "  Run './ralphd plan' to plan next steps, or 'bash scripts/archive.sh' to archive."
+    break
   fi
 
   # --- Build prompt ---

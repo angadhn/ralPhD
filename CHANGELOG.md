@@ -26,3 +26,6 @@
 
 ## Iteration 3 — 2026-03-11
 - Update checkpoint and plan: Task 3 (_scripts_dir in tools/*.py) done
+
+## Iteration 4 — 2026-03-11
+- Add init-project.sh, update README with workspace separation docs

@@ -42,8 +42,8 @@ cp -n "$RALPH_HOME/templates/implementation-plan.md" "$WORKSPACE/implementation-
 # --- .ralphrc ---
 echo "RALPH_HOME=$RALPH_HOME" > "$WORKSPACE/.ralphrc"
 
-# --- ./ralph launcher ---
-cat > "$WORKSPACE/ralph" << 'LAUNCHER'
+# --- ./ralphd launcher ---
+cat > "$WORKSPACE/ralphd" << 'LAUNCHER'
 #!/usr/bin/env bash
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -67,7 +67,7 @@ done
 
 exec "$RALPH_HOME/ralph-loop.sh" "$@"
 LAUNCHER
-chmod +x "$WORKSPACE/ralph"
+chmod +x "$WORKSPACE/ralphd"
 
 # --- Brownfield detection ---
 # If workspace is inside another git repo, isolate ralph's git
@@ -87,4 +87,4 @@ fi
 
 echo ""
 echo "Workspace ready: $WORKSPACE"
-echo "  cd $WORKSPACE && ./ralph plan"
+echo "  cd $WORKSPACE && ./ralphd plan"
