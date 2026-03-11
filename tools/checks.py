@@ -1,26 +1,18 @@
 """Check tools: check_language, check_journal, check_figure, citation_lint,
 citation_lookup, citation_verify, citation_verify_all, citation_manifest.
 
-check_language, check_journal, and check_figure are implemented inline. Citation
-tools currently wrap scripts/ via subprocess (task 5 will inline these).
+All check and citation tools are implemented inline — no subprocess calls.
+Citation tools delegate to tools._citation for API interactions.
 """
 
 import io
 import os
 import re
 import statistics
-import subprocess
 import sys
 from pathlib import Path
 
 from tools._paths import scripts_dir as _scripts_dir
-
-
-def _run_cmd(cmd):
-    """Run a subprocess, return combined stdout+stderr."""
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    output = result.stdout + result.stderr
-    return output if output.strip() else f"(exit code {result.returncode}, no output)"
 
 
 # ── check_language (inlined from scripts/check_language.py) ──────────────
@@ -739,15 +731,16 @@ def _handle_check_figure(inp):
     return _json.dumps({"results": results, "pass": all_pass}, indent=2)
 
 
-# ── Handlers: citation tools (still subprocess) ─────────────────────────
+# ── Handlers: citation tools (via tools._citation) ──────────────────────
 
 
 def _handle_citation_lint(inp):
+    """Run citation lint directly (no subprocess)."""
+    import json as _json
+    from tools._citation import lint_bib_files
+
     report_path = os.path.join(inp["bib_dir"], "citation_verification_report.md")
-    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "lint",
-           "--bib-dir", inp["bib_dir"],
-           "--output", report_path]
-    _run_cmd(cmd)
+    lint_bib_files(inp["bib_dir"], report_path)
 
     # Return summary only (counts + flagged entries), not the full report
     summary_lines = []
@@ -780,37 +773,53 @@ def _handle_citation_lint(inp):
 
 
 def _handle_citation_lookup(inp):
+    """Look up papers directly (no subprocess)."""
+    import json as _json
+    from tools._citation import lookup_paper
+
     if inp.get("input_file"):
-        # Batch mode
-        cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "batch-lookup",
-               "--input", inp["input_file"],
-               "--output", inp.get("output_file", "corpus/batch_results.jsonl")]
-        return _run_cmd(cmd)
+        # Batch mode: read titles, look up each, write JSONL
+        output_file = inp.get("output_file", "corpus/batch_results.jsonl")
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+        titles = Path(inp["input_file"]).read_text(encoding="utf-8").strip().splitlines()
+        found = 0
+        with open(output_file, "w", encoding="utf-8") as out:
+            for title in titles:
+                title = title.strip()
+                if not title:
+                    continue
+                result = lookup_paper(title)
+                if result:
+                    found += 1
+                    out.write(_json.dumps(result) + "\n")
+        return f"Batch lookup: {found}/{len(titles)} titles found. Results: {output_file}"
+
     # Single lookup
-    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "lookup",
-           "--title", inp["title"]]
-    if inp.get("authors"):
-        cmd.extend(["--authors", inp["authors"]])
-    return _run_cmd(cmd)
+    result = lookup_paper(inp["title"], inp.get("authors", ""))
+    if result:
+        return _json.dumps(result, indent=2)
+    return "(no results found)"
 
 
 def _handle_citation_verify(inp):
-    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "verify",
-           "--doi", inp["doi"]]
-    return _run_cmd(cmd)
+    """Verify a DOI directly (no subprocess)."""
+    import json as _json
+    from tools._citation import verify_doi
+
+    result = verify_doi(inp["doi"])
+    if result:
+        return _json.dumps(result, indent=2)
+    return f"(DOI {inp['doi']} could not be verified)"
 
 
 def _handle_citation_verify_all(inp):
-    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "batch-verify",
-           "--bib-file", inp["bib_file"]]
-    raw = _run_cmd(cmd)
+    """Batch-verify .bib file directly (no subprocess)."""
+    from tools._citation import batch_verify_bib
 
-    # Parse JSON output for a compact summary
-    import json as _json
-    try:
-        data = _json.loads(raw)
-    except (ValueError, _json.JSONDecodeError):
-        return raw  # fallback: return raw output
+    data = batch_verify_bib(inp["bib_file"])
+
+    if "error" in data:
+        return f"Error: {data['error']}"
 
     lines = ["## citation_verify_all report", ""]
     lines.append(f"Total entries: {data.get('total', '?')}")
@@ -858,30 +867,29 @@ def _handle_citation_verify_all(inp):
 
 
 def _handle_citation_manifest(inp):
+    """Check or update paper manifest directly (no subprocess)."""
+    import json as _json
+    from tools._citation import manifest_add, manifest_check
+
     if inp.get("file"):
         # Add mode
-        cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "manifest-add",
-               "--file", inp["file"]]
-        if inp.get("doi"):
-            cmd.extend(["--doi", inp["doi"]])
-        if inp.get("scout"):
-            cmd.extend(["--scout", inp["scout"]])
-        if inp.get("title"):
-            cmd.extend(["--title", inp["title"]])
-        if inp.get("papers_dir"):
-            cmd.extend(["--papers-dir", inp["papers_dir"]])
-        if inp.get("ntrs_id"):
-            cmd.extend(["--ntrs-id", inp["ntrs_id"]])
-        return _run_cmd(cmd)
+        result = manifest_add(
+            doi=inp.get("doi", ""),
+            file=inp["file"],
+            scout=inp.get("scout", ""),
+            title=inp.get("title", ""),
+            papers_dir=inp.get("papers_dir", "papers/"),
+            ntrs_id=inp.get("ntrs_id"),
+        )
+        return _json.dumps(result, indent=2)
+
     # Check mode
-    cmd = ["python3", str(_scripts_dir() / "citation_tools.py"), "manifest-check"]
-    if inp.get("doi"):
-        cmd.extend(["--doi", inp["doi"]])
-    if inp.get("title"):
-        cmd.extend(["--title", inp["title"]])
-    if inp.get("papers_dir"):
-        cmd.extend(["--papers-dir", inp["papers_dir"]])
-    return _run_cmd(cmd)
+    result = manifest_check(
+        doi=inp.get("doi", ""),
+        papers_dir=inp.get("papers_dir", "papers/"),
+        title=inp.get("title", ""),
+    )
+    return _json.dumps(result, indent=2)
 
 
 # ── Tool definitions ─────────────────────────────────────────────────────
