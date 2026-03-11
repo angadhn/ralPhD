@@ -23,3 +23,4 @@ Six specialized agents that form the Ralph loop. Each reads `checkpoint.md` to d
 - Agents read `checkpoint.md` for state and write it back with the next task
 - Output format templates live in `specs/*-output-format.md`, not inline
 - Deterministic checks use scripts in `scripts/` — agents call them, not replicate them
+- Each agent gets a curated tool set via `tools/__init__.py` `AGENT_TOOLS` — see `tools/README.md`

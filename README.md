@@ -119,6 +119,7 @@ Run `python3 scripts/usage_report.py` to see a summary of token usage and costs 
 ```
 .
 ├── ralph-loop.sh               # The loop (shell infrastructure)
+├── ralph_agent.py              # Python agent runner (replaces claude -p)
 ├── prompt-build.md             # Build-mode dispatcher (~20 lines)
 ├── prompt-plan.md              # Plan-mode dispatcher (~12 lines)
 ├── checkpoint.md               # Shared state between iterations
@@ -126,40 +127,46 @@ Run `python3 scripts/usage_report.py` to see a summary of token usage and costs 
 ├── inbox.md                    # Operator notes (auto-cleared)
 ├── CHANGELOG.md                # Rolling progress log
 ├── iteration_count             # Persistent counter (survives restarts)
-├── .claude/agents/
-│   ├── scout.md                # Literature search
-│   ├── deep-reader.md          # Paper reading + note extraction
-│   ├── critic.md               # Assessment + compliance checks
-│   ├── paper-writer.md         # Section writing + revision
-│   ├── research-coder.md       # Analysis scripts + figures
-│   ├── figure-stylist.md       # Figure visual review
-│   └── agent-template.md       # Template for adding new agents
-├── specs/
-│   ├── writing-style.md        # Anti-LLM-speak guide
-│   ├── grading-rubric.md       # Paper scoring (for scout)
-│   ├── publication-requirements.md # Target publication specs
-│   ├── reflection-template.md  # Reflection instructions
-│   └── *-output-format.md      # Output templates per agent
-├── logs/
-│   └── usage.jsonl             # Per-iteration token usage + cost
-├── scripts/
-│   ├── citation_tools.py       # BibTeX lookup + lint
-│   ├── check_language.py       # LLM-speak detector
-│   ├── check_journal.py        # Journal compliance linter
-│   ├── check_figure.py         # Figure spec linter
-│   ├── extract_figure.py       # Figure extraction from PDFs
-│   ├── pdf_metadata.py         # PDF metadata reader
-│   ├── usage_report.py         # Token usage + cost summary
-│   └── extract_session_usage.py # Interactive session usage extractor
-└── ai-generated-outputs/
-    └── reflections/            # Full reflection files
+├── .claude/agents/             # 6 agent prompts (scout, deep-reader, critic, etc.)
+├── tools/                      # Tool registry + per-agent tool implementations
+│   ├── __init__.py             # Merged registry, AGENT_TOOLS, dispatch
+│   ├── core.py                 # read_file, write_file, bash
+│   ├── checks.py               # check_language, citation_lint/lookup/verify/manifest
+│   ├── pdf.py                  # pdf_metadata, extract_figure
+│   └── search.py               # list_files, code_search
+├── specs/                      # Quality standards + output format templates
+├── scripts/                    # Deterministic check/extraction scripts
+├── logs/                       # Per-iteration token usage + cost (usage.jsonl)
+├── templates/                  # Starter checkpoint.md + implementation-plan.md
+├── archive/                    # Old plans and historical research
+└── ai-generated-outputs/       # All agent outputs, organized by thread
 ```
+
+## Tool registry
+
+`ralph_agent.py` is a thin Python runner (~200 lines) that replaces `claude -p` inside `ralph-loop.sh`. It gives each agent a curated tool set instead of Claude Code's full ~20+ built-in tools.
+
+Tools are defined in `tools/` and registered per-agent in `tools/__init__.py`:
+
+| Agent | Tools (beyond essentials) |
+|-------|--------------------------|
+| scout | pdf_metadata, citation_lookup/verify/manifest |
+| deep-reader | pdf_metadata, extract_figure |
+| critic | check_language, check_journal, check_figure |
+| paper-writer | check_language, citation_lint |
+| research-coder | (essentials only) |
+| figure-stylist | check_figure |
+
+Every agent gets 5 essentials: `read_file`, `write_file`, `bash`, `list_files`, `code_search`. 14 tools total.
+
+Based on [ghuntley's agent architecture](https://ghuntley.com/agent): the agent = the loop + tool registry, the prompt = behavioral guidance.
 
 ## Design decisions
 
 - **Research-first, not spec-first.** The loop starts from questions, not specifications. The plan evolves as understanding deepens.
 - **No orchestrator agent.** `checkpoint.md` and `implementation-plan.md` are the shared state. The dispatcher is ~25 lines. Claude picks the highest-priority task each iteration.
 - **One agent per iteration.** Each iteration gets a fresh context window. No agent mixing, no subagent spawning.
+- **Per-agent tool registries.** Each agent only sees the tools it needs. Scout gets citation tools, critic gets compliance checkers, research-coder gets only the essentials. This focuses the model's attention and prevents tool misuse.
 - **Plan mode creates agents on the fly.** If a task needs a capability that doesn't exist yet, plan mode can write a new agent file rather than forcing everything through six predefined roles.
 - **Peer-reviewed sources only.** Scout searches academic databases via `citation_tools.py`. No general web search — journal submissions cite peer-reviewed and conference papers.
 - **Human in the loop.** `HUMAN CHECKPOINT` tasks pause for review. `inbox.md` allows mid-run steering. Reflections every 5 iterations surface drift.
