@@ -580,6 +580,15 @@ while true; do
   # Reset backoff after success
   BACKOFF=60
 
+  # Safety net: detect and restore git-tracked files truncated to 0 bytes
+  TRUNCATED=$(git diff --numstat 2>/dev/null | awk '$1 == 0 && $2 > 0 {print $3}')
+  if [ -n "$TRUNCATED" ]; then
+    echo "  ⚠  TRUNCATED FILES DETECTED:"
+    echo "$TRUNCATED" | sed 's/^/    /'
+    echo "  Restoring from HEAD..."
+    echo "$TRUNCATED" | xargs git checkout HEAD --
+  fi
+
   # Auto-append CHANGELOG entry from git log
   if [ -f "CHANGELOG.md" ] || [ "$ITERATION" -eq 1 ]; then
     LAST_MSG=$(git log -1 --format='%s' 2>/dev/null || echo "no commit")

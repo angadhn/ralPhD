@@ -5,6 +5,7 @@ These are ghuntley's essential primitives — every agent gets them.
 
 import os
 import subprocess
+import tempfile
 
 
 def _handle_read_file(inp):
@@ -16,13 +17,39 @@ def _handle_read_file(inp):
 
 
 def _handle_write_file(inp):
+    # Validate inputs before touching the filesystem
+    if "content" not in inp or "file_path" not in inp:
+        return "Error: write_file requires 'file_path' and 'content' parameters"
+
+    file_path = inp["file_path"]
+    content = inp["content"]
+
+    # Check for size regression before writing
+    old_size = 0
+    if os.path.exists(file_path):
+        old_size = os.path.getsize(file_path)
+
+    dir_name = os.path.dirname(file_path) or "."
+    os.makedirs(dir_name, exist_ok=True)
+
+    # Atomic write: temp file in same directory, then os.replace()
     try:
-        os.makedirs(os.path.dirname(inp["file_path"]) or ".", exist_ok=True)
-        with open(inp["file_path"], "w") as f:
-            f.write(inp["content"])
-        return f"Wrote {len(inp['content'])} chars to {inp['file_path']}"
+        fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(content)
+            os.replace(tmp_path, file_path)
+        except Exception:
+            os.unlink(tmp_path)
+            raise
     except Exception as e:
         return f"Error writing file: {e}"
+
+    msg = f"Wrote {len(content)} chars to {file_path}"
+    if old_size > 100 and len(content) < old_size * 0.2:
+        reduction = 100 - len(content) * 100 // old_size
+        msg += f" ⚠ WARNING: file shrank from {old_size} to {len(content)} chars ({reduction}% reduction)"
+    return msg
 
 
 def _handle_bash(inp):
