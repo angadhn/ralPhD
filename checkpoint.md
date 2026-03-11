@@ -3,7 +3,7 @@
 **Thread:** ralph-as-engine
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 1 in progress (tasks 3–4 done, task 5 next)
+**Status:** Phase 1 complete — stage gate reached
 
 ## Knowledge State
 
@@ -12,8 +12,8 @@
 | 1. Archive all per-thread files | done | archive.sh now handles agent outputs, reflections, inbox |
 | 2. Audit for other stale files | done | CHANGELOG.md archived+reset, /tmp/ralph-* cleaned |
 | 3. GitHub Actions workflow | done | `.github/workflows/ralph-run.yml` — workflow_dispatch with 7 inputs |
-| 4. .ralph init step | done | `init-project.sh --ci` copies instead of symlinking; workflow step injects thread/prompt/autonomy |
-| 5. Local workflow test | pending | verify with act or test repo |
+| 4. .ralph init step | done | `init-project.sh --ci` copies instead of symlinking; workflow injects thread/prompt/autonomy |
+| 5. Local workflow test | done | 31/31 tests pass (CI init, injection, RALPH_HOME, agent detection, YAML) |
 | 6. ralph-loop.sh path audit | pending | RALPH_HOME separation |
 | 7. Agent prompt path audit | pending | specs/templates via RALPH_HOME |
 | 8. ralph_agent.py path audit | pending | tool resolution from RALPH_HOME |
@@ -25,8 +25,13 @@
 
 ## Last Reflection
 
-Tasks 3–4 completed in one iteration. The workflow is structurally complete: dual checkout (engine + workspace), CI-aware init, pipe-mode ralph-loop, artifact upload, job summary. Task 5 (local test) will need `act` or a test repo to verify the full pipeline. After task 5, we hit the Phase 1→2 stage gate.
+Phase 1 complete. Created the GitHub Actions workflow (ralph-run.yml) with workflow_dispatch trigger, CI-aware init step, and comprehensive local tests. Key deliverables:
+- Workflow: dual checkout, 7 inputs, artifact upload, job summary
+- init-project.sh: --ci flag for copying instead of symlinking
+- Tests: 31/31 passing covering init, injection, resolution, detection, YAML
+
+Stage gate reached: Phase 2 (RALPH_HOME separation hardening) requires reviewing the workflow before proceeding.
 
 ## Next Task
 
-5. Test workflow locally with `act` or a test repo — **coder**
+6. Audit `ralph-loop.sh` for hardcoded paths — **coder** (Phase 2 — after stage gate review)

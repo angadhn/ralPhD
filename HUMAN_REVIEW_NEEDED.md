@@ -1,35 +1,49 @@
-# Human Review Needed
+# Human Review Needed — Phase 1 → Phase 2
 
-## Phase 0 Complete — Archive Hygiene
+## Completed: Phase 1 — GitHub Actions Workflow for ralph-loop
 
-**Thread:** ralph-as-engine
-**Date:** 2026-03-11
+### What was done
 
-### What was completed
+**Task 3: `.github/workflows/ralph-run.yml`**
+- `workflow_dispatch` trigger with 7 inputs (thread, prompt, autonomy, target_repo, target_ref, max_iterations, loop_mode)
+- Dual checkout: ralPhD as `ralph-home/`, target project as `workspace/`
+- Sets `RALPH_HOME` for all steps, runs `ralph-loop.sh -p` in pipe mode
+- Artifact upload (outputs, checkpoint, logs), job summary
+- 60-minute timeout, configurable iteration cap
 
-`scripts/archive.sh` now archives all per-thread files on thread completion:
+**Task 4: CI-aware init step**
+- Added `--ci` flag to `scripts/init-project.sh` — copies specs/, templates/, .claude/agents/ instead of symlinking
+- Workflow injects thread name, date, prompt, autonomy into template files
+- Idempotent: re-running on existing workspace preserves custom files
 
-| File/Dir | Action |
-|----------|--------|
-| `ai-generated-outputs/<thread>/` | Moved to archive |
-| `ai-generated-outputs/reflections/*.md` | Moved to archive (`.gitkeep` preserved) |
-| `inbox.md` | Copied to archive if non-empty, then truncated |
-| `CHANGELOG.md` | Moved to archive, reset to blank header |
-| `/tmp/ralph-*` | Deleted (8 state files) |
+**Task 5: Local tests**
+- `tests/test-workflow-local.sh` — 31/31 tests passing
+- Covers: CI init, template injection, RALPH_HOME resolution, agent detection, YAML structure, secrets, idempotency
 
-Previously only `checkpoint.md`, `implementation-plan.md`, `HUMAN_REVIEW_NEEDED.md`, and `iteration_count` were handled.
+### Files changed
+- `.github/workflows/ralph-run.yml` (new)
+- `scripts/init-project.sh` (modified — `--ci` flag)
+- `tests/test-workflow-local.sh` (new)
 
-### What the next phase will do
+### Required secrets (to be configured in GitHub repo settings)
+- `ANTHROPIC_API_KEY` — Anthropic API key for agent runner
+- `TARGET_REPO_TOKEN` (optional) — PAT for cross-repo checkout
 
-**Phase 1 — GitHub Actions workflow for ralph-loop:**
-- Task 3: Create `.github/workflows/ralph-run.yml` (workflow_dispatch)
-- Task 4: Add `.ralph` init step (template copying for new repos)
-- Task 5: Test workflow locally
+### Required variables (optional)
+- `CLAUDE_MODEL` — defaults to `claude-sonnet-4-6` if not set
 
-This will make ralPhD invocable as a reusable engine from external triggers.
+## Next: Phase 2 — RALPH_HOME Separation Hardening
 
-### Review checklist
+Phase 2 will audit all code paths for hardcoded path assumptions:
+- **Task 6:** `ralph-loop.sh` — ensure all framework paths use `$RALPH_HOME/`
+- **Task 7:** Agent prompts — ensure specs/templates resolve from RALPH_HOME, not CWD
+- **Task 8:** `ralph_agent.py` + `tools/` — ensure tool scripts resolve from RALPH_HOME
 
-- [ ] Review `scripts/archive.sh` changes (3 commits: d31a30c, 357e93e, 624e5dc)
-- [ ] Confirm archive behavior looks correct
-- [ ] Approve proceeding to Phase 1
+This phase ensures ralPhD works correctly when RALPH_HOME ≠ CWD (i.e., when running as an engine on a separate project repo).
+
+## Action required
+
+Review the workflow and init changes. When ready, delete this file and re-run:
+```bash
+rm HUMAN_REVIEW_NEEDED.md && ./ralph-loop.sh -p
+```
