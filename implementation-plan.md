@@ -17,7 +17,7 @@ Howler v2's research companion duplicates ralPhD's agent roster in TypeScript ed
 
 ## Phase 1 — GitHub Actions workflow for ralph-loop
 
-- [ ] 3. Create `.github/workflows/ralph-run.yml` — a `workflow_dispatch` action that accepts inputs (thread name, task prompt, autonomy level), checks out the target project repo, clones ralPhD as `RALPH_HOME`, and runs `ralph-loop.sh` — **coder**
+- [x] 3. Create `.github/workflows/ralph-run.yml` — a `workflow_dispatch` action that accepts inputs (thread name, task prompt, autonomy level), checks out the target project repo, clones ralPhD as `RALPH_HOME`, and runs `ralph-loop.sh` — **coder**
 - [ ] 4. Add a `.ralph` init step to the workflow — if the target repo lacks `checkpoint.md` / `implementation-plan.md`, copy templates from `RALPH_HOME/templates/` — **coder**
 - [ ] 5. Test workflow locally with `act` or a test repo — verify ralph-loop.sh runs, agents load, tools execute, and outputs are committed back — **coder**
 

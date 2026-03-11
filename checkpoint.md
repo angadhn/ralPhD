@@ -3,7 +3,7 @@
 **Thread:** ralph-as-engine
 **Last updated:** 2026-03-11
 **Last agent:** coder
-**Status:** Phase 0 complete, stage gate reached
+**Status:** Phase 1 in progress (task 3 done)
 
 ## Knowledge State
 
@@ -11,8 +11,8 @@
 |------|--------|-------|
 | 1. Archive all per-thread files | done | archive.sh now handles agent outputs, reflections, inbox |
 | 2. Audit for other stale files | done | CHANGELOG.md archived+reset, /tmp/ralph-* cleaned |
-| 3. GitHub Actions workflow | pending | workflow_dispatch with inputs |
-| 4. .ralph init step | pending | template copying for new repos |
+| 3. GitHub Actions workflow | done | `.github/workflows/ralph-run.yml` — workflow_dispatch with 7 inputs |
+| 4. .ralph init step | pending | template copying for new repos (already partially in workflow step 5) |
 | 5. Local workflow test | pending | verify with act or test repo |
 | 6. ralph-loop.sh path audit | pending | RALPH_HOME separation |
 | 7. Agent prompt path audit | pending | specs/templates via RALPH_HOME |
@@ -25,8 +25,10 @@
 
 ## Last Reflection
 
-Plan created from Howler v2 integration discussion. Phase 0 added to fix archive hygiene (HUMAN_REVIEW_NEEDED.md was already fixed manually; tasks 1-2 will catch remaining gaps like reflections and inbox content). The coder agent has been added to ralPhD (agent prompt + tool registration).
+Task 3 completed: Created `.github/workflows/ralph-run.yml` with workflow_dispatch trigger. The workflow accepts thread, prompt, autonomy, target_repo, target_ref, max_iterations, and loop_mode inputs. It checks out ralPhD as RALPH_HOME and the target project as workspace, runs init-project.sh if needed, writes the prompt to inbox.md, and runs ralph-loop.sh in pipe mode. Outputs uploaded as artifacts with job summary.
+
+Note: Task 4 (init step) is largely already handled by step 5 of the workflow ("Initialize workspace with ralph") which calls init-project.sh. May be a quick task or can be merged.
 
 ## Next Task
 
-3. Create `.github/workflows/ralph-run.yml` — **coder** (Phase 1 — stage gate: review archive changes first)
+4. Add a `.ralph` init step to the workflow — **coder**

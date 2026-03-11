@@ -1,54 +1,32 @@
-# Task 1 Summary — Archive all per-thread files
+# Task 3 Summary — Create `.github/workflows/ralph-run.yml`
 
-**Agent:** coder
-**Task:** Update `scripts/archive.sh` to archive all per-thread files
+## What was done
+Created a GitHub Actions workflow_dispatch workflow that makes ralPhD invocable as an engine from external triggers (Howler, API, manual).
 
-## Changes
+## Files changed
+- **`.github/workflows/ralph-run.yml`** (new) — 229 lines
 
-**File modified:** `scripts/archive.sh`
+## Design decisions
+1. **Two checkouts:** ralPhD checked out as `ralph-home/`, target project as `workspace/`. When no target repo is specified, workspace symlinks to ralph-home (self-mode).
+2. **RALPH_HOME separation:** All steps that run ralph code set `RALPH_HOME` to `${{ github.workspace }}/ralph-home`, matching the RALPH_HOME pattern already in `ralph-loop.sh`.
+3. **Input security:** All `workflow_dispatch` inputs are passed to shell via `env:` blocks, never interpolated directly in `run:` scripts (prevents shell injection).
+4. **Auth:** Uses `ANTHROPIC_API_KEY` secret. Model configurable via `CLAUDE_MODEL` repository variable (defaults to `claude-sonnet-4-6` for CI cost control).
+5. **Target repo token:** Uses `TARGET_REPO_TOKEN` secret for cross-repo checkout (PAT with repo access). Falls back gracefully if not set.
+6. **Safety:** 60-minute job timeout + configurable `max_iterations` cap (default: 5).
 
-Added three new archive steps between the existing checkpoint/plan archiving and the template restoration:
-
-1. **Per-thread agent outputs** (`ai-generated-outputs/<thread>/`): Moved to `archive/<date>_<thread>/ai-generated-outputs/` if the directory exists.
-
-2. **Reflections** (`ai-generated-outputs/reflections/*.md`): Moved to `archive/<date>_<thread>/reflections/`, preserving `.gitkeep` in the source directory.
-
-3. **Inbox content** (`inbox.md`): Copied to archive if non-empty, then truncated to reset for the next thread.
-
-## What was NOT changed
-
-- `logs/usage.jsonl`: Running log across all threads. The existing thread-summary append logic is sufficient; copying the full file per-archive would be redundant.
-- No template changes needed — inbox is reset via truncation, not template copy.
+## Workflow inputs
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| thread | yes | — | Thread name for checkpoint/outputs |
+| prompt | yes | — | Task prompt written to inbox.md |
+| autonomy | no | stage-gates | autopilot / stage-gates / step-by-step |
+| target_repo | no | (empty=self) | owner/name of target project |
+| target_ref | no | main | Branch of target repo |
+| max_iterations | no | 5 | Safety iteration cap |
+| loop_mode | no | build | build or plan |
 
 ## Test results
-
-- `bash -n` syntax check: passed
-- `find` command for reflections verified against live files: correctly discovers `reflection-iter-1.md` and `reflection-iter-2.md`
-
----
-
-# Task 2 Summary — Audit for stale files
-
-**Agent:** coder
-**Task:** Audit for other files that should be reset/archived on thread completion
-
-## Audit findings
-
-Audited all files created/modified by `ralph-loop.sh` and `ralph_agent.py` during execution.
-
-**Files that needed archiving/cleanup (now fixed):**
-
-1. **CHANGELOG.md** — Accumulates per-iteration entries across all threads via `ralph-loop.sh` line 575. Now moved to archive on thread completion and reset to a blank header.
-
-2. **/tmp/ralph-*** — 8+ temp files created during loop execution (`ralph-context-pct`, `ralph-yield`, `ralph-budget-info`, `ralph-output.json`, `ralph-statusline-log`, `ralph-monitor-start`, `ralph-reflect`, `ralph-test-output.json`). Could leak state across thread boundaries. Now cleaned on archive.
-
-**Files confirmed as not needing cleanup:**
-- `prompt-build.md`, `prompt-plan.md` — framework-level, read-only
-- `context-budgets.json` — static configuration
-- `.claude/agents/`, `specs/`, `templates/` — framework files
-- `logs/usage.jsonl` — intentional running log (thread summary already appended)
-- `__pycache__/` — already gitignored, harmless
-
-## Changes
-
-**File modified:** `scripts/archive.sh` — added CHANGELOG.md archive+reset and /tmp/ralph-* cleanup
+- YAML validation: ✅ (parsed without errors)
+- Structure check: ✅ (10 steps, 7 inputs, all `uses:` pinned to @v4/@v5)
+- Injection check: ✅ (no raw `${{ }}` in `run:` script bodies)
+- Full integration test deferred to Task 5
