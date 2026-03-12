@@ -24,7 +24,7 @@ for arg in "$@"; do
     *) WORKSPACE="$arg" ;;
   esac
 done
-WORKSPACE="${WORKSPACE:-.}"
+WORKSPACE="${WORKSPACE:-.ralph}"
 
 mkdir -p "$WORKSPACE"
 WORKSPACE="$(cd "$WORKSPACE" && pwd)"

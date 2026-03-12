@@ -10,6 +10,15 @@ source "${SCRIPT_DIR}/lib/exec.sh"
 
 parse_loop_args "$@"
 
+if $SHOW_HELP; then
+  show_help
+  exit 0
+fi
+
+if [ -n "$CLI_MODEL" ]; then
+  export RALPH_MODEL="$CLI_MODEL"
+fi
+
 if $PIPE_MODE && [ "$LOOP_MODE" = "plan" ]; then
   echo "Error: plan mode is interactive only — remove the -p flag."
   echo "  Use: ./ralph-loop.sh plan"
@@ -110,8 +119,8 @@ while true; do
     echo "  Agent detected: $CURRENT_AGENT"
   else
     # Check if this is a completed plan (all tasks checked off) vs empty template
-    CHECKED=$(grep -c '^\- \[x\]' implementation-plan.md 2>/dev/null || echo 0)
-    UNCHECKED=$(grep -c '^\- \[ \]' implementation-plan.md 2>/dev/null || echo 0)
+    CHECKED=$(grep -c '^\- \[x\]' implementation-plan.md 2>/dev/null) || CHECKED=0
+    UNCHECKED=$(grep -c '^\- \[ \]' implementation-plan.md 2>/dev/null) || UNCHECKED=0
     if [ "$CHECKED" -gt 0 ] && [ "$UNCHECKED" -eq 0 ]; then
       echo "  All tasks complete — auto-archiving thread."
       bash "${RALPH_HOME}/scripts/archive.sh"
