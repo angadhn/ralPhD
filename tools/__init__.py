@@ -10,6 +10,7 @@ from tools.pdf import TOOLS as _pdf_tools
 from tools.search import TOOLS as _search_tools
 from tools.download import TOOLS as _download_tools
 from tools.claims import TOOLS as _claims_tools
+from tools.interact import TOOLS as _interact_tools
 
 # ── Merged registry ───────────────────────────────────────────
 
@@ -20,6 +21,7 @@ TOOLS.update(_pdf_tools)
 TOOLS.update(_search_tools)
 TOOLS.update(_download_tools)
 TOOLS.update(_claims_tools)
+TOOLS.update(_interact_tools)
 
 # ── Per-agent tool registries ─────────────────────────────────
 # Every agent gets the essentials: read_file, write_file, git_commit, list_files, code_search
@@ -46,6 +48,7 @@ AGENT_TOOLS = {
     "synthesizer": _ESSENTIALS + ["citation_lint", "citation_verify_all"],
     "triage": _ESSENTIALS + ["pdf_metadata", "citation_verify_all"],
     "coder": _ESSENTIALS + ["bash"],
+    "plan": _ESSENTIALS + ["ask_choice", "ask_question"],
 }
 
 DEFAULT_TOOLS = _ESSENTIALS

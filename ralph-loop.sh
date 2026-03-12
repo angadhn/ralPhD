@@ -275,7 +275,34 @@ while true; do
 
     CLAUDE_MODEL=$(resolve_model "$CURRENT_AGENT")
 
-    if is_openai_model "$CLAUDE_MODEL"; then
+    if [ "$LOOP_MODE" = "plan" ]; then
+      # Plan mode: use ralph_agent.py with interactive tools (ask_choice, ask_question)
+      rm -f /tmp/ralph-output.json
+      echo "  Model: $CLAUDE_MODEL (plan mode — interactive intake)"
+      echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent plan --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json
+      EXIT_CODE=$?
+
+      kill "$MONITOR_PID" 2>/dev/null || true
+      wait "$MONITOR_PID" 2>/dev/null || true
+      MONITOR_PID=""
+
+      # Log usage
+      AGENT_NAME="plan"
+      if [ -f /tmp/ralph-output.json ]; then
+        print_output_json_summary /tmp/ralph-output.json
+        log_usage_from_output_json /tmp/ralph-output.json "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
+          && echo "  Usage logged to $USAGE_LOG" \
+          || echo "  (could not log usage data)"
+      fi
+
+      # Plan mode is one-shot — exit after this session
+      if [ "$EXIT_CODE" -eq 0 ]; then
+        echo ""
+        echo "=== Planning session complete. Run 'build' to start executing. ==="
+      fi
+      break
+
+    elif is_openai_model "$CLAUDE_MODEL"; then
       # OpenAI models: use codex CLI for interactive TUI (uses codex's own tools),
       # fall back to ralph_agent.py (uses Ralph's per-agent tool registry)
       rm -f /tmp/ralph-output.json
@@ -284,15 +311,9 @@ while true; do
         codex --model "$CLAUDE_MODEL" --full-auto "$PROMPT"
         EXIT_CODE=$?
       else
-        if [ "$LOOP_MODE" = "plan" ]; then
-          echo "  Error: plan mode requires an interactive CLI (codex or claude)."
-          echo "  Install codex CLI: npm install -g @anthropic-ai/codex"
-          EXIT_CODE=1
-        else
-          echo "  Model: $CLAUDE_MODEL (OpenAI — codex CLI not found, using ralph_agent.py)"
-          echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json
-          EXIT_CODE=$?
-        fi
+        echo "  Model: $CLAUDE_MODEL (OpenAI — codex CLI not found, using ralph_agent.py)"
+        echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json
+        EXIT_CODE=$?
       fi
 
       kill "$MONITOR_PID" 2>/dev/null || true

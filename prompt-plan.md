@@ -22,15 +22,21 @@ before planning. Skip this step if either file has real content.
 
 ### Interaction style
 
-Walk the user through intake **one question at a time**. Do NOT present
-multiple questions in one message. The flow is:
+Use the `ask_choice` and `ask_question` tools for ALL user interaction.
+Do NOT output questions as plain text — always use the tools so the
+model waits for the user's response before continuing.
 
-1. Ask a single question with numbered options.
-2. Wait for the user's response.
-3. Acknowledge their choice briefly (one line).
-4. Ask the next question, adapted to prior answers.
+- **ask_choice** — for questions with clear categories (MCQ). The user
+  sees numbered options and picks one, or types a free-text answer.
+- **ask_question** — for open-ended questions where you need free text.
 
-Keep each message short — the question plus its options, nothing else.
+Call **one tool at a time**. Read the result, then decide the next
+question based on the answer. The flow is:
+
+1. Call ask_choice or ask_question with one question.
+2. Read the user's response from the tool result.
+3. Use the response to adapt the next question.
+
 If the workspace scan (1b) reveals something relevant, weave it into
 the next question naturally ("I see you have reviewer feedback in
 human-inputs/ — are we doing a revision?") rather than dumping a
