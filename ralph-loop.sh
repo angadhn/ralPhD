@@ -80,9 +80,7 @@ while true; do
   fi
 
   # --- Detect thread and agent ---
-  CURRENT_THREAD=$(grep '^\*\*Thread:\*\*\|^Thread:' checkpoint.md 2>/dev/null \
-    | head -1 | sed 's/.*: *//' | sed 's/\*//g' | tr -d '[:space:]')
-  [ -z "$CURRENT_THREAD" ] || [ "$CURRENT_THREAD" = "<thread-name>" ] && CURRENT_THREAD="unknown"
+  CURRENT_THREAD=$(extract_thread)
   if [ "$ARCH_MODE" = "single" ] && [ "$LOOP_MODE" = "build" ]; then
     CURRENT_AGENT="single"
     echo "  Single-agent mode — skipping agent detection"
@@ -249,9 +247,7 @@ while true; do
 
       # Persist usage data to logs/usage.jsonl
       # Extract agent name from checkpoint.md "**Last agent:**" field
-      AGENT_NAME=$(grep '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null \
-        | sed 's/\*\*Last agent:\*\* *//' | tr -d '[:space:]' | head -1)
-      AGENT_NAME="${AGENT_NAME:-unknown}"
+      AGENT_NAME=$(extract_agent_name)
       log_usage_from_output_json /tmp/ralph-output.json "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
         && echo "  Usage logged to $USAGE_LOG" \
         || echo "  (could not log usage data)"
@@ -280,9 +276,7 @@ while true; do
     MONITOR_PID=""
 
     # Log interactive session usage
-    AGENT_NAME=$(grep '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null \
-      | sed 's/\*\*Last agent:\*\* *//' | tr -d '[:space:]' | head -1)
-    AGENT_NAME="${AGENT_NAME:-unknown}"
+    AGENT_NAME=$(extract_agent_name)
     PROJECT_DIR=$(echo "$PWD" | tr '/' '-' | sed 's/^-//')
     SESSION_FILE="$HOME/.claude/projects/${PROJECT_DIR}/${SESSION_ID}.jsonl"
     if [ -f "$SESSION_FILE" ]; then

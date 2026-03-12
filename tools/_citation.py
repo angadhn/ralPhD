@@ -19,6 +19,8 @@ import urllib.request
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from tools._helpers import parse_jsonl
+
 # ── Matching ─────────────────────────────────────────────────────
 
 
@@ -88,172 +90,154 @@ def _get_json(url: str, headers: dict = None, retries: int = 3):
     return None
 
 
-def query_semantic_scholar(title: str, authors: str = ""):
-    """Search Semantic Scholar for a paper by title."""
-    query = urllib.parse.quote(title)
-    url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={query}&limit=5&fields=title,authors,year,externalIds,venue,citationCount"
+def _query_api(title, authors, url, extract_items, extract_title,
+               extract_authors, build_result):
+    """Generic API query with best-candidate scoring.
+
+    Returns the best-matching result dict (with title/author similarity added)
+    if title_similarity >= 0.65, else None.
+    """
     data = _get_json(url)
-    if not data or not data.get("data"):
+    items = extract_items(data)
+    if not items:
         return None
     best = None
     best_scores = None
     best_blend = 0.0
-    for paper in data["data"]:
-        paper_authors = ", ".join(a.get("name", "") for a in (paper.get("authors") or []))
-        scores = _score_candidate(title, paper.get("title") or "", authors, paper_authors)
+    for item in items:
+        scores = _score_candidate(title, extract_title(item), authors, extract_authors(item))
         if scores["blended"] > best_blend:
             best_blend = scores["blended"]
             best_scores = scores
-            best = paper
+            best = item
     if best and best_scores and best_scores["title_similarity"] >= 0.65:
-        doi = (best.get("externalIds") or {}).get("DOI")
-        return {
-            "source": "semantic_scholar",
-            "title": best.get("title"),
-            "authors": [a.get("name", "") for a in (best.get("authors") or [])],
-            "year": best.get("year"),
-            "doi": doi,
-            "venue": best.get("venue"),
-            "citation_count": best.get("citationCount"),
-            "title_similarity": best_scores["title_similarity"],
-            "author_similarity": best_scores["author_similarity"],
-        }
+        result = build_result(best)
+        result["title_similarity"] = best_scores["title_similarity"]
+        result["author_similarity"] = best_scores["author_similarity"]
+        return result
     return None
+
+
+def query_semantic_scholar(title: str, authors: str = ""):
+    """Search Semantic Scholar for a paper by title."""
+    query = urllib.parse.quote(title)
+    return _query_api(
+        title, authors,
+        url=f"https://api.semanticscholar.org/graph/v1/paper/search?query={query}&limit=5&fields=title,authors,year,externalIds,venue,citationCount",
+        extract_items=lambda d: (d or {}).get("data"),
+        extract_title=lambda p: p.get("title") or "",
+        extract_authors=lambda p: ", ".join(a.get("name", "") for a in (p.get("authors") or [])),
+        build_result=lambda p: {
+            "source": "semantic_scholar",
+            "title": p.get("title"),
+            "authors": [a.get("name", "") for a in (p.get("authors") or [])],
+            "year": p.get("year"),
+            "doi": (p.get("externalIds") or {}).get("DOI"),
+            "venue": p.get("venue"),
+            "citation_count": p.get("citationCount"),
+        },
+    )
 
 
 def query_crossref(title: str, authors: str = ""):
     """Search CrossRef for a paper by title."""
     query = urllib.parse.quote(title)
-    url = f"https://api.crossref.org/works?query.title={query}&rows=5&select=DOI,title,author,published-print,container-title,type,volume,page,issue"
-    data = _get_json(url)
-    if not data or not data.get("message", {}).get("items"):
-        return None
-    best = None
-    best_scores = None
-    best_blend = 0.0
-    for item in data["message"]["items"]:
-        item_title = (item.get("title") or [""])[0]
-        item_authors = ", ".join(
+    return _query_api(
+        title, authors,
+        url=f"https://api.crossref.org/works?query.title={query}&rows=5&select=DOI,title,author,published-print,container-title,type,volume,page,issue",
+        extract_items=lambda d: (d or {}).get("message", {}).get("items"),
+        extract_title=lambda item: (item.get("title") or [""])[0],
+        extract_authors=lambda item: ", ".join(
             f"{a.get('family', '')} {a.get('given', '')}".strip()
             for a in (item.get("author") or [])
-        )
-        scores = _score_candidate(title, item_title, authors, item_authors)
-        if scores["blended"] > best_blend:
-            best_blend = scores["blended"]
-            best_scores = scores
-            best = item
-    if best and best_scores and best_scores["title_similarity"] >= 0.65:
-        pub_date = best.get("published-print", {}).get("date-parts", [[None]])[0]
-        year = pub_date[0] if pub_date else None
-        return {
+        ),
+        build_result=lambda item: {
             "source": "crossref",
-            "title": (best.get("title") or [""])[0],
+            "title": (item.get("title") or [""])[0],
             "authors": [
                 f"{a.get('given', '')} {a.get('family', '')}".strip()
-                for a in (best.get("author") or [])
+                for a in (item.get("author") or [])
             ],
-            "year": year,
-            "doi": best.get("DOI"),
-            "venue": (best.get("container-title") or [""])[0],
-            "volume": best.get("volume"),
-            "pages": best.get("page"),
-            "issue": best.get("issue"),
-            "title_similarity": best_scores["title_similarity"],
-            "author_similarity": best_scores["author_similarity"],
-        }
-    return None
+            "year": (item.get("published-print", {}).get("date-parts", [[None]])[0] or [None])[0],
+            "doi": item.get("DOI"),
+            "venue": (item.get("container-title") or [""])[0],
+            "volume": item.get("volume"),
+            "pages": item.get("page"),
+            "issue": item.get("issue"),
+        },
+    )
+
+
+def _build_openalex_result(work):
+    doi_url = work.get("doi") or ""
+    doi = doi_url.replace("https://doi.org/", "") if doi_url else None
+    venue = ""
+    loc = work.get("primary_location") or {}
+    if loc.get("source"):
+        venue = loc["source"].get("display_name", "")
+    return {
+        "source": "openalex",
+        "title": work.get("title"),
+        "authors": [
+            a.get("author", {}).get("display_name", "")
+            for a in (work.get("authorships") or [])
+        ],
+        "year": work.get("publication_year"),
+        "doi": doi,
+        "venue": venue,
+        "citation_count": work.get("cited_by_count"),
+    }
 
 
 def query_openalex(title: str, authors: str = ""):
     """Search OpenAlex for a paper by title."""
     query = urllib.parse.quote(title)
-    url = f"https://api.openalex.org/works?search={query}&per_page=5&select=id,doi,title,authorships,publication_year,primary_location,cited_by_count"
-    data = _get_json(url)
-    if not data or not data.get("results"):
-        return None
-    best = None
-    best_scores = None
-    best_blend = 0.0
-    for work in data["results"]:
-        work_title = work.get("title") or ""
-        work_authors = ", ".join(
+    return _query_api(
+        title, authors,
+        url=f"https://api.openalex.org/works?search={query}&per_page=5&select=id,doi,title,authorships,publication_year,primary_location,cited_by_count",
+        extract_items=lambda d: (d or {}).get("results"),
+        extract_title=lambda w: w.get("title") or "",
+        extract_authors=lambda w: ", ".join(
             (a.get("author", {}).get("display_name", ""))
-            for a in (work.get("authorships") or [])
-        )
-        scores = _score_candidate(title, work_title, authors, work_authors)
-        if scores["blended"] > best_blend:
-            best_blend = scores["blended"]
-            best_scores = scores
-            best = work
-    if best and best_scores and best_scores["title_similarity"] >= 0.65:
-        doi_url = best.get("doi") or ""
-        doi = doi_url.replace("https://doi.org/", "") if doi_url else None
-        venue = ""
-        loc = best.get("primary_location") or {}
-        if loc.get("source"):
-            venue = loc["source"].get("display_name", "")
-        return {
-            "source": "openalex",
-            "title": best.get("title"),
-            "authors": [
-                a.get("author", {}).get("display_name", "")
-                for a in (best.get("authorships") or [])
-            ],
-            "year": best.get("publication_year"),
-            "doi": doi,
-            "venue": venue,
-            "citation_count": best.get("cited_by_count"),
-            "title_similarity": best_scores["title_similarity"],
-            "author_similarity": best_scores["author_similarity"],
-        }
-    return None
+            for a in (w.get("authorships") or [])
+        ),
+        build_result=_build_openalex_result,
+    )
 
 
 def query_ntrs(title: str, authors: str = ""):
     """Search NASA Technical Reports Server for a paper by title."""
     query = urllib.parse.quote(title)
-    url = f"https://ntrs.nasa.gov/api/citations?title={query}"
-    data = _get_json(url)
-    if not data or not data.get("results"):
-        return None
-    best = None
-    best_scores = None
-    best_blend = 0.0
-    for item in data["results"]:
-        item_title = item.get("title", "")
-        item_authors = ", ".join(
-            f"{a.get('name', '')}".strip()
+    return _query_api(
+        title, authors,
+        url=f"https://ntrs.nasa.gov/api/citations?title={query}",
+        extract_items=lambda d: (d or {}).get("results"),
+        extract_title=lambda item: item.get("title", ""),
+        extract_authors=lambda item: ", ".join(
+            a.get("name", "").strip()
             for a in (item.get("authorAffiliations") or [])
-        )
-        scores = _score_candidate(title, item_title, authors, item_authors)
-        if scores["blended"] > best_blend:
-            best_blend = scores["blended"]
-            best_scores = scores
-            best = item
-    if best and best_scores and best_scores["title_similarity"] >= 0.65:
-        return {
+        ),
+        build_result=lambda item: {
             "source": "ntrs",
-            "title": best.get("title", ""),
+            "title": item.get("title", ""),
             "authors": [
                 a.get("name", "")
-                for a in (best.get("authorAffiliations") or [])
+                for a in (item.get("authorAffiliations") or [])
             ],
             "year": (
-                best.get("publicationDate", "")[:4]
-                if best.get("publicationDate")
+                item.get("publicationDate", "")[:4]
+                if item.get("publicationDate")
                 else None
             ),
-            "doi": best.get("doi"),
+            "doi": item.get("doi"),
             "venue": (
-                best.get("subjectCategories", [None])[0]
-                if best.get("subjectCategories")
+                item.get("subjectCategories", [None])[0]
+                if item.get("subjectCategories")
                 else None
             ),
-            "ntrs_id": best.get("id"),
-            "title_similarity": best_scores["title_similarity"],
-            "author_similarity": best_scores["author_similarity"],
-        }
-    return None
+            "ntrs_id": item.get("id"),
+        },
+    )
 
 
 def verify_doi(doi: str):
@@ -553,18 +537,13 @@ def manifest_check(doi: str, papers_dir: str, title: str = "") -> dict:
         return {"status": "OK", "message": "Not yet downloaded (no manifest)"}
     doi_lower = doi.lower().strip() if doi else ""
     title_lower = title.lower().strip() if title else ""
-    with open(mpath, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            entry = json.loads(line)
-            entry_doi = (entry.get("doi") or "").lower().strip()
-            entry_title = (entry.get("title") or "").lower().strip()
-            if doi_lower and entry_doi and doi_lower == entry_doi:
-                return {"status": "SKIP", "message": f"Already downloaded as {entry.get('file')}", "file": entry.get("file")}
-            if title_lower and entry_title and SequenceMatcher(None, title_lower, entry_title).ratio() >= 0.9:
-                return {"status": "SKIP", "message": f"Already downloaded as {entry.get('file')} (title match)", "file": entry.get("file")}
+    for entry in parse_jsonl(str(mpath), on_error="skip"):
+        entry_doi = (entry.get("doi") or "").lower().strip()
+        entry_title = (entry.get("title") or "").lower().strip()
+        if doi_lower and entry_doi and doi_lower == entry_doi:
+            return {"status": "SKIP", "message": f"Already downloaded as {entry.get('file')}", "file": entry.get("file")}
+        if title_lower and entry_title and SequenceMatcher(None, title_lower, entry_title).ratio() >= 0.9:
+            return {"status": "SKIP", "message": f"Already downloaded as {entry.get('file')} (title match)", "file": entry.get("file")}
     return {"status": "OK", "message": "Not yet downloaded"}
 
 
@@ -590,17 +569,9 @@ def manifest_add(doi: str, file: str, scout: str, title: str, papers_dir: str, n
 
 def cited_check(doi: str, tracker_path: str = "references/cited_tracker.jsonl") -> dict:
     """Check if a DOI already appears in cited_tracker.jsonl."""
-    path = Path(tracker_path)
-    if not path.exists():
+    if not Path(tracker_path).exists():
         return {"status": "NOT_CITED", "note": f"Tracker file not found: {tracker_path}"}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    for entry in parse_jsonl(tracker_path, on_error="skip"):
         if entry.get("doi", "").lower() == doi.lower():
             result = {"status": "CITED"}
             if "section" in entry:

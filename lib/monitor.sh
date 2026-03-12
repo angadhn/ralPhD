@@ -10,10 +10,9 @@ estimate_input_cost() {
   local BASELINE_OVERHEAD=3000
   local EFFECTIVE_WINDOW=$(( CONTEXT_WINDOW - BASELINE_OVERHEAD ))
 
-  thread=$(grep '^\*\*Thread:\*\*\|^Thread:' checkpoint.md 2>/dev/null \
-    | head -1 | sed 's/.*: *//' | sed 's/\*//g' | tr -d '[:space:]')
+  thread=$(extract_thread)
 
-  if [ -z "$thread" ] || [ "$thread" = "<thread-name>" ]; then
+  if [ "$thread" = "unknown" ]; then
     echo 0
     return
   fi

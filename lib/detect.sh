@@ -87,3 +87,21 @@ collect_phase_tasks() {
     fi
   done < "$plan_path"
 }
+
+extract_agent_name() {
+  local name
+  name=$(grep '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null \
+    | sed 's/\*\*Last agent:\*\* *//' | tr -d '[:space:]' | head -1)
+  echo "${name:-unknown}"
+}
+
+extract_thread() {
+  local thread
+  thread=$(grep '^\*\*Thread:\*\*\|^Thread:' checkpoint.md 2>/dev/null \
+    | head -1 | sed 's/.*: *//' | sed 's/\*//g' | tr -d '[:space:]')
+  if [ -z "$thread" ] || [ "$thread" = "<thread-name>" ]; then
+    echo "unknown"
+  else
+    echo "$thread"
+  fi
+}

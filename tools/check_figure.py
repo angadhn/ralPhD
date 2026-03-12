@@ -3,6 +3,8 @@
 import re
 from pathlib import Path
 
+from tools._helpers import collect_files, parse_pub_reqs
+
 
 _FIGURE_DEFAULTS = {
     "min_dpi": 300,
@@ -12,21 +14,17 @@ _FIGURE_DEFAULTS = {
 }
 
 
+_FIGURE_PUB_REQ_PATTERNS = {
+    "min_dpi": r"(?:min[_\s-]*)?dpi\s*[:=]\s*(\d+)",
+    "max_width_px": r"max[_\s-]*width[_\s-]*(?:px|pixels?)?\s*[:=]\s*(\d+)",
+    "max_height_px": r"max[_\s-]*height[_\s-]*(?:px|pixels?)?\s*[:=]\s*(\d+)",
+    "max_file_size_mb": r"max[_\s-]*(?:file[_\s-]*)?size[_\s-]*(?:mb)?\s*[:=]\s*(\d+(?:\.\d+)?)",
+}
+
+
 def _figure_parse_pub_reqs(path: str) -> dict:
     """Parse specs/publication-requirements.md for figure thresholds."""
-    reqs = dict(_FIGURE_DEFAULTS)
-    text = Path(path).read_text(encoding="utf-8")
-    patterns = {
-        "min_dpi": r"(?:min[_\s-]*)?dpi\s*[:=]\s*(\d+)",
-        "max_width_px": r"max[_\s-]*width[_\s-]*(?:px|pixels?)?\s*[:=]\s*(\d+)",
-        "max_height_px": r"max[_\s-]*height[_\s-]*(?:px|pixels?)?\s*[:=]\s*(\d+)",
-        "max_file_size_mb": r"max[_\s-]*(?:file[_\s-]*)?size[_\s-]*(?:mb)?\s*[:=]\s*(\d+(?:\.\d+)?)",
-    }
-    for key, pattern in patterns.items():
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            reqs[key] = float(match.group(1)) if "." in match.group(1) else int(match.group(1))
-    return reqs
+    return parse_pub_reqs(path, _FIGURE_PUB_REQ_PATTERNS, _FIGURE_DEFAULTS)
 
 
 def check_raster(filepath: Path, reqs: dict) -> dict:
@@ -105,22 +103,7 @@ def check_pdf_figure(filepath: Path, reqs: dict) -> dict:
     return result
 
 
-def collect_figure_files(paths: list) -> list:
-    """Expand directories and glob patterns into a flat list of figure files."""
-    extensions = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".pdf"}
-    files = []
-    for path_str in paths:
-        path = Path(path_str)
-        if path.is_dir():
-            for ext in extensions:
-                files.extend(sorted(path.glob(f"*{ext}")))
-        elif path.exists():
-            files.append(path)
-        else:
-            for match in sorted(Path(".").glob(path_str)):
-                if match.suffix.lower() in extensions:
-                    files.append(match)
-    return files
+_FIGURE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".pdf"}
 
 
 def _handle_check_figure(inp):
@@ -131,7 +114,7 @@ def _handle_check_figure(inp):
     if inp.get("pub_reqs") and Path(inp["pub_reqs"]).exists():
         reqs = _figure_parse_pub_reqs(inp["pub_reqs"])
 
-    figures = collect_figure_files([inp["figures_dir"]])
+    figures = collect_files([inp["figures_dir"]], _FIGURE_EXTENSIONS)
     if not figures:
         return "No figure files found."
 

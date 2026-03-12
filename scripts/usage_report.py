@@ -20,28 +20,8 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-# Anthropic pricing (per million tokens) as of 2025-02
-# Source: https://docs.anthropic.com/en/docs/about-claude/models
-PRICING = {
-    "claude-opus-4-6": {
-        "input": 15.00,
-        "cache_read": 1.50,
-        "cache_create": 18.75,
-        "output": 75.00,
-    },
-    "claude-sonnet-4-6": {
-        "input": 3.00,
-        "cache_read": 0.30,
-        "cache_create": 3.75,
-        "output": 15.00,
-    },
-    "claude-haiku-4-5-20251001": {
-        "input": 0.80,
-        "cache_read": 0.08,
-        "cache_create": 1.00,
-        "output": 4.00,
-    },
-}
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from tools._pricing import PRICING
 
 DEFAULT_LOG = Path(__file__).resolve().parent.parent / "logs" / "usage.jsonl"
 

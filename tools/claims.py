@@ -4,27 +4,10 @@ Cross-references a .tex file and its .bib against the evidence ledger,
 flagging unsupported claims, low-confidence inferences, and stale entries.
 """
 
-import json
 import re
 from pathlib import Path
 
-
-def _parse_ledger(ledger_path: str) -> list[dict]:
-    """Parse evidence-ledger.jsonl, skipping malformed lines."""
-    entries = []
-    try:
-        with open(ledger_path) as f:
-            for i, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    entries.append(json.loads(line))
-                except json.JSONDecodeError:
-                    entries.append({"_error": f"line {i}: malformed JSON"})
-    except FileNotFoundError:
-        pass
-    return entries
+from tools._helpers import format_truncated, parse_jsonl
 
 
 def _extract_bib_keys(bib_path: str) -> set[str]:
@@ -59,7 +42,7 @@ def _handle_check_claims(inp):
     bib_file = inp.get("bib_file", "")
 
     # Parse inputs
-    entries = _parse_ledger(ledger_file)
+    entries = parse_jsonl(ledger_file, on_error="record")
     if not entries:
         return f"No evidence ledger found at {ledger_file} (or it is empty). Cannot check claims."
 
@@ -110,32 +93,25 @@ def _handle_check_claims(inp):
     if low_conf:
         lines.append(f"### Low-confidence inferences ({len(low_conf)})")
         lines.append("These need stronger sourcing or hedging language:")
-        for e in low_conf[:20]:
-            claim = e.get("claim", "?")[:120]
-            src = e.get("source_key", "?")
-            lines.append(f"- [{src}] {claim}")
-        if len(low_conf) > 20:
-            lines.append(f"  ... and {len(low_conf) - 20} more")
+        lines.extend(format_truncated(
+            low_conf, 20,
+            lambda e: f"- [{e.get('source_key', '?')}] {e.get('claim', '?')[:120]}",
+        ))
         lines.append("")
 
     if stale:
         lines.append(f"### Stale entries ({len(stale)})")
         lines.append("Source key not found in .bib — source was removed but claim remains:")
-        for e in stale[:20]:
-            claim = e.get("claim", "?")[:120]
-            src = e.get("source_key", "?")
-            lines.append(f"- [{src}] {claim}")
-        if len(stale) > 20:
-            lines.append(f"  ... and {len(stale) - 20} more")
+        lines.extend(format_truncated(
+            stale, 20,
+            lambda e: f"- [{e.get('source_key', '?')}] {e.get('claim', '?')[:120]}",
+        ))
         lines.append("")
 
     if uncovered_cites:
         lines.append(f"### Cited keys with no ledger entry ({len(uncovered_cites)})")
         lines.append("These sources are cited in the manuscript but have no evidence-ledger entries:")
-        for key in uncovered_cites[:30]:
-            lines.append(f"- {key}")
-        if len(uncovered_cites) > 30:
-            lines.append(f"  ... and {len(uncovered_cites) - 30} more")
+        lines.extend(format_truncated(uncovered_cites, 30, lambda k: f"- {k}"))
         lines.append("")
 
     if errors:

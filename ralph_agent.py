@@ -25,6 +25,7 @@ from pathlib import Path
 import anthropic
 
 from tools import execute_tool, get_tools_for_agent
+from tools._pricing import PRICING
 
 
 def truncate_result(result: str, limit: int = 50000) -> str:
@@ -251,13 +252,7 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
     duration_ms = int(_time.time() * 1000) - start_ms
 
     # Compute cost from token usage
-    # Pricing per million tokens (as of 2025-05)
-    _PRICING = {
-        "claude-opus-4-6":   {"input": 15.0, "output": 75.0, "cache_read": 1.5,  "cache_create": 18.75},
-        "claude-sonnet-4-6": {"input": 3.0,  "output": 15.0, "cache_read": 0.3,  "cache_create": 3.75},
-        "claude-haiku-4-5":  {"input": 0.8,  "output": 4.0,  "cache_read": 0.08, "cache_create": 1.0},
-    }
-    prices = _PRICING.get(model, _PRICING["claude-sonnet-4-6"])
+    prices = PRICING.get(model, PRICING["claude-sonnet-4-6"])
     total_cost_usd = round(
         (total_input * prices["input"]
          + total_output * prices["output"]

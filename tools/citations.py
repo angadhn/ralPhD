@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 
+from tools._helpers import format_truncated
+
 
 def _handle_citation_lint(inp):
     """Run citation lint directly (no subprocess)."""
@@ -32,10 +34,7 @@ def _handle_citation_lint(inp):
     if flagged:
         summary_lines.append("")
         summary_lines.append("Flagged entries:")
-        for entry in flagged[:20]:
-            summary_lines.append(f"  {entry}")
-        if len(flagged) > 20:
-            summary_lines.append(f"  ... and {len(flagged) - 20} more")
+        summary_lines.extend(format_truncated(flagged, 20, lambda e: f"  {e}"))
     summary_lines.append(f"\nFull report: {report_path}")
     return "\n".join(summary_lines)
 
@@ -104,28 +103,28 @@ def _handle_citation_verify_all(inp):
     failed = data.get("failed_entries", [])
     if failed:
         lines.append(f"### Failed DOI verification ({len(failed)})")
-        for entry in failed[:20]:
-            lines.append(f"- [{entry.get('key', '?')}] doi:{entry.get('doi', '?')} — {entry.get('title', '?')[:100]}")
-        if len(failed) > 20:
-            lines.append(f"  ... and {len(failed) - 20} more")
+        lines.extend(format_truncated(
+            failed, 20,
+            lambda e: f"- [{e.get('key', '?')}] doi:{e.get('doi', '?')} — {e.get('title', '?')[:100]}",
+        ))
         lines.append("")
 
     no_doi = data.get("no_doi_entries", [])
     if no_doi:
         lines.append(f"### Entries without DOI ({len(no_doi)})")
-        for entry in no_doi[:20]:
-            lines.append(f"- [{entry.get('key', '?')}] {entry.get('title', '?')[:100]}")
-        if len(no_doi) > 20:
-            lines.append(f"  ... and {len(no_doi) - 20} more")
+        lines.extend(format_truncated(
+            no_doi, 20,
+            lambda e: f"- [{e.get('key', '?')}] {e.get('title', '?')[:100]}",
+        ))
         lines.append("")
 
     warnings = data.get("warnings", [])
     if warnings:
         lines.append(f"### DOI/title mismatches ({len(warnings)})")
-        for entry in warnings[:20]:
-            lines.append(f"- [{entry.get('key', '?')}] doi:{entry.get('doi', '?')} — {entry.get('warning', '?')}")
-        if len(warnings) > 20:
-            lines.append(f"  ... and {len(warnings) - 20} more")
+        lines.extend(format_truncated(
+            warnings, 20,
+            lambda e: f"- [{e.get('key', '?')}] doi:{e.get('doi', '?')} — {e.get('warning', '?')}",
+        ))
         lines.append("")
 
     return "\n".join(lines)

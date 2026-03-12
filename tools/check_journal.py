@@ -3,6 +3,7 @@
 import re
 from pathlib import Path
 
+from tools._helpers import collect_files, parse_pub_reqs
 from tools.check_language import extract_body, strip_latex_commands
 
 
@@ -14,23 +15,22 @@ _JOURNAL_DEFAULTS = {
 }
 
 
-def _journal_parse_pub_reqs(path: str) -> dict:
-    """Parse specs/publication-requirements.md for compliance thresholds."""
-    reqs = dict(_JOURNAL_DEFAULTS)
+_JOURNAL_PUB_REQ_PATTERNS = {
+    "word_limit": r"word[_\s-]*limit\s*[:=]\s*(\d+)",
+    "page_limit": r"page[_\s-]*limit\s*[:=]\s*(\d+)",
+    "words_per_page": r"words[_\s-]*per[_\s-]*page\s*[:=]\s*(\d+)",
+}
+
+
+def _journal_post_process(reqs, text):
     reqs["required_bib_fields"] = list(_JOURNAL_DEFAULTS["required_bib_fields"])
-    text = Path(path).read_text(encoding="utf-8")
-    patterns = {
-        "word_limit": r"word[_\s-]*limit\s*[:=]\s*(\d+)",
-        "page_limit": r"page[_\s-]*limit\s*[:=]\s*(\d+)",
-        "words_per_page": r"words[_\s-]*per[_\s-]*page\s*[:=]\s*(\d+)",
-    }
-    for key, pat in patterns.items():
-        match = re.search(pat, text, re.IGNORECASE)
-        if match:
-            reqs[key] = int(match.group(1))
     if re.search(r"double[_\s-]*column", text, re.IGNORECASE):
         reqs["words_per_page"] = 500
-    return reqs
+
+
+def _journal_parse_pub_reqs(path: str) -> dict:
+    """Parse specs/publication-requirements.md for compliance thresholds."""
+    return parse_pub_reqs(path, _JOURNAL_PUB_REQ_PATTERNS, _JOURNAL_DEFAULTS, _journal_post_process)
 
 
 def count_words_tex(filepath: Path) -> tuple:
@@ -72,18 +72,6 @@ def check_bib_fields(bib_path: Path, required_fields: list) -> list:
     return issues
 
 
-def collect_tex_files(paths: list) -> list:
-    """Expand directories into .tex files."""
-    files = []
-    for path_str in paths:
-        path = Path(path_str)
-        if path.is_dir():
-            files.extend(sorted(path.glob("*.tex")))
-        elif path.exists() and path.suffix == ".tex":
-            files.append(path)
-    return files
-
-
 def collect_bib_files(paths: list) -> list:
     """Find .bib files in references/ or alongside .tex files."""
     bib_files = []
@@ -108,7 +96,7 @@ def _handle_check_journal(inp):
     if inp.get("pub_reqs") and Path(inp["pub_reqs"]).exists():
         reqs = _journal_parse_pub_reqs(inp["pub_reqs"])
 
-    tex_files = collect_tex_files([inp["sections_dir"]])
+    tex_files = collect_files([inp["sections_dir"]], {".tex"})
     if not tex_files:
         return "No .tex files found."
 
