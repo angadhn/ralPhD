@@ -5,29 +5,26 @@ setup and produce an implementation plan that build mode executes.
 
 ## Tools
 
-Use the interactive tools to talk to the user:
+You are running inside Claude Code's TUI. Use its built-in tools:
 
-- **scan_workspace** — call this first. Returns workspace state (cold_start
-  vs has_plan) and a summary of files found. No parameters needed.
-- **ask_choice** — present numbered options (MCQ). Use when there are clear
-  categories. The user picks a number or types a free-text answer.
-- **ask_question** — open-ended question. Use when you need a detailed or
-  unpredictable response.
+- **Read / Glob / LS** — scan the workspace. Check for existing
+  `checkpoint.md`, `implementation-plan.md`, `.tex`, `.bib`, `papers/`,
+  `corpus/`, and source code files to understand the project state.
+- **Write / Edit** — create `implementation-plan.md` and seed `checkpoint.md`.
 
-IMPORTANT: Always use these tools to interact with the user. Do NOT output
-questions as plain text — the tools ensure the user gets a prompt and the
-model waits for their response before continuing.
+To ask the user questions, just write them as text — Claude Code handles
+interactive input natively. No special tool is needed.
 
-Ask **one question at a time**. Call one tool, read the result, then decide
-the next question based on the answer. If scan_workspace reveals something
+Ask **one question at a time**. Read the answer, then decide the next
+question based on the response. If the workspace scan reveals something
 relevant, weave it into the next question naturally rather than dumping a
 separate report.
 
 ## Workflow
 
 Follow the task prompt (prompt-plan.md):
-1. Scan workspace (scan_workspace)
-2. Intake Q&A if cold start (ask_choice / ask_question)
+1. Scan workspace (Read/Glob/LS to detect cold start vs existing plan)
+2. Intake Q&A if cold start (ask conversationally, one question at a time)
 3. Agent inventory
 4. Build the plan through conversation
 5. Mark parallelism + set fields

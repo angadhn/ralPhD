@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 from tools.redact import preview_text, redact_text
+from tools.fmt import fmt_banner, fmt_tool_call, fmt_tool_result, fmt_separator
 from tools import execute_tool, get_tools_for_agent
 from tools._pricing import PRICING
 from providers import (
@@ -132,11 +133,7 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
     # Build tool list for this agent
     tool_names, tools = get_tools_for_agent(agent_name)
 
-    print(f"Agent: {agent_name}", file=sys.stderr)
-    print(f"Provider: {provider}", file=sys.stderr)
-    print(f"Tools: {', '.join(tool_names)}", file=sys.stderr)
-    print(f"Model: {model}", file=sys.stderr)
-    print("", file=sys.stderr)
+    print(fmt_banner(agent_name, provider, tool_names, model), file=sys.stderr)
 
     messages = [{"role": "user", "content": task}]
     num_turns = 0
@@ -194,9 +191,10 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
         tool_results = []
         for text in response.text_blocks:
             print(text)
+        if response.tool_calls:
+            print(fmt_separator(), file=sys.stderr)
         for tc in response.tool_calls:
-            tool_input = redact_text(json.dumps(tc.input, indent=None))
-            print(f"  [tool] {tc.name}({tool_input})", file=sys.stderr)
+            print(fmt_tool_call(tc.name, tc.input), file=sys.stderr)
             tools_called.append(tc.name)
             try:
                 result = execute_tool(tc.name, tc.input)
@@ -206,11 +204,11 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
                 # Multimodal result (image + text content blocks)
                 text_parts = [b["text"] for b in result if b.get("type") == "text"]
                 log_preview = "; ".join(text_parts) if text_parts else "(image content)"
-                print(f"  [result] {preview_text(log_preview)}", file=sys.stderr)
+                print(fmt_tool_result(tc.name, preview_text(log_preview)), file=sys.stderr)
                 tool_results.append({"type": "tool_result", "tool_use_id": tc.id, "content": result})
             else:
                 result = truncate_result(result)
-                print(f"  [result] {preview_text(result)}", file=sys.stderr)
+                print(fmt_tool_result(tc.name, preview_text(result)), file=sys.stderr)
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": tc.id,

@@ -288,23 +288,30 @@ while true; do
         fi
       fi
 
-      # Plan mode: use ralph_agent.py with interactive tools
-      rm -f /tmp/ralph-output.json
-      echo "  Model: $CLAUDE_MODEL (plan mode — interactive intake)"
-      echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent plan --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json
+      # Plan mode: use claude CLI for interactive TUI
+      PLAN_SYSTEM="$(cat "${RALPH_HOME}/.claude/agents/plan.md")"
+      SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+      echo "  Model: $CLAUDE_MODEL (plan mode — claude CLI)"
+      echo "$PROMPT" | claude --model "$CLAUDE_MODEL" \
+        --append-system-prompt "$PLAN_SYSTEM" \
+        --session-id "$SESSION_ID" \
+        --dangerously-skip-permissions
       EXIT_CODE=$?
 
       kill "$MONITOR_PID" 2>/dev/null || true
       wait "$MONITOR_PID" 2>/dev/null || true
       MONITOR_PID=""
 
-      # Log usage
+      # Log interactive session usage (same pattern as interactive build mode)
       AGENT_NAME="plan"
-      if [ -f /tmp/ralph-output.json ]; then
-        print_output_json_summary /tmp/ralph-output.json
-        log_usage_from_output_json /tmp/ralph-output.json "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
+      PROJECT_DIR=$(echo "$PWD" | tr '/' '-' | sed 's/^-//')
+      SESSION_FILE="$HOME/.claude/projects/${PROJECT_DIR}/${SESSION_ID}.jsonl"
+      if [ -f "$SESSION_FILE" ]; then
+        log_interactive_session_usage "$SESSION_FILE" "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
           && echo "  Usage logged to $USAGE_LOG" \
           || echo "  (could not log usage data)"
+      else
+        echo "  (session file not found — usage not logged)"
       fi
 
       # Plan mode is one-shot — exit after this session

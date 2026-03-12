@@ -2,17 +2,20 @@
 
 ## Step 1 — Intake
 
-Call `scan_workspace` first. If state is `cold_start`, gather context
+Scan the workspace first using Read, Glob, and LS. Check for existing
+`checkpoint.md`, `implementation-plan.md`, papers, .tex files, and other
+project content. If this is a cold start (no existing plan), gather context
 before planning:
 
-1. Ask what kind of project this is (use ask_choice).
+1. Ask what kind of project this is (present clear options).
 2. Based on their answer and the workspace scan, ask 2–3 follow-up
    questions to understand the goal, audience, and current stage.
 3. Ask about autonomy level: autopilot, stage-gates (default),
    step-by-step.
 
 Keep interviewing until you have enough context to build a good plan.
-If scan_workspace shows existing content, skip intake and go to Step 2.
+If the workspace already has a plan with unchecked tasks, skip intake and
+go to Step 2.
 
 ## Step 2 — Agent inventory
 

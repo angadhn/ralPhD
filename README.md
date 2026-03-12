@@ -86,7 +86,7 @@ By default each agent uses the model specified in `context-budgets.json` (Opus f
 
 **OpenAI auth:** Ralph auto-discovers credentials in this order: `OPENAI_API_KEY` env var → Codex CLI auth file (`~/.codex/auth.json`) → Codex CLI keychain entry. If you have Codex CLI installed, just run `codex login` and Ralph will pick up the token automatically — no env var needed.
 
-**Interactive mode:** With Anthropic models, interactive mode uses the `claude` CLI (full TUI). With OpenAI models, interactive mode uses `codex` CLI when installed (full TUI), otherwise falls back to `ralph_agent.py`. Headless mode (`-p`) uses `ralph_agent.py` for all providers.
+**Interactive mode:** With Anthropic models, interactive mode uses the `claude` CLI (full TUI) for both plan and build modes. With OpenAI models, interactive mode uses `codex` CLI when installed (full TUI), otherwise falls back to `ralph_agent.py`. Headless mode (`-p`) uses `ralph_agent.py` for all providers.
 
 ## Agents
 
@@ -173,7 +173,7 @@ ralPhD/
 │   ├── monitor.sh              # Context budgeting and heartbeat/status monitoring
 │   ├── exec.sh                 # Model resolution and parallel execution helpers
 │   └── post-run.sh             # Usage logging, eval capture, human-review gate, circuit breaker
-├── ralph_agent.py              # Python agent runner (replaces claude -p)
+├── ralph_agent.py              # Python agent runner for headless build mode
 ├── providers.py                # Provider abstraction (Anthropic + OpenAI)
 ├── prompt-build.md             # Build-mode dispatcher
 ├── prompt-plan.md              # Plan-mode dispatcher
@@ -190,7 +190,10 @@ ralPhD/
 │   ├── claims.py               # check_claims (cross-ref .tex + evidence-ledger + .bib)
 │   ├── pdf.py                  # pdf_metadata, extract_figure
 │   ├── download.py             # citation_download
-│   └── search.py               # list_files, code_search
+│   ├── search.py               # list_files, code_search
+│   ├── interact.py             # ask_choice, ask_question, scan_workspace (unused — plan uses claude CLI)
+│   ├── redact.py               # Secret redaction + preview truncation
+│   └── fmt.py                  # ANSI color output for headless mode
 ├── scripts/                    # Utility scripts + project scaffolding
 │   ├── init-project.sh         # Scaffold a new project workspace
 │   ├── evaluate_iteration.py   # Post-iteration metric capture → eval.jsonl
@@ -398,7 +401,7 @@ The comparison table shows total cost, iterations, wall-clock time, quality gate
 - **Research-first, not spec-first.** The loop starts from questions, not specifications. The plan evolves as understanding deepens.
 - **No orchestrator agent.** `checkpoint.md` and `implementation-plan.md` are the shared state. The dispatcher is ~25 lines. Claude picks the highest-priority task each iteration.
 - **One agent per iteration.** Each iteration gets a fresh context window. No agent mixing, no subagent spawning.
-- **Per-agent tool registries.** Each agent only sees the tools it needs. Scout gets citation tools, critic gets compliance checkers, research-coder gets only the essentials. This focuses the model's attention and prevents tool misuse. Tool registries are enforced on the `ralph_agent.py` path (headless mode and interactive OpenAI fallback); interactive CLI mode (`claude`/`codex`) uses provider-native tools under human supervision.
+- **Per-agent tool registries.** Each agent only sees the tools it needs. Scout gets citation tools, critic gets compliance checkers, research-coder gets only the essentials. This focuses the model's attention and prevents tool misuse. Tool registries are enforced on the `ralph_agent.py` path (headless build mode and interactive OpenAI fallback); plan mode and interactive CLI mode (`claude`/`codex`) use provider-native tools.
 - **Plan mode creates agents on the fly.** If a task needs a capability that doesn't exist yet, plan mode can write a new agent file rather than forcing everything through the predefined roles.
 - **Peer-reviewed sources only.** Scout searches academic databases via `tools/_citation.py`. No general web search — journal submissions cite peer-reviewed and conference papers.
 - **Human in the loop.** `HUMAN CHECKPOINT` tasks pause for review. `inbox.md` allows mid-run steering. Reflections every 5 iterations surface drift.
