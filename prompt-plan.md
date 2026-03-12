@@ -102,6 +102,23 @@ Read `.claude/agents/README.md` (framework file — see Path Context if present)
 and the agent files. Do the right agents exist for this task, or does the
 session suggest new ones are needed?
 
+### Custom agents
+
+1. Check the workspace `.claude/agents/` directory for existing custom agents.
+2. If the built-in agents don't fit the task, create a custom agent:
+   - Read `agent-template.md` (framework file) for the required structure.
+   - Draft a focused agent prompt (~60 lines). Show it to the user for approval.
+   - Create the file in the **workspace** `.claude/agents/` directory (not RALPH_HOME) —
+     this keeps customizations project-local.
+   - Custom agents automatically get DEFAULT_TOOLS (read_file, write_file,
+     git_commit, list_files, code_search). Specialized tools (pdf, search, etc.)
+     require manual registration in `tools/__init__.py` `AGENT_TOOLS` —
+     note this in the plan if needed.
+3. **Name collisions**: if a workspace agent has the same name as a built-in
+   agent, the workspace version takes priority. Use this intentionally to
+   override built-in behavior for a specific project, but call it out in
+   the plan so it's not surprising.
+
 ## Step 3 — Context
 
 Read `checkpoint.md` and `implementation-plan.md` if they exist (and

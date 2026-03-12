@@ -4,7 +4,7 @@ Study checkpoint.md and implementation-plan.md.
 Pick the highest-priority task to do.
 
 The last word in the task name is the agent.
-Read the agent prompt at `.claude/agents/{agent}.md` (framework file — see Path Context if present) and follow its Workflow.
+Read the agent prompt at `.claude/agents/{agent}.md` (resolves workspace-first, then RALPH_HOME) and follow its Workflow.
 
 If the task has a mode prefix (STYLE-CHECK critic,
 GAP-FILL scout), the agent is still the last word.

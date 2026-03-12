@@ -1962,6 +1962,66 @@ rm -rf "$LOCAL_PROJECT"
 
 echo ""
 
+# ── Test 16: Workspace-first agent resolution ─────────────────
+echo "--- 16. Workspace-First Agent Resolution ---"
+
+AGENT_TEST_DIR=$(mktemp -d)
+
+# 16a. Workspace agent takes priority over framework agent
+(
+  cd "$AGENT_TEST_DIR"
+  mkdir -p .claude/agents
+  echo "# Custom workspace scout" > .claude/agents/scout.md
+  RALPH_HOME="$RALPH_HOME" RESULT=$(resolve_agent_path scout)
+  [ "$RESULT" = ".claude/agents/scout.md" ] || { echo "FAIL: got '$RESULT'"; exit 1; }
+)
+if [ $? -eq 0 ]; then
+  pass "16a: workspace agent takes priority over framework agent"
+else
+  fail "16a: workspace agent takes priority over framework agent"
+fi
+
+# 16b. Falls back to framework when no workspace agent
+(
+  cd "$AGENT_TEST_DIR"
+  rm -rf .claude/agents
+  RESULT=$(RALPH_HOME="$RALPH_HOME" resolve_agent_path scout)
+  [ "$RESULT" = "${RALPH_HOME}/.claude/agents/scout.md" ] || { echo "FAIL: got '$RESULT'"; exit 1; }
+)
+if [ $? -eq 0 ]; then
+  pass "16b: falls back to framework agent when workspace has none"
+else
+  fail "16b: falls back to framework agent when workspace has none"
+fi
+
+# 16c. Returns empty when agent doesn't exist anywhere
+(
+  cd "$AGENT_TEST_DIR"
+  RESULT=$(RALPH_HOME="$RALPH_HOME" resolve_agent_path nonexistent-agent-xyz)
+  [ -z "$RESULT" ] || { echo "FAIL: got '$RESULT'"; exit 1; }
+)
+if [ $? -eq 0 ]; then
+  pass "16c: returns empty for nonexistent agent"
+else
+  fail "16c: returns empty for nonexistent agent"
+fi
+
+# 16d. Local init creates .claude/agents/ landing zone
+LOCAL_AGENT_DIR=$(mktemp -d)
+(
+  cd "$LOCAL_AGENT_DIR"
+  RALPH_HOME="$RALPH_HOME" bash "$RALPH_HOME/scripts/init-project.sh" > /dev/null 2>&1
+)
+if [ -d "$LOCAL_AGENT_DIR/.ralph/.claude/agents" ]; then
+  pass "16d: init-project.sh creates .claude/agents/ in local workspace"
+else
+  fail "16d: init-project.sh did not create .claude/agents/ in local workspace"
+fi
+
+rm -rf "$AGENT_TEST_DIR" "$LOCAL_AGENT_DIR"
+
+echo ""
+
 # ── Summary ───────────────────────────────────────────────────
 echo "=== Results: $PASS/$TESTS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then

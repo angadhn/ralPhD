@@ -122,13 +122,17 @@ cp -n "$RALPH_HOME/templates/implementation-plan.md" "$WORKSPACE/implementation-
 [ -f "$WORKSPACE/inbox.md" ] || touch "$WORKSPACE/inbox.md"
 [ -f "$WORKSPACE/iteration_count" ] || echo "0" > "$WORKSPACE/iteration_count"
 
-# --- .claude/agents (CI only — agents need to be in workspace for ralph_agent.py) ---
+# --- .claude/agents ---
 if $CI_MODE; then
+  # CI: copy agents (symlinks don't survive git commits)
   if [ ! -d "$WORKSPACE/.claude/agents" ]; then
     mkdir -p "$WORKSPACE/.claude"
     cp -r "$RALPH_HOME/.claude/agents" "$WORKSPACE/.claude/agents"
     echo "  Copied .claude/agents/"
   fi
+else
+  # Local: create empty landing zone for custom workspace agents
+  mkdir -p "$WORKSPACE/.claude/agents"
 fi
 
 # --- human-inputs/ README (first-init only) ---

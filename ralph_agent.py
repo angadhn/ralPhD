@@ -107,8 +107,10 @@ def build_path_preamble(ralph_home: Path) -> str:
         "\n"
         "File paths in this prompt use short names. Resolve them as follows:\n"
         "- **Framework files** — prefix with RALPH_HOME:\n"
-        "  `specs/*`, `templates/*`, `.claude/agents/*`, `prompt-*.md`\n"
+        "  `specs/*`, `templates/*`, `prompt-*.md`\n"
         f"  Example: `specs/writing-style.md` → `{rh}/specs/writing-style.md`\n"
+        "- **Agent files** — workspace-first: `.claude/agents/{{name}}.md` checks\n"
+        "  project dir first, then RALPH_HOME\n"
         "- **Project files** — use as-is (relative to working directory):\n"
         "  `checkpoint.md`, `implementation-plan.md`, `inbox.md`,\n"
         "  `AI-generated-outputs/*`, `sections/*`, `figures/*`, `corpus/*`,\n"
@@ -286,14 +288,21 @@ def main():
         else:
             args.max_tokens = 8096
 
-    # Load agent prompt
+    # Load agent prompt (workspace-first resolution)
     if args.system_prompt_file:
         prompt_path = args.system_prompt_file
     else:
-        prompt_path = str(ralph_home / ".claude" / "agents" / f"{args.agent}.md")
-    if not os.path.exists(prompt_path):
-        print(f"Error: {prompt_path} not found", file=sys.stderr)
-        sys.exit(1)
+        workspace_path = Path.cwd() / ".claude" / "agents" / f"{args.agent}.md"
+        framework_path = ralph_home / ".claude" / "agents" / f"{args.agent}.md"
+        if workspace_path.exists():
+            prompt_path = str(workspace_path)
+        elif framework_path.exists():
+            prompt_path = str(framework_path)
+        else:
+            print(f"Error: agent '{args.agent}' not found in:", file=sys.stderr)
+            print(f"  workspace: {workspace_path}", file=sys.stderr)
+            print(f"  framework: {framework_path}", file=sys.stderr)
+            sys.exit(1)
     with open(prompt_path) as f:
         system_prompt = f.read()
 

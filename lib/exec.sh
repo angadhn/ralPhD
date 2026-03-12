@@ -52,8 +52,11 @@ run_parallel_phase() {
     local output_dir="/tmp/ralph-parallel-${ITERATION}-${task_idx}"
     mkdir -p "$output_dir"
 
-    if [ ! -f "${RALPH_HOME}/.claude/agents/${agent_name}.md" ]; then
+    local agent_path
+    agent_path=$(resolve_agent_path "$agent_name")
+    if [ -z "$agent_path" ]; then
       echo "  ⚠  Skipping parallel task (agent not found): $agent_name"
+      echo "     Checked: .claude/agents/${agent_name}.md, ${RALPH_HOME}/.claude/agents/${agent_name}.md"
       continue
     fi
 

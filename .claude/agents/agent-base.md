@@ -6,8 +6,9 @@ All agents inherit these rules. Agent-specific prompts override when they confli
 
 ralPhD may run as an engine on a separate project repo. Two roots exist:
 
-- **RALPH_HOME** (framework): contains `specs/`, `templates/`, `.claude/agents/`, `scripts/`, `tools/`
+- **RALPH_HOME** (framework): contains `specs/`, `templates/`, `scripts/`, `tools/`, and built-in `.claude/agents/`
 - **Working directory** (project): contains `checkpoint.md`, `implementation-plan.md`, `inbox.md`, `AI-generated-outputs/`, `sections/`, `figures/`, `corpus/`, `references/`, `papers/`, `logs/`
+- **Agent files** resolve workspace-first: `.claude/agents/{name}.md` is checked in the project directory before RALPH_HOME. Custom agents in the workspace override built-in agents of the same name.
 
 When a "Path Context" section is present at the top of this prompt, use its RALPH_HOME path to prefix framework file reads (e.g., `specs/writing-style.md` → `$RALPH_HOME/specs/writing-style.md`). Project files are always relative to the working directory.
 

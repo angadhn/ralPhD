@@ -103,15 +103,17 @@ while true; do
     CURRENT_AGENT="${CURRENT_AGENT:-plan}"
     echo "  Plan mode (agent detection skipped)"
   elif [ -n "$CURRENT_AGENT" ] && [ "$CURRENT_AGENT" != "" ]; then
-    if [ ! -f "${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md" ]; then
+    AGENT_PATH=$(resolve_agent_path "$CURRENT_AGENT")
+    if [ -z "$AGENT_PATH" ]; then
       RAW_LINE=$(grep -i '^\*\*Next Task\|^Next Task\|^## Next' checkpoint.md 2>/dev/null | head -1)
-      echo "  ⚠  Agent file not found: ${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md"
+      echo "  ⚠  Agent file not found in workspace (.claude/agents/${CURRENT_AGENT}.md)"
+      echo "     or framework (${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md)"
       echo "     Raw Next Task line: $RAW_LINE"
       echo "     Skipping iteration (fix checkpoint.md or agent name)."
       sleep 5
       continue
     fi
-    echo "  Agent detected: $CURRENT_AGENT"
+    echo "  Agent detected: $CURRENT_AGENT (${AGENT_PATH})"
   else
     # Check if this is a completed plan (all tasks checked off) vs empty template
     CHECKED=$(grep -c '^\- \[x\]' implementation-plan.md 2>/dev/null) || CHECKED=0

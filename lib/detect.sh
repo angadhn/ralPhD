@@ -88,6 +88,15 @@ collect_phase_tasks() {
   done < "$plan_path"
 }
 
+resolve_agent_path() {
+  local agent_name=$1
+  if [ -f ".claude/agents/${agent_name}.md" ]; then
+    echo ".claude/agents/${agent_name}.md"
+  elif [ -f "${RALPH_HOME}/.claude/agents/${agent_name}.md" ]; then
+    echo "${RALPH_HOME}/.claude/agents/${agent_name}.md"
+  fi
+}
+
 extract_agent_name() {
   local name
   name=$(grep '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null \
