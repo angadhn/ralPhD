@@ -81,6 +81,8 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 | `RALPH_HOME` | script directory | Path to the ralPhD framework repo |
 | `OPENAI_API_KEY` | — | OpenAI API key (or use `codex login` — see auth below) |
 
+By default each agent uses the model specified in `context-budgets.json` (Opus for reasoning-heavy agents, Sonnet for coder/research-coder/figure-stylist). Setting `RALPH_MODEL` overrides this globally — all agents use that one model.
+
 **OpenAI model policy:** Only **GPT-5.4** (high thinking mode) is supported for OpenAI. Ralph automatically sets `reasoning_effort: "high"` for GPT-5.4 calls. Context window is 272k tokens.
 
 **OpenAI auth:** Ralph auto-discovers credentials in this order: `OPENAI_API_KEY` env var → Codex CLI auth file (`~/.codex/auth.json`) → Codex CLI keychain entry. If you have Codex CLI installed, just run `codex login` and Ralph will pick up the token automatically — no env var needed.
