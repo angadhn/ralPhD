@@ -23,6 +23,9 @@ set -euo pipefail
 # Usage: bash tests/test-workflow-local.sh
 
 RALPH_HOME="$(cd "$(dirname "$0")/.." && pwd)"
+source "$RALPH_HOME/lib/detect.sh"
+source "$RALPH_HOME/lib/config.sh"
+PARSER_FIXTURE_DIR="$RALPH_HOME/tests/fixtures/parser"
 WORKSPACE=$(mktemp -d)
 PASS=0
 FAIL=0
@@ -134,23 +137,14 @@ echo ""
 # ── Test 4: Agent detection ───────────────────────────────────
 echo "--- 4. Agent Detection ---"
 
-# detect_agent extracted from ralph-loop.sh
-detect_agent() {
-  local ckpt="$1"
-  local next_task
-  next_task=$(grep -i '^\*\*Next Task\*\*:\|^Next Task:' "$ckpt" 2>/dev/null \
-    | head -1 | sed 's/.*: *//' | sed 's/\*//g')
-  if [ -z "$next_task" ]; then
-    next_task=$(awk '/^## Next Task/{found=1; next} found && /[^ ]/{print; exit}' "$ckpt" 2>/dev/null)
-  fi
-  next_task=$(echo "$next_task" | sed 's/([^)]*)//g; s/\*//g; s/^ *//; s/ *$//')
-  case "$next_task" in
-    none*|None*|"<"*|"") echo ""; return ;;
-  esac
-  local agent="${next_task##* }"
-  agent=$(echo "$agent" | sed 's/[^a-zA-Z0-9_-]//g')
-  echo "$agent"
-}
+DETECTED=$(detect_agent_from_checkpoint \
+  "$PARSER_FIXTURE_DIR/checkpoint.md" \
+  "$PARSER_FIXTURE_DIR/implementation-plan.md")
+if [ "$DETECTED" = "coder" ]; then
+  pass "fixture agent detection: '$DETECTED'"
+else
+  fail "fixture agent detection: got '$DETECTED', expected 'coder'"
+fi
 
 # Test inline format
 cat > "$WORKSPACE/checkpoint.md" << 'EOF'
@@ -171,7 +165,7 @@ cat > "$WORKSPACE/checkpoint.md" << 'EOF'
 3. Create the workflow file — **coder**
 EOF
 
-DETECTED=$(detect_agent "$WORKSPACE/checkpoint.md")
+DETECTED=$(detect_agent_from_checkpoint "$WORKSPACE/checkpoint.md")
 if [ "$DETECTED" = "coder" ]; then
   pass "heading-style agent detection: '$DETECTED'"
 else
@@ -187,7 +181,7 @@ cat > "$WORKSPACE/checkpoint.md" << 'EOF'
 7. Audit agent prompts — **scout**
 EOF
 
-DETECTED=$(detect_agent "$WORKSPACE/checkpoint.md")
+DETECTED=$(detect_agent_from_checkpoint "$WORKSPACE/checkpoint.md")
 if [ "$DETECTED" = "scout" ]; then
   pass "bold agent detection: '$DETECTED'"
 else
@@ -203,7 +197,7 @@ cat > "$WORKSPACE/checkpoint.md" << 'EOF'
 none
 EOF
 
-DETECTED=$(detect_agent "$WORKSPACE/checkpoint.md")
+DETECTED=$(detect_agent_from_checkpoint "$WORKSPACE/checkpoint.md")
 if [ -z "$DETECTED" ]; then
   pass "no-task detection: empty (correct)"
 else
@@ -1051,22 +1045,7 @@ CKPT
   fi
   rm -rf "$FAKE_HOME"
 
-  # Test detect_agent by writing a helper script (avoids nested quoting issues)
-  cat > "$E2E_DIR/detect_agent_test.sh" << 'DETECT_SCRIPT'
-#!/usr/bin/env bash
-cd "$1" || exit 1
-next_task=$(awk '/^## Next Task/{found=1; next} found && /[^ ]/{print; exit}' checkpoint.md 2>/dev/null)
-next_task=$(echo "$next_task" | sed 's/([^)]*)//g; s/\*//g; s/^ *//; s/ *$//')
-case "$next_task" in
-  none*|None*|"<"*|"") echo ""; exit 0 ;;
-esac
-agent="${next_task##* }"
-agent=$(echo "$agent" | sed 's/[^a-zA-Z0-9_-]//g')
-echo "$agent"
-DETECT_SCRIPT
-  chmod +x "$E2E_DIR/detect_agent_test.sh"
-
-  DETECTED=$(bash "$E2E_DIR/detect_agent_test.sh" "$E2E_WORKSPACE")
+  DETECTED=$(detect_agent_from_checkpoint checkpoint.md implementation-plan.md)
   [ "$DETECTED" = "coder" ] || { echo "DETECT_FAIL: got '$DETECTED', expected 'coder'"; exit 1; }
 
   # Verify agent file exists for detected agent
@@ -1324,17 +1303,6 @@ echo ""
 # ── Test 12: Architecture field parsing ──────────────────────
 echo "--- 12. Architecture Field Parsing ---"
 
-# 12a. Extract the Architecture field parsing logic from ralph-loop.sh
-parse_arch_field() {
-  local plan_file="$1"
-  local arch
-  arch=$(grep -i '^\*\*Architecture:\*\*\|^Architecture:' "$plan_file" 2>/dev/null | head -1 | sed 's/.*: *//' | sed 's/\*//g' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' || true)
-  if [ -z "$arch" ] || ! echo "$arch" | grep -qE '^(serial|parallel|single|auto)$'; then
-    arch="serial"
-  fi
-  echo "$arch"
-}
-
 # Test: serial field
 ARCH_TEST_DIR=$(mktemp -d)
 cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
@@ -1347,7 +1315,7 @@ cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
 - [ ] 1. Do thing — **coder**
 ARCHEOF
 
-PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+PARSED=$(resolve_arch_mode_from_plan "" "$ARCH_TEST_DIR/plan.md")
 if [ "$PARSED" = "serial" ]; then
   pass "12a: Architecture field parsed: serial"
 else
@@ -1364,7 +1332,7 @@ cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
 - [ ] 1. Do thing — **coder**
 ARCHEOF
 
-PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+PARSED=$(resolve_arch_mode_from_plan "" "$ARCH_TEST_DIR/plan.md")
 if [ "$PARSED" = "parallel" ]; then
   pass "12b: Architecture field parsed: parallel"
 else
@@ -1377,7 +1345,7 @@ cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
 **Architecture:** auto
 ARCHEOF
 
-PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+PARSED=$(resolve_arch_mode_from_plan "" "$ARCH_TEST_DIR/plan.md")
 if [ "$PARSED" = "auto" ]; then
   pass "12c: Architecture field parsed: auto"
 else
@@ -1390,7 +1358,7 @@ cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
 **Architecture:** single
 ARCHEOF
 
-PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+PARSED=$(resolve_arch_mode_from_plan "" "$ARCH_TEST_DIR/plan.md")
 if [ "$PARSED" = "single" ]; then
   pass "12d: Architecture field parsed: single"
 else
@@ -1405,7 +1373,7 @@ cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
 - [ ] 1. Do thing — **coder**
 ARCHEOF
 
-PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+PARSED=$(resolve_arch_mode_from_plan "" "$ARCH_TEST_DIR/plan.md")
 if [ "$PARSED" = "serial" ]; then
   pass "12e: missing Architecture field defaults to serial"
 else
@@ -1418,7 +1386,7 @@ cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
 **Architecture:** banana
 ARCHEOF
 
-PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+PARSED=$(resolve_arch_mode_from_plan "" "$ARCH_TEST_DIR/plan.md")
 if [ "$PARSED" = "serial" ]; then
   pass "12f: invalid Architecture field defaults to serial"
 else
@@ -1431,7 +1399,7 @@ cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
 **Architecture:** Parallel
 ARCHEOF
 
-PARSED=$(parse_arch_field "$ARCH_TEST_DIR/plan.md")
+PARSED=$(resolve_arch_mode_from_plan "" "$ARCH_TEST_DIR/plan.md")
 if [ "$PARSED" = "parallel" ]; then
   pass "12g: Architecture field case-insensitive: 'Parallel' → 'parallel'"
 else
@@ -1439,45 +1407,28 @@ else
 fi
 
 # Test: CLI flag overrides plan field
-# Simulate the override logic from ralph-loop.sh
-cli_override_test() {
-  local cli_flag="$1"
-  local plan_field="$2"
-  local arch_mode=""
-  # Simulate: CLI flag takes priority
-  case "$cli_flag" in
-    --serial) arch_mode="serial" ;;
-    --parallel) arch_mode="parallel" ;;
-    --single) arch_mode="single" ;;
-  esac
-  if [ -z "$arch_mode" ]; then
-    arch_mode="$plan_field"
-  fi
-  echo "$arch_mode"
-}
-
-RESULT=$(cli_override_test "--serial" "parallel")
+RESULT=$(resolve_arch_mode_from_plan "serial" "$ARCH_TEST_DIR/plan.md")
 if [ "$RESULT" = "serial" ]; then
   pass "12h: --serial flag overrides plan field 'parallel'"
 else
   fail "12h: flag override: got '$RESULT', expected 'serial'"
 fi
 
-RESULT=$(cli_override_test "--parallel" "serial")
+RESULT=$(resolve_arch_mode_from_plan "parallel" "$ARCH_TEST_DIR/plan.md")
 if [ "$RESULT" = "parallel" ]; then
   pass "12i: --parallel flag overrides plan field 'serial'"
 else
   fail "12i: flag override: got '$RESULT', expected 'parallel'"
 fi
 
-RESULT=$(cli_override_test "--single" "parallel")
+RESULT=$(resolve_arch_mode_from_plan "single" "$ARCH_TEST_DIR/plan.md")
 if [ "$RESULT" = "single" ]; then
   pass "12j: --single flag overrides plan field 'parallel'"
 else
   fail "12j: flag override: got '$RESULT', expected 'single'"
 fi
 
-RESULT=$(cli_override_test "" "parallel")
+RESULT=$(resolve_arch_mode_from_plan "" "$PARSER_FIXTURE_DIR/implementation-plan.md")
 if [ "$RESULT" = "parallel" ]; then
   pass "12k: no CLI flag → uses plan field 'parallel'"
 else
@@ -1486,21 +1437,33 @@ fi
 
 rm -rf "$ARCH_TEST_DIR"
 
-# Test: ralph-loop.sh actually contains the Architecture parsing code
-check "12l: ralph-loop.sh reads Architecture field" grep -q 'Architecture' "$RALPH_HOME/ralph-loop.sh"
-check "12m: ralph-loop.sh has --serial flag" grep -q '\-\-serial' "$RALPH_HOME/ralph-loop.sh"
-check "12n: ralph-loop.sh has --parallel flag" grep -q '\-\-parallel' "$RALPH_HOME/ralph-loop.sh"
-check "12o: ralph-loop.sh has --single flag" grep -q '\-\-single' "$RALPH_HOME/ralph-loop.sh"
-check "12p: ralph-loop.sh exports ARCH_MODE" grep -q 'export ARCH_MODE' "$RALPH_HOME/ralph-loop.sh"
+# Test: runtime now sources shared config logic
+check "12l: lib/config.sh exists" test -f "$RALPH_HOME/lib/config.sh"
+check "12m: lib/config.sh has --serial flag" grep -q '\-\-serial' "$RALPH_HOME/lib/config.sh"
+check "12n: lib/config.sh has --parallel flag" grep -q '\-\-parallel' "$RALPH_HOME/lib/config.sh"
+check "12o: lib/config.sh has --single flag" grep -q '\-\-single' "$RALPH_HOME/lib/config.sh"
+check "12p: ralph-loop.sh sources lib/config.sh" grep -q 'lib/config.sh' "$RALPH_HOME/ralph-loop.sh"
 echo ""
 
 # ── Test 13: Parallel phase detection ────────────────────────
 echo "--- 13. Parallel Phase Detection ---"
 
-# Extract detect_current_phase and is_parallel_phase from ralph-loop.sh
-# (Test them on synthetic plan files)
-
 PHASE_TEST_DIR=$(mktemp -d)
+
+DETECTED_PHASE=$(detect_current_phase "$PARSER_FIXTURE_DIR/implementation-plan.md")
+if [ "$DETECTED_PHASE" = "## Phase 2 - Build (parallel)" ]; then
+  pass "fixture phase detection: '$DETECTED_PHASE'"
+else
+  fail "fixture phase detection: got '$DETECTED_PHASE'"
+fi
+
+TASKS=$(collect_phase_tasks "$PARSER_FIXTURE_DIR/implementation-plan.md" "$DETECTED_PHASE")
+TASK_COUNT=$(echo "$TASKS" | wc -l | tr -d '[:space:]')
+if [ "$TASK_COUNT" = "3" ]; then
+  pass "fixture task collection: 3 tasks"
+else
+  fail "fixture task collection: got $TASK_COUNT tasks, expected 3"
+fi
 
 # 13a. Plan with a parallel phase
 cat > "$PHASE_TEST_DIR/plan.md" << 'PHASEEOF'
@@ -1523,66 +1486,21 @@ cat > "$PHASE_TEST_DIR/plan.md" << 'PHASEEOF'
 - [ ] 6. Final review — **critic**
 PHASEEOF
 
-# detect_current_phase: find which phase the first unchecked task belongs to
-detect_current_phase_from() {
-  local plan_file="$1"
-  local in_phase=""
-  while IFS= read -r line; do
-    if echo "$line" | grep -q '^## Phase'; then
-      in_phase="$line"
-    fi
-    if echo "$line" | grep -q '^\- \[ \]'; then
-      echo "$in_phase"
-      return
-    fi
-  done < "$plan_file"
-  echo ""
-}
-
-# is_parallel_phase: check if phase heading contains "(parallel)"
-is_parallel_phase_test() {
-  local phase_line="$1"
-  echo "$phase_line" | grep -qi '(parallel)' && return 0 || return 1
-}
-
-# collect_phase_tasks: gather unchecked tasks in a phase
-collect_phase_tasks_from() {
-  local plan_file="$1"
-  local target_phase="$2"
-  local in_target=false
-  while IFS= read -r line; do
-    if echo "$line" | grep -q '^## Phase'; then
-      if [ "$line" = "$target_phase" ]; then
-        in_target=true
-      elif $in_target; then
-        break
-      fi
-    fi
-    if $in_target && echo "$line" | grep -q '^\- \[ \]'; then
-      local task_desc
-      task_desc=$(echo "$line" | sed 's/^- \[ \] [0-9]*\. *//' | sed 's/\*//g')
-      local agent_name="${task_desc##* }"
-      agent_name=$(echo "$agent_name" | sed 's/[^a-zA-Z0-9_-]//g')
-      echo "${agent_name}|${task_desc}"
-    fi
-  done < "$plan_file"
-}
-
-DETECTED_PHASE=$(detect_current_phase_from "$PHASE_TEST_DIR/plan.md")
+DETECTED_PHASE=$(detect_current_phase "$PHASE_TEST_DIR/plan.md")
 if [ "$DETECTED_PHASE" = "## Phase 2 — Build (parallel)" ]; then
   pass "13a: detect_current_phase finds first unchecked phase"
 else
   fail "13a: detect_current_phase: got '$DETECTED_PHASE'"
 fi
 
-if is_parallel_phase_test "$DETECTED_PHASE"; then
+if is_parallel_phase "$DETECTED_PHASE"; then
   pass "13b: is_parallel_phase recognizes (parallel) annotation"
 else
   fail "13b: is_parallel_phase failed for '$DETECTED_PHASE'"
 fi
 
 # 13c. Collect tasks from parallel phase
-TASKS=$(collect_phase_tasks_from "$PHASE_TEST_DIR/plan.md" "$DETECTED_PHASE")
+TASKS=$(collect_phase_tasks "$PHASE_TEST_DIR/plan.md" "$DETECTED_PHASE")
 TASK_COUNT=$(echo "$TASKS" | wc -l | tr -d '[:space:]')
 if [ "$TASK_COUNT" = "3" ]; then
   pass "13c: collect_phase_tasks found 3 tasks in parallel phase"
@@ -1609,8 +1527,8 @@ cat > "$PHASE_TEST_DIR/plan_serial.md" << 'PHASEEOF'
 - [ ] 2. Review code — **critic**
 PHASEEOF
 
-DETECTED_PHASE=$(detect_current_phase_from "$PHASE_TEST_DIR/plan_serial.md")
-if ! is_parallel_phase_test "$DETECTED_PHASE"; then
+DETECTED_PHASE=$(detect_current_phase "$PHASE_TEST_DIR/plan_serial.md")
+if ! is_parallel_phase "$DETECTED_PHASE"; then
   pass "13e: serial phase not detected as parallel"
 else
   fail "13e: serial phase incorrectly detected as parallel"
@@ -1624,7 +1542,7 @@ cat > "$PHASE_TEST_DIR/plan_done.md" << 'PHASEEOF'
 - [x] 2. Also done — **critic**
 PHASEEOF
 
-DETECTED_PHASE=$(detect_current_phase_from "$PHASE_TEST_DIR/plan_done.md")
+DETECTED_PHASE=$(detect_current_phase "$PHASE_TEST_DIR/plan_done.md")
 if [ -z "$DETECTED_PHASE" ]; then
   pass "13f: no unchecked tasks → empty phase detection"
 else
@@ -1649,8 +1567,8 @@ cat > "$PHASE_TEST_DIR/plan_boundary.md" << 'PHASEEOF'
 - [ ] 4. Final review — **critic**
 PHASEEOF
 
-DETECTED_PHASE=$(detect_current_phase_from "$PHASE_TEST_DIR/plan_boundary.md")
-TASKS=$(collect_phase_tasks_from "$PHASE_TEST_DIR/plan_boundary.md" "$DETECTED_PHASE")
+DETECTED_PHASE=$(detect_current_phase "$PHASE_TEST_DIR/plan_boundary.md")
+TASKS=$(collect_phase_tasks "$PHASE_TEST_DIR/plan_boundary.md" "$DETECTED_PHASE")
 TASK_COUNT=$(echo "$TASKS" | wc -l | tr -d '[:space:]')
 if [ "$TASK_COUNT" = "2" ]; then
   pass "13g: phase boundary respected (2 tasks, not 3)"
@@ -1658,11 +1576,11 @@ else
   fail "13g: phase boundary: got $TASK_COUNT tasks, expected 2"
 fi
 
-# 13h. Verify ralph-loop.sh has the parallel phase functions
-check "13h: ralph-loop.sh has detect_current_phase" grep -q 'detect_current_phase' "$RALPH_HOME/ralph-loop.sh"
-check "13i: ralph-loop.sh has is_parallel_phase" grep -q 'is_parallel_phase' "$RALPH_HOME/ralph-loop.sh"
-check "13j: ralph-loop.sh has collect_phase_tasks" grep -q 'collect_phase_tasks' "$RALPH_HOME/ralph-loop.sh"
-check "13k: ralph-loop.sh has run_parallel_phase" grep -q 'run_parallel_phase' "$RALPH_HOME/ralph-loop.sh"
+# 13h. Verify runtime uses shared detection logic
+check "13h: lib/detect.sh exists" test -f "$RALPH_HOME/lib/detect.sh"
+check "13i: ralph-loop.sh sources lib/detect.sh" grep -q 'lib/detect.sh' "$RALPH_HOME/ralph-loop.sh"
+check "13j: lib/exec.sh exists" test -f "$RALPH_HOME/lib/exec.sh"
+check "13k: lib/exec.sh has run_parallel_phase" grep -q 'run_parallel_phase' "$RALPH_HOME/lib/exec.sh"
 
 rm -rf "$PHASE_TEST_DIR"
 echo ""
