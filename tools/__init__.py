@@ -48,7 +48,7 @@ AGENT_TOOLS = {
     "synthesizer": _ESSENTIALS + ["citation_lint", "citation_verify_all"],
     "triage": _ESSENTIALS + ["pdf_metadata", "citation_verify_all"],
     "coder": _ESSENTIALS + ["bash"],
-    "plan": _ESSENTIALS + ["ask_choice", "ask_question"],
+    "plan": _ESSENTIALS + ["ask_choice", "ask_question", "scan_workspace"],
 }
 
 DEFAULT_TOOLS = _ESSENTIALS

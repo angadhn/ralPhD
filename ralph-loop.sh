@@ -276,7 +276,19 @@ while true; do
     CLAUDE_MODEL=$(resolve_model "$CURRENT_AGENT")
 
     if [ "$LOOP_MODE" = "plan" ]; then
-      # Plan mode: use ralph_agent.py with interactive tools (ask_choice, ask_question)
+      # Archive check: if all tasks done, ask user before launching plan agent
+      CHECKED=$(grep -c '^\- \[x\]' implementation-plan.md 2>/dev/null) || CHECKED=0
+      UNCHECKED=$(grep -c '^\- \[ \]' implementation-plan.md 2>/dev/null) || UNCHECKED=0
+      if [ "$CHECKED" -gt 0 ] && [ "$UNCHECKED" -eq 0 ]; then
+        echo "  All tasks in implementation-plan.md are complete."
+        read -r -p "  Archive this thread and start fresh? (y/n): " answer < /dev/tty
+        if [[ "$answer" =~ ^[Yy] ]]; then
+          bash "${RALPH_HOME}/scripts/archive.sh"
+          echo "  Archived. Starting fresh."
+        fi
+      fi
+
+      # Plan mode: use ralph_agent.py with interactive tools
       rm -f /tmp/ralph-output.json
       echo "  Model: $CLAUDE_MODEL (plan mode — interactive intake)"
       echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent plan --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json

@@ -7,8 +7,10 @@ setup and produce an implementation plan that build mode executes.
 
 Use the interactive tools to talk to the user:
 
+- **scan_workspace** — call this first. Returns workspace state (cold_start
+  vs has_plan) and a summary of files found. No parameters needed.
 - **ask_choice** — present numbered options (MCQ). Use when there are clear
-  categories to choose from. The user picks a number or types a free-text answer.
+  categories. The user picks a number or types a free-text answer.
 - **ask_question** — open-ended question. Use when you need a detailed or
   unpredictable response.
 
@@ -17,18 +19,29 @@ questions as plain text — the tools ensure the user gets a prompt and the
 model waits for their response before continuing.
 
 Ask **one question at a time**. Call one tool, read the result, then decide
-the next question based on the answer.
+the next question based on the answer. If scan_workspace reveals something
+relevant, weave it into the next question naturally rather than dumping a
+separate report.
 
 ## Workflow
 
-Follow the step-by-step procedure in the task prompt (prompt-plan.md):
+Follow the task prompt (prompt-plan.md):
+1. Scan workspace (scan_workspace)
+2. Intake Q&A if cold start (ask_choice / ask_question)
+3. Agent inventory
+4. Build the plan through conversation
+5. Mark parallelism + set fields
 
-1. Check for completed plan (Step 0)
-2. Cold-start intake (Step 1) — use ask_choice / ask_question
-3. Agent inventory (Step 2)
-4. Read context (Step 3)
-5. Build the plan (Step 4) — use ask_choice to confirm with the user
-6. Parallelism analysis (Step 5)
+## Parallelism Reference
+
+Two tasks are independent if neither reads files the other writes
+(checkpoint.md excluded — each agent updates only its own entry).
+
+Parallel-safe: multiple critics on different sections, scout + research-coder
+on independent problems, multiple deep-readers on different papers.
+
+Serial-required: writer → editor → reviewer, scout → deep-reader, anything
+reading checkpoint.md to determine what to do next.
 
 ## Outputs
 
