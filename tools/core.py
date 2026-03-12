@@ -1,6 +1,7 @@
-"""Core tools: read_file, write_file, bash.
+"""Core tools: read_file, write_file, bash, git_commit.
 
-These are ghuntley's essential primitives — every agent gets them.
+These are ghuntley's essential primitives — every agent gets them
+(except bash, which is restricted to agents that need full shell access).
 """
 
 import os
@@ -63,6 +64,38 @@ def _handle_bash(inp):
     return output if output.strip() else "(no output)"
 
 
+def _handle_git_commit(inp):
+    message = inp.get("message")
+    if not message:
+        return "Error: git_commit requires 'message' parameter"
+    files = inp.get("files") or []
+
+    # Stage files
+    if files:
+        stage_cmd = ["git", "add", "--"] + files
+    else:
+        stage_cmd = ["git", "add", "-A"]
+    result = subprocess.run(stage_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        return f"Error staging files: {result.stderr}"
+
+    # Check if there's anything to commit
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], capture_output=True, text=True,
+    )
+    if not status.stdout.strip():
+        return "Nothing to commit"
+
+    # Commit
+    result = subprocess.run(
+        ["git", "commit", "-m", message], capture_output=True, text=True,
+    )
+    output = result.stdout + result.stderr
+    if result.returncode != 0:
+        return f"(exit code {result.returncode})\n{output}"
+    return output if output.strip() else "(committed)"
+
+
 TOOLS = {
     "read_file": {
         "name": "read_file",
@@ -100,5 +133,22 @@ TOOLS = {
             "required": ["command"],
         },
         "function": _handle_bash,
+    },
+    "git_commit": {
+        "name": "git_commit",
+        "description": "Stage files and create a git commit. Use this for the yield protocol.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", "description": "Commit message"},
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Files to stage. If omitted, stages all changes (git add -A).",
+                },
+            },
+            "required": ["message"],
+        },
+        "function": _handle_git_commit,
     },
 }

@@ -38,6 +38,7 @@ class LLMResponse:
     cache_creation_input_tokens: int = 0
     cache_read_input_tokens: int = 0
     raw: object = None
+    raw_content: list = field(default_factory=list)  # Anthropic content blocks, preserves server-side blocks
 
 
 # ── Context windows ───────────────────────────────────────────
@@ -238,6 +239,7 @@ def _call_anthropic(client, model, system_prompt, tools, messages, max_tokens):
         cache_creation_input_tokens=getattr(response.usage, 'cache_creation_input_tokens', 0) or 0,
         cache_read_input_tokens=getattr(response.usage, 'cache_read_input_tokens', 0) or 0,
         raw=response,
+        raw_content=list(response.content),
     )
 
 
@@ -358,7 +360,24 @@ def format_assistant_message(provider: str, response: LLMResponse) -> dict:
 
     Returns Anthropic-format messages regardless of provider — ralph_agent.py
     keeps its conversation in Anthropic format; translation happens in call_model.
+
+    For Anthropic responses with raw_content, we serialize the SDK objects directly
+    to preserve server-side blocks (server_tool_use, web_search_tool_result, etc.).
     """
+    # Anthropic path: preserve all content blocks including server-side ones
+    if response.raw_content:
+        content = []
+        for block in response.raw_content:
+            if hasattr(block, 'model_dump'):
+                content.append(block.model_dump())
+            elif isinstance(block, dict):
+                content.append(block)
+            else:
+                # Fallback: serialize known block types
+                content.append({"type": getattr(block, 'type', 'unknown')})
+        return {"role": "assistant", "content": content}
+
+    # OpenAI path (or no raw_content): reconstruct from text_blocks + tool_calls
     content = []
     for text in response.text_blocks:
         content.append({"type": "text", "text": text})

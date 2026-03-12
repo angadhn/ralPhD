@@ -22,23 +22,30 @@ TOOLS.update(_download_tools)
 TOOLS.update(_claims_tools)
 
 # ── Per-agent tool registries ─────────────────────────────────
-# Every agent gets the 5 essentials: read_file, write_file, bash, list_files, code_search
+# Every agent gets the essentials: read_file, write_file, git_commit, list_files, code_search
+# Only agents that genuinely need full shell access get bash.
 
-_ESSENTIALS = ["read_file", "write_file", "bash", "list_files", "code_search"]
+_ESSENTIALS = ["read_file", "write_file", "git_commit", "list_files", "code_search"]
+
+# Server-side tools — executed by the API, not locally.
+# Keyed by tool name; values are the raw tool definitions sent to the API.
+SERVER_TOOLS = {
+    "web_search": {"type": "web_search_20250305", "name": "web_search"},
+}
 
 AGENT_TOOLS = {
-    "paper-writer": _ESSENTIALS + ["check_language", "citation_lint"],
+    "paper-writer": _ESSENTIALS + ["bash", "check_language", "citation_lint"],
     "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure", "check_claims", "citation_verify_all"],
-    "scout": _ESSENTIALS + ["pdf_metadata", "citation_lookup", "citation_verify", "citation_verify_all", "citation_manifest", "citation_download"],
+    "scout": _ESSENTIALS + ["web_search", "pdf_metadata", "citation_lookup", "citation_verify", "citation_verify_all", "citation_manifest", "citation_download"],
     "deep-reader": _ESSENTIALS + ["pdf_metadata", "extract_figure"],
-    "research-coder": _ESSENTIALS + [],
+    "research-coder": _ESSENTIALS + ["bash"],
     "figure-stylist": _ESSENTIALS + ["check_figure"],
     "editor": _ESSENTIALS + ["check_claims", "check_language", "citation_lint", "citation_verify_all"],
     "coherence-reviewer": _ESSENTIALS + ["check_claims", "check_language"],
     "provocateur": _ESSENTIALS + [],
     "synthesizer": _ESSENTIALS + ["citation_lint", "citation_verify_all"],
     "triage": _ESSENTIALS + ["pdf_metadata", "citation_verify_all"],
-    "coder": _ESSENTIALS + [],
+    "coder": _ESSENTIALS + ["bash"],
     "single": list(TOOLS.keys()),
 }
 
@@ -61,7 +68,16 @@ def execute_tool(name: str, tool_input: dict) -> str:
 
 
 def get_tools_for_agent(agent_name: str) -> tuple[list[str], list[dict]]:
-    """Return (tool_names, api_schemas) for an agent."""
+    """Return (tool_names, api_schemas) for an agent.
+
+    Server-side tools (e.g. web_search) use their raw definition directly.
+    Client-side tools use api_schema() to strip the handler function.
+    """
     tool_names = AGENT_TOOLS.get(agent_name, DEFAULT_TOOLS)
-    schemas = [api_schema(TOOLS[t]) for t in tool_names]
+    schemas = []
+    for t in tool_names:
+        if t in SERVER_TOOLS:
+            schemas.append(SERVER_TOOLS[t])
+        else:
+            schemas.append(api_schema(TOOLS[t]))
     return tool_names, schemas
