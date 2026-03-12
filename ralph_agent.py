@@ -265,6 +265,7 @@ def main():
                         help="Model to use (auto-detects provider from name)")
     parser.add_argument("--max-tokens", type=int, default=None, help="Max output tokens (default: from context-budgets.json or 8096)")
     parser.add_argument("--output-json", help="Write usage JSON to this path (compatible with ralph-loop.sh)")
+    parser.add_argument("--system-prompt-file", help="Use this file as system prompt instead of .claude/agents/{agent}.md")
     args = parser.parse_args()
 
     # Resolve RALPH_HOME: env var > script directory
@@ -283,11 +284,14 @@ def main():
             args.max_tokens = 8096
 
     # Load agent prompt
-    agent_path = str(ralph_home / ".claude" / "agents" / f"{args.agent}.md")
-    if not os.path.exists(agent_path):
-        print(f"Error: {agent_path} not found", file=sys.stderr)
+    if args.system_prompt_file:
+        prompt_path = args.system_prompt_file
+    else:
+        prompt_path = str(ralph_home / ".claude" / "agents" / f"{args.agent}.md")
+    if not os.path.exists(prompt_path):
+        print(f"Error: {prompt_path} not found", file=sys.stderr)
         sys.exit(1)
-    with open(agent_path) as f:
+    with open(prompt_path) as f:
         system_prompt = f.read()
 
     # Prepend path context so agents resolve framework vs project files correctly

@@ -57,7 +57,7 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 ./ralph-loop.sh              # interactive, build mode
 ./ralph-loop.sh plan         # interactive, plan mode
 ./ralph-loop.sh -p           # headless (piped), build mode
-./ralph-loop.sh -p plan 10   # headless, plan mode, max 10 iterations
+./ralph-loop.sh plan         # plan mode (interactive only, no -p)
 ./ralph-loop.sh -p 20        # headless, build mode, max 20 iterations
 ```
 
@@ -86,7 +86,7 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 
 **OpenAI auth:** Ralph auto-discovers credentials in this order: `OPENAI_API_KEY` env var → Codex CLI auth file (`~/.codex/auth.json`) → Codex CLI keychain entry. If you have Codex CLI installed, just run `codex login` and Ralph will pick up the token automatically — no env var needed.
 
-**Interactive mode:** With Anthropic models, interactive mode uses the `claude` CLI (full TUI). With OpenAI models, interactive mode routes through `ralph_agent.py` (streaming output, no TUI). Headless mode (`-p`) uses `ralph_agent.py` for all providers.
+**Interactive mode:** With Anthropic models, interactive mode uses the `claude` CLI (full TUI). With OpenAI models, interactive mode uses `codex` CLI when installed (full TUI), otherwise falls back to `ralph_agent.py`. Headless mode (`-p`) uses `ralph_agent.py` for all providers.
 
 ## Agents
 
@@ -407,7 +407,7 @@ The comparison table shows total cost, iterations, wall-clock time, quality gate
 - **Research-first, not spec-first.** The loop starts from questions, not specifications. The plan evolves as understanding deepens.
 - **No orchestrator agent.** `checkpoint.md` and `implementation-plan.md` are the shared state. The dispatcher is ~25 lines. Claude picks the highest-priority task each iteration.
 - **One agent per iteration.** Each iteration gets a fresh context window. No agent mixing, no subagent spawning.
-- **Per-agent tool registries.** Each agent only sees the tools it needs. Scout gets citation tools, critic gets compliance checkers, research-coder gets only the essentials. This focuses the model's attention and prevents tool misuse.
+- **Per-agent tool registries.** Each agent only sees the tools it needs. Scout gets citation tools, critic gets compliance checkers, research-coder gets only the essentials. This focuses the model's attention and prevents tool misuse. Tool registries are enforced on the `ralph_agent.py` path (headless mode and interactive OpenAI fallback); interactive CLI mode (`claude`/`codex`) uses provider-native tools under human supervision.
 - **Plan mode creates agents on the fly.** If a task needs a capability that doesn't exist yet, plan mode can write a new agent file rather than forcing everything through the predefined roles.
 - **Peer-reviewed sources only.** Scout searches academic databases via `tools/_citation.py`. No general web search — journal submissions cite peer-reviewed and conference papers.
 - **Human in the loop.** `HUMAN CHECKPOINT` tasks pause for review. `inbox.md` allows mid-run steering. Reflections every 5 iterations surface drift.

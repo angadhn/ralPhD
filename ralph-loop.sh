@@ -9,6 +9,13 @@ source "${SCRIPT_DIR}/lib/post-run.sh"
 source "${SCRIPT_DIR}/lib/exec.sh"
 
 parse_loop_args "$@"
+
+if $PIPE_MODE && [ "$LOOP_MODE" = "plan" ]; then
+  echo "Error: plan mode is interactive only — remove the -p flag."
+  echo "  Use: ./ralph-loop.sh plan"
+  exit 1
+fi
+
 ARCH_MODE=$(resolve_arch_mode_from_plan "$ARCH_MODE" "implementation-plan.md")
 export ARCH_MODE
 
@@ -179,12 +186,18 @@ while true; do
       echo "  JSONL context monitor started (pid $JSONL_MONITOR_PID)"
     fi
 
+    # Build extra args for ralph_agent.py (shell array to avoid word-splitting)
+    AGENT_EXTRA_ARGS=()
+    if [ "$CURRENT_AGENT" = "single" ]; then
+      AGENT_EXTRA_ARGS+=(--system-prompt-file "${RALPH_HOME}/prompt-build-single.md")
+    fi
+
     # Launch agent runner with bash-level retries for transient failures
     AGENT_ATTEMPT=0
     while true; do
       rm -f /tmp/ralph-output.json
 
-      echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json &
+      echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json "${AGENT_EXTRA_ARGS[@]}" &
       CLAUDE_PID=$!
 
       # Wait for first context reading (after ignore window) and print it
@@ -276,7 +289,11 @@ while true; do
         EXIT_CODE=$?
       else
         echo "  Model: $CLAUDE_MODEL (OpenAI — codex CLI not found, using ralph_agent.py)"
-        echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json
+        AGENT_EXTRA_ARGS=()
+        if [ "$CURRENT_AGENT" = "single" ]; then
+          AGENT_EXTRA_ARGS+=(--system-prompt-file "${RALPH_HOME}/prompt-build-single.md")
+        fi
+        echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json "${AGENT_EXTRA_ARGS[@]}"
         EXIT_CODE=$?
       fi
 
@@ -291,6 +308,8 @@ while true; do
         log_usage_from_output_json /tmp/ralph-output.json "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
           && echo "  Usage logged to $USAGE_LOG" \
           || echo "  (could not log usage data)"
+      else
+        echo "  (codex interactive — usage not logged)"
       fi
     else
       # Anthropic models: use claude CLI for interactive TUI
