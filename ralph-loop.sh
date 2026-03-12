@@ -149,7 +149,13 @@ while true; do
   fi
 
   # --- Build prompt ---
-  PROMPT=$(cat "$PROMPT_FILE")
+  if [ "$CURRENT_AGENT" = "single" ]; then
+    # Single mode: system prompt (prompt-build-single.md) has all instructions.
+    # Task is just a kick — don't send prompt-build.md (it contradicts single-mode behavior).
+    PROMPT="Begin. Read checkpoint.md and implementation-plan.md, then work through the tasks."
+  else
+    PROMPT=$(cat "$PROMPT_FILE")
+  fi
 
   # Inbox: absorb operator notes if present
   if [ -s "inbox.md" ]; then
