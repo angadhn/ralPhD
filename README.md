@@ -55,9 +55,8 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 
 ```bash
 ./ralph-loop.sh              # interactive, build mode
-./ralph-loop.sh plan         # interactive, plan mode
+./ralph-loop.sh plan         # interactive, plan mode (no -p)
 ./ralph-loop.sh -p           # headless (piped), build mode
-./ralph-loop.sh plan         # plan mode (interactive only, no -p)
 ./ralph-loop.sh -p 20        # headless, build mode, max 20 iterations
 ```
 

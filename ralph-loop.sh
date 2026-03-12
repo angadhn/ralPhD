@@ -148,11 +148,6 @@ while true; do
     echo "  Phase not marked (parallel) — running serially"
   fi
 
-  # --- Single-agent mode: use combined prompt ---
-  if [ "$ARCH_MODE" = "single" ] && [ "$LOOP_MODE" = "build" ]; then
-    PROMPT_FILE="${RALPH_HOME}/prompt-build-single.md"
-  fi
-
   # --- Build prompt ---
   PROMPT=$(cat "$PROMPT_FILE")
 
@@ -283,6 +278,7 @@ while true; do
     if is_openai_model "$CLAUDE_MODEL"; then
       # OpenAI models: use codex CLI for interactive TUI (uses codex's own tools),
       # fall back to ralph_agent.py (uses Ralph's per-agent tool registry)
+      rm -f /tmp/ralph-output.json
       if command -v codex >/dev/null 2>&1; then
         echo "  Model: $CLAUDE_MODEL (OpenAI — using codex CLI)"
         echo "$PROMPT" | codex --model "$CLAUDE_MODEL" --full-auto -
