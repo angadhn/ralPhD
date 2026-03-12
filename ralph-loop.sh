@@ -268,10 +268,17 @@ while true; do
     CLAUDE_MODEL=$(resolve_model "$CURRENT_AGENT")
 
     if is_openai_model "$CLAUDE_MODEL"; then
-      # OpenAI models: use ralph_agent.py (no claude CLI equivalent)
-      echo "  Model: $CLAUDE_MODEL (OpenAI — using ralph_agent.py)"
-      echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json
-      EXIT_CODE=$?
+      # OpenAI models: use codex CLI for interactive TUI (uses codex's own tools),
+      # fall back to ralph_agent.py (uses Ralph's per-agent tool registry)
+      if command -v codex >/dev/null 2>&1; then
+        echo "  Model: $CLAUDE_MODEL (OpenAI — using codex CLI)"
+        echo "$PROMPT" | codex --model "$CLAUDE_MODEL" --full-auto -
+        EXIT_CODE=$?
+      else
+        echo "  Model: $CLAUDE_MODEL (OpenAI — codex CLI not found, using ralph_agent.py)"
+        echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json
+        EXIT_CODE=$?
+      fi
 
       kill "$MONITOR_PID" 2>/dev/null || true
       wait "$MONITOR_PID" 2>/dev/null || true
