@@ -79,7 +79,7 @@ can enforce it.
 Also set the **Architecture** field:
 (`**Architecture:** serial | parallel | auto`). Set to `parallel` if
 any phases have independent agents (see Step 5), `serial` if all phases
-are strictly sequential, or `auto` to let build mode decide.
+are strictly sequential, or `auto` to let the loop decide.
 
 For stage gates: ask which transitions warrant a pause. Common gates:
 - After literature review, before writing begins

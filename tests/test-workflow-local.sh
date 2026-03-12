@@ -15,11 +15,10 @@ set -euo pipefail
 #   9. Commit-back step (post-run result delivery)
 #   10. Webhook callback step (result delivery to external URL)
 #   11. End-to-end pipeline integration
-#   12. Architecture field parsing (--serial/--parallel/--single flags)
+#   12. Architecture field parsing (--serial/--parallel flags)
 #   13. Parallel phase detection (phase heading annotations)
 #   14. eval.jsonl output format (evaluate_iteration.py --dry-run)
-#   15. Single-agent mode (prompt-build-single.md)
-#   16. Local init layout (split content/workspace, symlinks)
+#   15. Local init layout (split content/workspace, symlinks)
 #
 # Usage: bash tests/test-workflow-local.sh
 
@@ -362,15 +361,15 @@ fi
 if RALPH_HOME="$RALPH_HOME" python3 -c "
 import sys
 sys.path.insert(0, '$RALPH_HOME')
-from tools import TOOLS, AGENT_TOOLS, get_tools_for_agent
+from tools import TOOLS, AGENT_TOOLS, SERVER_TOOLS, get_tools_for_agent
 
-# All 17 tools should be registered
-assert len(TOOLS) == 17, f'Expected 17 tools, got {len(TOOLS)}'
+# All 18 tools should be registered (17 original + git_commit)
+assert len(TOOLS) == 18, f'Expected 18 tools, got {len(TOOLS)}'
 
-# Every tool in AGENT_TOOLS must exist in TOOLS
+# Every tool in AGENT_TOOLS must exist in TOOLS or SERVER_TOOLS
 for agent, tool_list in AGENT_TOOLS.items():
     for t in tool_list:
-        assert t in TOOLS, f'Agent {agent} references unknown tool: {t}'
+        assert t in TOOLS or t in SERVER_TOOLS, f'Agent {agent} references unknown tool: {t}'
 
 # get_tools_for_agent should work for all known agents
 for agent in AGENT_TOOLS:
@@ -378,9 +377,9 @@ for agent in AGENT_TOOLS:
     assert len(names) > 0, f'Agent {agent} has no tools'
     assert len(schemas) == len(names), f'Schema count mismatch for {agent}'
 " 2>/dev/null; then
-  pass "tools/__init__.py: all 17 tools load, agent registries valid"
+  pass "tools/__init__.py: all 18 tools load, agent registries valid"
 else
-  fail "tools/__init__.py: all 17 tools load, agent registries valid"
+  fail "tools/__init__.py: all 18 tools load, agent registries valid"
 fi
 
 # Test checks.py, pdf.py, download.py all use the shared _scripts_dir
@@ -1467,19 +1466,6 @@ else
   fail "12c: Architecture field: got '$PARSED', expected 'auto'"
 fi
 
-# Test: single field
-cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
-# Plan
-**Architecture:** single
-ARCHEOF
-
-PARSED=$(resolve_arch_mode_from_plan "" "$ARCH_TEST_DIR/plan.md")
-if [ "$PARSED" = "single" ]; then
-  pass "12d: Architecture field parsed: single"
-else
-  fail "12d: Architecture field: got '$PARSED', expected 'single'"
-fi
-
 # Test: missing field defaults to serial
 cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
 # Plan
@@ -1536,13 +1522,6 @@ else
   fail "12i: flag override: got '$RESULT', expected 'parallel'"
 fi
 
-RESULT=$(resolve_arch_mode_from_plan "single" "$ARCH_TEST_DIR/plan.md")
-if [ "$RESULT" = "single" ]; then
-  pass "12j: --single flag overrides plan field 'parallel'"
-else
-  fail "12j: flag override: got '$RESULT', expected 'single'"
-fi
-
 RESULT=$(resolve_arch_mode_from_plan "" "$PARSER_FIXTURE_DIR/implementation-plan.md")
 if [ "$RESULT" = "parallel" ]; then
   pass "12k: no CLI flag → uses plan field 'parallel'"
@@ -1556,8 +1535,7 @@ rm -rf "$ARCH_TEST_DIR"
 check "12l: lib/config.sh exists" test -f "$RALPH_HOME/lib/config.sh"
 check "12m: lib/config.sh has --serial flag" grep -q '\-\-serial' "$RALPH_HOME/lib/config.sh"
 check "12n: lib/config.sh has --parallel flag" grep -q '\-\-parallel' "$RALPH_HOME/lib/config.sh"
-check "12o: lib/config.sh has --single flag" grep -q '\-\-single' "$RALPH_HOME/lib/config.sh"
-check "12p: ralph-loop.sh sources lib/config.sh" grep -q 'lib/config.sh' "$RALPH_HOME/ralph-loop.sh"
+check "12o: ralph-loop.sh sources lib/config.sh" grep -q 'lib/config.sh' "$RALPH_HOME/ralph-loop.sh"
 echo ""
 
 # ── Test 13: Parallel phase detection ────────────────────────
@@ -1921,62 +1899,13 @@ fi
 rm -rf "$EVAL_TEST_DIR" "$EVAL_TEST_DIR2"
 echo ""
 
-# ── Test 15: Single-agent mode ───────────────────────────────
-echo "--- 15. Single-Agent Mode ---"
-
-# 15a. Verify prompt-build-single.md exists
-check "15a: prompt-build-single.md exists" test -f "$RALPH_HOME/prompt-build-single.md"
-
-# 15b. Verify it contains key single-agent sections
-if grep -q 'Single-Agent\|single-agent\|single agent' "$RALPH_HOME/prompt-build-single.md" 2>/dev/null; then
-  pass "15b: prompt-build-single.md mentions single-agent mode"
-else
-  fail "15b: prompt-build-single.md missing single-agent reference"
-fi
-
-if grep -q 'all.*tasks\|ALL.*tasks\|task list.*exhausted' "$RALPH_HOME/prompt-build-single.md" 2>/dev/null; then
-  pass "15c: prompt-build-single.md handles all tasks in one session"
-else
-  fail "15c: prompt-build-single.md missing all-tasks handling"
-fi
-
-# 15d. ralph-loop.sh switches to single prompt when ARCH_MODE=single
-if grep -q 'prompt-build-single.md' "$RALPH_HOME/ralph-loop.sh" 2>/dev/null; then
-  pass "15d: ralph-loop.sh references prompt-build-single.md"
-else
-  fail "15d: ralph-loop.sh missing prompt-build-single.md reference"
-fi
-
-# 15e. ralph-loop.sh skips agent detection in single mode
-if grep -q 'single.*skip.*agent\|single-agent.*skip\|CURRENT_AGENT="single"' "$RALPH_HOME/ralph-loop.sh" 2>/dev/null; then
-  pass "15e: ralph-loop.sh skips agent detection for single mode"
-else
-  fail "15e: ralph-loop.sh missing single-mode agent skip"
-fi
-
-# 15f. Verify prompt-build.md documents Architecture awareness
-if grep -q 'Architecture' "$RALPH_HOME/prompt-build.md" 2>/dev/null; then
-  pass "15f: prompt-build.md documents Architecture field"
-else
-  fail "15f: prompt-build.md missing Architecture documentation"
-fi
-
-# 15g. Verify prompt-plan.md has parallelism analysis
-if grep -q 'parallel\|Architecture' "$RALPH_HOME/prompt-plan.md" 2>/dev/null; then
-  pass "15g: prompt-plan.md includes parallelism/Architecture guidance"
-else
-  fail "15g: prompt-plan.md missing parallelism guidance"
-fi
-
-echo ""
-
-# ── Test 16: Local init layout (split content/workspace) ─────
-echo "--- 16. Local Init Layout ---"
+# ── Test 15: Local init layout (split content/workspace) ─────
+echo "--- 15. Local Init Layout ---"
 
 LOCAL_PROJECT=$(mktemp -d)
 LOCAL_CLEANUP() { rm -rf "$LOCAL_PROJECT"; }
 
-# 16a. Default init: content at project root, framework state in .ralph/
+# 15a. Default init: content at project root, framework state in .ralph/
 (
   cd "$LOCAL_PROJECT"
   RALPH_HOME="$RALPH_HOME" bash "$RALPH_HOME/scripts/init-project.sh" > /dev/null 2>&1
@@ -1985,48 +1914,48 @@ LOCAL_WS="$LOCAL_PROJECT/.ralph"
 
 # Content dirs exist at project root
 for dir in human-inputs ai-generated-outputs papers corpus sections references figures; do
-  check "16a: $dir/ at project root" test -d "$LOCAL_PROJECT/$dir"
+  check "15a: $dir/ at project root" test -d "$LOCAL_PROJECT/$dir"
 done
 
 # Symlinks exist inside .ralph/ and point to project root
 for dir in ai-generated-outputs papers corpus sections references figures; do
-  check "16a: .ralph/$dir is symlink" test -L "$LOCAL_WS/$dir"
+  check "15a: .ralph/$dir is symlink" test -L "$LOCAL_WS/$dir"
 done
-check "16a: .ralph/inputs is symlink" test -L "$LOCAL_WS/inputs"
+check "15a: .ralph/inputs is symlink" test -L "$LOCAL_WS/inputs"
 
 # Symlinks resolve correctly
-check "16a: .ralph/ai-generated-outputs resolves" test -d "$LOCAL_WS/ai-generated-outputs"
-check "16a: .ralph/inputs resolves to human-inputs" test -d "$LOCAL_WS/inputs"
+check "15a: .ralph/ai-generated-outputs resolves" test -d "$LOCAL_WS/ai-generated-outputs"
+check "15a: .ralph/inputs resolves to human-inputs" test -d "$LOCAL_WS/inputs"
 
 # Framework state inside .ralph/
-check "16a: .ralph/logs/ exists" test -d "$LOCAL_WS/logs"
-check "16a: .ralph/archive/ exists" test -d "$LOCAL_WS/archive"
-check "16a: .ralph/ralphd exists" test -f "$LOCAL_WS/ralphd"
-check "16a: .ralph/.ralphrc exists" test -f "$LOCAL_WS/.ralphrc"
+check "15a: .ralph/logs/ exists" test -d "$LOCAL_WS/logs"
+check "15a: .ralph/archive/ exists" test -d "$LOCAL_WS/archive"
+check "15a: .ralph/ralphd exists" test -f "$LOCAL_WS/ralphd"
+check "15a: .ralph/.ralphrc exists" test -f "$LOCAL_WS/.ralphrc"
 
 # human-inputs/ README created at project root
-check "16a: human-inputs/README.md exists" test -f "$LOCAL_PROJECT/human-inputs/README.md"
+check "15a: human-inputs/README.md exists" test -f "$LOCAL_PROJECT/human-inputs/README.md"
 
-# 16b. Files created through symlinks appear at project root
+# 15b. Files created through symlinks appear at project root
 echo "test-content" > "$LOCAL_WS/ai-generated-outputs/testfile.txt"
 if [ -f "$LOCAL_PROJECT/ai-generated-outputs/testfile.txt" ] && \
    grep -q "test-content" "$LOCAL_PROJECT/ai-generated-outputs/testfile.txt"; then
-  pass "16b: file through symlink appears at project root"
+  pass "15b: file through symlink appears at project root"
 else
-  fail "16b: file through symlink appears at project root"
+  fail "15b: file through symlink appears at project root"
 fi
 
-# 16c. Same-dir mode (init .): no content symlinks, inputs → human-inputs
+# 15c. Same-dir mode (init .): no content symlinks, inputs → human-inputs
 LOCAL_SAMEDIR=$(mktemp -d)
 (
   cd "$LOCAL_SAMEDIR"
   RALPH_HOME="$RALPH_HOME" bash "$RALPH_HOME/scripts/init-project.sh" . > /dev/null 2>&1
 )
-check "16c: same-dir human-inputs/ exists" test -d "$LOCAL_SAMEDIR/human-inputs"
-check "16c: same-dir inputs is symlink" test -L "$LOCAL_SAMEDIR/inputs"
-check "16c: same-dir inputs resolves" test -d "$LOCAL_SAMEDIR/inputs"
+check "15c: same-dir human-inputs/ exists" test -d "$LOCAL_SAMEDIR/human-inputs"
+check "15c: same-dir inputs is symlink" test -L "$LOCAL_SAMEDIR/inputs"
+check "15c: same-dir inputs resolves" test -d "$LOCAL_SAMEDIR/inputs"
 # In same-dir mode, content dirs are real dirs (not symlinks)
-check "16c: same-dir ai-generated-outputs is real dir" test -d "$LOCAL_SAMEDIR/ai-generated-outputs" -a ! -L "$LOCAL_SAMEDIR/ai-generated-outputs"
+check "15c: same-dir ai-generated-outputs is real dir" test -d "$LOCAL_SAMEDIR/ai-generated-outputs" -a ! -L "$LOCAL_SAMEDIR/ai-generated-outputs"
 
 rm -rf "$LOCAL_SAMEDIR"
 rm -rf "$LOCAL_PROJECT"

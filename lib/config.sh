@@ -17,7 +17,6 @@ parse_loop_args() {
       build) LOOP_MODE="build"; PROMPT_FILE="prompt-build.md" ;;
       --serial) ARCH_MODE="serial" ;;
       --parallel) ARCH_MODE="parallel" ;;
-      --single) ARCH_MODE="single" ;;
       --run-tag=*) RUN_TAG="${arg#--run-tag=}" ;;
       --model=*) CLI_MODEL="${arg#--model=}" ;;
       --help|-h) SHOW_HELP=true ;;
@@ -39,7 +38,6 @@ Options:
   --model=<name>    Override model for all agents
   --serial          Force serial architecture
   --parallel        Force parallel architecture
-  --single          Single-agent mode (one agent handles everything)
   --run-tag=<tag>   Tag for this run (used in logs)
   --help, -h        Show this help and exit
 
@@ -85,7 +83,7 @@ resolve_arch_mode_from_plan() {
       | tr '[:upper:]' '[:lower:]' || true)
   fi
 
-  if [ -z "$arch_mode" ] || ! echo "$arch_mode" | grep -qE '^(serial|parallel|single|auto)$'; then
+  if [ -z "$arch_mode" ] || ! echo "$arch_mode" | grep -qE '^(serial|parallel|auto)$'; then
     arch_mode="serial"
   fi
 

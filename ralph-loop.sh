@@ -97,18 +97,13 @@ while true; do
 
   # --- Detect thread and agent ---
   CURRENT_THREAD=$(extract_thread)
-  if [ "$ARCH_MODE" = "single" ] && [ "$LOOP_MODE" = "build" ]; then
-    CURRENT_AGENT="single"
-    echo "  Single-agent mode — skipping agent detection"
-  else
-    CURRENT_AGENT=$(detect_agent_from_checkpoint "checkpoint.md" "implementation-plan.md")
-  fi
+  CURRENT_AGENT=$(detect_agent_from_checkpoint "checkpoint.md" "implementation-plan.md")
   if [ "$LOOP_MODE" = "plan" ]; then
     # Plan mode doesn't need an agent — it's an interactive session
     CURRENT_AGENT="${CURRENT_AGENT:-plan}"
     echo "  Plan mode (agent detection skipped)"
   elif [ -n "$CURRENT_AGENT" ] && [ "$CURRENT_AGENT" != "" ]; then
-    if [ "$CURRENT_AGENT" != "single" ] && [ ! -f "${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md" ]; then
+    if [ ! -f "${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md" ]; then
       RAW_LINE=$(grep -i '^\*\*Next Task\|^Next Task\|^## Next' checkpoint.md 2>/dev/null | head -1)
       echo "  ⚠  Agent file not found: ${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md"
       echo "     Raw Next Task line: $RAW_LINE"
@@ -158,13 +153,7 @@ while true; do
   fi
 
   # --- Build prompt ---
-  if [ "$CURRENT_AGENT" = "single" ]; then
-    # Single mode: CLI paths need full instructions as user message;
-    # ralph_agent.py paths get instructions via --system-prompt-file instead.
-    PROMPT=$(cat "${RALPH_HOME}/prompt-build-single.md")
-  else
-    PROMPT=$(cat "$PROMPT_FILE")
-  fi
+  PROMPT=$(cat "$PROMPT_FILE")
 
   # Inbox: absorb operator notes if present
   if [ -s "inbox.md" ]; then
@@ -196,24 +185,12 @@ while true; do
       echo "  JSONL context monitor started (pid $JSONL_MONITOR_PID)"
     fi
 
-    # Build extra args for ralph_agent.py (shell array to avoid word-splitting)
-    AGENT_EXTRA_ARGS=()
-    if [ "$CURRENT_AGENT" = "single" ]; then
-      AGENT_EXTRA_ARGS+=(--system-prompt-file "${RALPH_HOME}/prompt-build-single.md")
-    fi
-
     # Launch agent runner with bash-level retries for transient failures
     AGENT_ATTEMPT=0
     while true; do
       rm -f /tmp/ralph-output.json
 
-      # Single mode: ralph_agent.py gets instructions via --system-prompt-file,
-      # so pipe a minimal task instead of the full prompt (avoids duplication).
-      AGENT_TASK="$PROMPT"
-      if [ "$CURRENT_AGENT" = "single" ]; then
-        AGENT_TASK="Begin. Read checkpoint.md and implementation-plan.md, then work through the tasks."
-      fi
-      echo "$AGENT_TASK" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json "${AGENT_EXTRA_ARGS[@]}" &
+      echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json &
       CLAUDE_PID=$!
 
       # Wait for first context reading (after ignore window) and print it
@@ -311,16 +288,7 @@ while true; do
           EXIT_CODE=1
         else
           echo "  Model: $CLAUDE_MODEL (OpenAI — codex CLI not found, using ralph_agent.py)"
-          AGENT_EXTRA_ARGS=()
-          if [ "$CURRENT_AGENT" = "single" ]; then
-            AGENT_EXTRA_ARGS+=(--system-prompt-file "${RALPH_HOME}/prompt-build-single.md")
-          fi
-          # Single mode: pipe minimal task (instructions via --system-prompt-file)
-          AGENT_TASK="$PROMPT"
-          if [ "$CURRENT_AGENT" = "single" ]; then
-            AGENT_TASK="Begin. Read checkpoint.md and implementation-plan.md, then work through the tasks."
-          fi
-          echo "$AGENT_TASK" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json "${AGENT_EXTRA_ARGS[@]}"
+          echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json
           EXIT_CODE=$?
         fi
       fi

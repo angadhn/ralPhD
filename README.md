@@ -70,7 +70,6 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 | `N` | unlimited | Max iterations before stopping |
 | `--serial` | — | Force serial architecture mode |
 | `--parallel` | — | Force parallel architecture mode |
-| `--single` | — | Force single-agent architecture mode |
 
 **Environment:**
 
@@ -178,7 +177,6 @@ ralPhD/
 ├── providers.py                # Provider abstraction (Anthropic + OpenAI)
 ├── prompt-build.md             # Build-mode dispatcher
 ├── prompt-plan.md              # Plan-mode dispatcher
-├── prompt-build-single.md      # Single-agent combined prompt (benchmarking)
 ├── context-budgets.json        # Per-agent context budget config
 ├── .claude/agents/             # 12 agent prompts + agent-base.md shared protocol
 ├── tools/                      # Tool registry + per-agent tool implementations
@@ -320,7 +318,7 @@ See `specs/api-contract.md` for the full API contract, webhook payload schema, a
 
 ## Benchmarking
 
-Ralph supports three architecture modes for comparing multi-agent vs. single-agent execution on the same task.
+Ralph supports two architecture modes for execution.
 
 ### Architecture modes
 
@@ -328,14 +326,12 @@ Ralph supports three architecture modes for comparing multi-agent vs. single-age
 |------|-------------|
 | **serial** (default) | One agent per iteration, sequential relay |
 | **parallel** | Phases marked `(parallel)` in the plan run their tasks concurrently |
-| **single** | One combined prompt handles all agents — no agent detection, no relay |
 
 Set the mode via CLI flag or the `**Architecture:**` field in `implementation-plan.md`. CLI flags override the plan field.
 
 ```bash
 ./ralph-loop.sh -p --serial build 10    # serial relay (default)
 ./ralph-loop.sh -p --parallel build 10  # parallel fan-out on annotated phases
-./ralph-loop.sh -p --single build 10    # single combined agent
 ```
 
 ### Plan annotations for parallelism
@@ -367,11 +363,10 @@ After a run, aggregate and compare:
 # Summary of a single run
 python3 scripts/evaluate_run.py logs/eval.jsonl
 
-# Compare three architecture modes
+# Compare two architecture modes
 python3 scripts/evaluate_run.py --compare \
   logs/eval-serial.jsonl \
-  logs/eval-parallel.jsonl \
-  logs/eval-single.jsonl
+  logs/eval-parallel.jsonl
 ```
 
 ### Running a benchmark comparison
@@ -380,7 +375,7 @@ python3 scripts/evaluate_run.py --compare \
 # 1. Plan the task (sets Architecture field automatically)
 ./ralph-loop.sh plan
 
-# 2. Run all three modes on the same plan
+# 2. Run both modes on the same plan
 cp logs/eval.jsonl logs/eval.jsonl.bak  # preserve any prior data
 
 ./ralph-loop.sh -p --serial build 20
@@ -390,15 +385,10 @@ git checkout -- checkpoint.md           # reset state
 ./ralph-loop.sh -p --parallel build 20
 cp logs/eval.jsonl logs/eval-parallel.jsonl
 
-git checkout -- checkpoint.md           # reset state
-./ralph-loop.sh -p --single build 20
-cp logs/eval.jsonl logs/eval-single.jsonl
-
 # 3. Compare results
 python3 scripts/evaluate_run.py --compare \
   logs/eval-serial.jsonl \
-  logs/eval-parallel.jsonl \
-  logs/eval-single.jsonl
+  logs/eval-parallel.jsonl
 ```
 
 The comparison table shows total cost, iterations, wall-clock time, quality gate pass rate, cost per completed task, and context utilization for each mode.

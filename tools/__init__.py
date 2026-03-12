@@ -46,7 +46,6 @@ AGENT_TOOLS = {
     "synthesizer": _ESSENTIALS + ["citation_lint", "citation_verify_all"],
     "triage": _ESSENTIALS + ["pdf_metadata", "citation_verify_all"],
     "coder": _ESSENTIALS + ["bash"],
-    "single": list(TOOLS.keys()),
 }
 
 DEFAULT_TOOLS = _ESSENTIALS

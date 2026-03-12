@@ -215,7 +215,7 @@ def detect_agent_and_thread() -> tuple[str, str]:
 def main():
     parser = argparse.ArgumentParser(description="Capture post-iteration evaluation metrics")
     parser.add_argument("--iteration", type=int, required=True, help="Current iteration number")
-    parser.add_argument("--arch-mode", default="serial", help="Architecture mode (serial/parallel/single)")
+    parser.add_argument("--arch-mode", default="serial", help="Architecture mode (serial/parallel)")
     parser.add_argument("--run-tag", default="", help="Tag for this run (for comparison)")
     parser.add_argument("--eval-log", type=Path, default=EVAL_LOG, help="Path to eval.jsonl output")
     parser.add_argument("--dry-run", action="store_true", help="Print entry without writing to file")
