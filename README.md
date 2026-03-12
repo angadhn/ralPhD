@@ -77,10 +77,12 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RALPH_MODEL` | `claude-opus-4-6` | Which model to use (supports `claude-*`, `gpt-*`, `o3`, `o4-mini`) |
+| `RALPH_MODEL` | `claude-opus-4-6` | Which model to use (`claude-*` or `gpt-5.4`) |
 | `CLAUDE_MODEL` | — | Alias for `RALPH_MODEL` (backward compatible) |
 | `RALPH_HOME` | script directory | Path to the ralPhD framework repo |
 | `OPENAI_API_KEY` | — | OpenAI API key (or use `codex login` — see auth below) |
+
+**OpenAI model policy:** Only **GPT-5.4** (high thinking mode) is supported for OpenAI. Ralph automatically sets `reasoning_effort: "high"` for GPT-5.4 calls. Context window is 272k tokens.
 
 **OpenAI auth:** Ralph auto-discovers credentials in this order: `OPENAI_API_KEY` env var → Codex CLI auth file (`~/.codex/auth.json`) → Codex CLI keychain entry. If you have Codex CLI installed, just run `codex login` and Ralph will pick up the token automatically — no env var needed.
 

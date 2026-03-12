@@ -26,6 +26,7 @@ is_openai_model() {
 resolve_context_window() {
   local model="${1:-claude-opus-4-6}"
   case "$model" in
+    gpt-5.4*) echo 272000 ;;
     gpt-4o|gpt-4o-mini) echo 128000 ;;
     *) echo 200000 ;;
   esac

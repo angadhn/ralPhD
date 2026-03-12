@@ -7,6 +7,9 @@ format happens at call time inside this module.
 Provider auto-detected from model name:
   claude-* → anthropic
   gpt-*/o1*/o3*/o4* → openai
+
+OpenAI policy: only GPT-5.4 (high thinking) is supported. Other OpenAI
+models technically work but are not recommended or tested.
 """
 
 import json
@@ -42,6 +45,7 @@ _CONTEXT_WINDOWS = {
     "claude-opus-4-6": 200_000,
     "claude-sonnet-4-6": 200_000,
     "claude-haiku-4-5": 200_000,
+    "gpt-5.4": 272_000,          # 272k standard; 1.05M experimental (not enabled)
     "gpt-4o": 128_000,
     "gpt-4o-mini": 128_000,
     "o3": 200_000,
@@ -66,6 +70,11 @@ def detect_provider(model: str) -> str:
         f"Cannot detect provider for model '{model}'. "
         "Expected claude-*, gpt-*, o1*, o3*, or o4*."
     )
+
+
+def _is_thinking_model(model: str) -> bool:
+    """Check if model supports reasoning_effort (thinking mode)."""
+    return model.startswith(("o1", "o3", "o4", "gpt-5"))
 
 
 def _is_reasoning_model(model: str) -> bool:
@@ -245,8 +254,11 @@ def _call_openai(client, model, system_prompt, tools, messages, max_tokens):
     if oai_tools:
         kwargs["tools"] = oai_tools
 
-    # o-series reasoning models use max_completion_tokens
-    if _is_reasoning_model(model):
+    # Thinking models use max_completion_tokens + reasoning_effort
+    if _is_thinking_model(model):
+        kwargs["max_completion_tokens"] = max_tokens
+        kwargs["reasoning_effort"] = "high"
+    elif _is_reasoning_model(model):
         kwargs["max_completion_tokens"] = max_tokens
     else:
         kwargs["max_tokens"] = max_tokens
