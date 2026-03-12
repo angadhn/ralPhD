@@ -273,6 +273,7 @@ jobs:
           CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
         run: |
           cd workspace
+          REDACTOR="${GITHUB_WORKSPACE}/ralph-home/scripts/redact_secrets.py"
 
           # Determine run status from job outcome
           STATUS="completed"
@@ -283,13 +284,13 @@ jobs:
           # Extract checkpoint summary (first 20 lines, escaped for JSON)
           CHECKPOINT_SUMMARY=""
           if [ -f checkpoint.md ]; then
-            CHECKPOINT_SUMMARY=$(head -20 checkpoint.md | python3 -c "
+            CHECKPOINT_SUMMARY=$(head -20 checkpoint.md | python3 "$REDACTOR" | python3 -c "
           import sys, json
           print(json.dumps(sys.stdin.read()))" 2>/dev/null | sed 's/^"//;s/"$//')
           fi
 
           # Extract last task status from checkpoint
-          LAST_TASK=$(grep -m1 '## Next Task' checkpoint.md -A2 2>/dev/null | tail -1 | sed 's/^ *//' || echo "")
+          LAST_TASK=$(grep -m1 '## Next Task' checkpoint.md -A2 2>/dev/null | tail -1 | sed 's/^ *//' | python3 "$REDACTOR" | tr -d '\n' || echo "")
           LAST_AGENT=$(grep -m1 '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null | sed 's/.*:\*\* *//' || echo "")
 
           # Count tasks done vs total from Knowledge State table
@@ -301,9 +302,9 @@ jobs:
           REVIEW_BODY=""
           if [ -f HUMAN_REVIEW_NEEDED.md ]; then
             REVIEW_NEEDED="true"
-            REVIEW_BODY=$(python3 -c "
+            REVIEW_BODY=$(python3 "$REDACTOR" HUMAN_REVIEW_NEEDED.md | python3 -c "
           import sys, json
-          print(json.dumps(open('HUMAN_REVIEW_NEEDED.md').read()))" 2>/dev/null | sed 's/^"//;s/"$//')
+          print(json.dumps(sys.stdin.read()))" 2>/dev/null | sed 's/^"//;s/"$//')
           fi
 
           # Build JSON payload using jq for proper escaping
@@ -393,16 +394,47 @@ jobs:
           done
 
       # ── 9. Upload outputs as artifact ─────────────────────────
+      - name: Prepare sanitized artifact bundle
+        if: always()
+        run: |
+          cd workspace
+          REDACTOR="${GITHUB_WORKSPACE}/ralph-home/scripts/redact_secrets.py"
+          ARTIFACT_DIR="${GITHUB_WORKSPACE}/artifact-redacted"
+
+          sanitize_copy() {
+            local src="$1"
+            local dst="$2"
+            mkdir -p "$(dirname "$dst")"
+            python3 "$REDACTOR" "$src" > "$dst"
+          }
+
+          rm -rf "$ARTIFACT_DIR"
+          mkdir -p "$ARTIFACT_DIR/ai-generated-outputs" "$ARTIFACT_DIR/logs"
+
+          for path in checkpoint.md implementation-plan.md HUMAN_REVIEW_NEEDED.md; do
+            if [ -f "$path" ]; then
+              sanitize_copy "$path" "$ARTIFACT_DIR/$path"
+            fi
+          done
+
+          if [ -d ai-generated-outputs ]; then
+            while IFS= read -r path; do
+              sanitize_copy "$path" "$ARTIFACT_DIR/$path"
+            done < <(find ai-generated-outputs -type f | sort)
+          fi
+
+          if [ -d logs ]; then
+            while IFS= read -r path; do
+              sanitize_copy "$path" "$ARTIFACT_DIR/$path"
+            done < <(find logs -type f | sort)
+          fi
+
       - name: Upload AI outputs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ralph-outputs-${{ inputs.thread }}
-          path: |
-            workspace/ai-generated-outputs/
-            workspace/checkpoint.md
-            workspace/implementation-plan.md
-            workspace/logs/
+          path: artifact-redacted/
           retention-days: 30
 
       # ── 10. Summary ───────────────────────────────────────────
@@ -419,6 +451,7 @@ jobs:
           INPUT_CALLBACK_URL: ${{ inputs.callback_url }}
         run: |
           cd workspace
+          REDACTOR="${GITHUB_WORKSPACE}/ralph-home/scripts/redact_secrets.py"
 
           {
             echo "## Ralph Run Summary"
@@ -442,7 +475,7 @@ jobs:
             if [ -f checkpoint.md ]; then
               echo "### Checkpoint"
               echo '```'
-              head -30 checkpoint.md
+              head -30 checkpoint.md | python3 "$REDACTOR"
               echo '```'
             fi
 
@@ -451,7 +484,7 @@ jobs:
               echo ""
               echo "### Usage"
               echo '```json'
-              tail -5 logs/usage.jsonl
+              tail -5 logs/usage.jsonl | python3 "$REDACTOR"
               echo '```'
             fi
 
@@ -459,6 +492,6 @@ jobs:
             if [ -f HUMAN_REVIEW_NEEDED.md ]; then
               echo ""
               echo "### ⚠️ Human Review Requested"
-              cat HUMAN_REVIEW_NEEDED.md
+              python3 "$REDACTOR" HUMAN_REVIEW_NEEDED.md
             fi
           } >> "$GITHUB_STEP_SUMMARY"

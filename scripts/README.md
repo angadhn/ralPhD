@@ -14,3 +14,4 @@ inlined into `tools/*.py` (see `tools/README.md`).
 | `tool_report.py` | Tool usage analysis from usage logs | operator (manual) |
 | `init-project.sh` | Scaffold a new project workspace (dirs, symlinks, launcher) | operator (manual) |
 | `archive.sh` | Archive completed thread, restore blank templates, reset iteration counter | operator (manual) |
+| `redact_secrets.py` | Redact secret-like content from stdin or files | workflow + operator |

@@ -23,6 +23,7 @@ set -euo pipefail
 # Usage: bash tests/test-workflow-local.sh
 
 RALPH_HOME="$(cd "$(dirname "$0")/.." && pwd)"
+REDACTOR="$RALPH_HOME/scripts/redact_secrets.py"
 source "$RALPH_HOME/lib/detect.sh"
 source "$RALPH_HOME/lib/config.sh"
 PARSER_FIXTURE_DIR="$RALPH_HOME/tests/fixtures/parser"
@@ -702,7 +703,35 @@ else
   fail "webhook script: should be non-fatal on failure"
 fi
 
-# 10f. Simulate webhook JSON payload construction
+# 10f. Verify redaction helper masks representative secrets
+if PYTHONPATH="$RALPH_HOME" python3 -c "
+from tools.redact import preview_text, redact_text
+
+sample = '''
+ANTHROPIC_API_KEY=sk-ant-abcdef1234567890
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.secretpayload1234567890
+ghp_abcdefghijklmnopqrstuvwxyz1234567890
+-----BEGIN OPENSSH PRIVATE KEY-----
+abc123
+-----END OPENSSH PRIVATE KEY-----
+'''.strip()
+redacted = redact_text(sample)
+assert 'sk-ant-' not in redacted
+assert 'Bearer eyJ' not in redacted
+assert 'ghp_' not in redacted
+assert 'BEGIN OPENSSH PRIVATE KEY' not in redacted
+assert '[REDACTED]' in redacted
+
+preview = preview_text('OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz1234567890')
+assert 'sk-proj-' not in preview
+assert '[REDACTED]' in preview
+" 2>/dev/null; then
+  pass "redaction helper: masks representative secrets"
+else
+  fail "redaction helper: failed to mask representative secrets"
+fi
+
+# 10g. Simulate webhook JSON payload construction
 WEBHOOK_TEST_DIR=$(mktemp -d)
 (
   cd "$WEBHOOK_TEST_DIR"
@@ -715,6 +744,7 @@ WEBHOOK_TEST_DIR=$(mktemp -d)
 **Last updated:** 2026-03-11
 **Last agent:** coder
 **Status:** testing
+Token: sk-ant-webhooksecret1234567890
 
 ## Knowledge State
 
@@ -739,11 +769,11 @@ CKPT
   INPUT_COMMIT_MODE="branch"
 
   STATUS="completed"
-  CHECKPOINT_SUMMARY=$(head -20 checkpoint.md | python3 -c "
+  CHECKPOINT_SUMMARY=$(head -20 checkpoint.md | python3 "$REDACTOR" | python3 -c "
 import sys, json
 print(json.dumps(sys.stdin.read()))" 2>/dev/null | sed 's/^"//;s/"$//')
 
-  LAST_TASK=$(grep -m1 '## Next Task' checkpoint.md -A2 2>/dev/null | tail -1 | sed 's/^ *//' || echo "")
+  LAST_TASK=$(grep -m1 '## Next Task' checkpoint.md -A2 2>/dev/null | tail -1 | sed 's/^ *//' | python3 "$REDACTOR" | tr -d '\n' || echo "")
   LAST_AGENT=$(grep -m1 '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null | sed 's/.*:\*\* *//' || echo "")
   TASKS_DONE=$(grep -c '| done |' checkpoint.md 2>/dev/null || echo "0")
   TASKS_TOTAL=$(grep -c '| done \|| pending \|| in.progress |' checkpoint.md 2>/dev/null || echo "0")
@@ -814,17 +844,19 @@ assert p['result']['tasks_total'] == 3, f'wrong tasks_total: {p[\"result\"][\"ta
 assert p['result']['review_needed'] == False, 'review_needed should be False'
 assert p['result']['review_body'] is None, 'review_body should be None when no review'
 assert 'webhook-test' in p['result']['checkpoint_summary'], 'checkpoint_summary should contain thread name'
+assert '[REDACTED]' in p['result']['checkpoint_summary'], 'checkpoint_summary should be redacted'
+assert 'sk-ant-webhooksecret' not in p['result']['checkpoint_summary'], 'checkpoint_summary leaked a token'
 assert p['run']['id'] == 'local', f'wrong run id'
 assert 'timestamp' in p, 'missing timestamp'
 " || exit 1
 )
 if [ $? -eq 0 ]; then
-  pass "webhook JSON payload: valid structure with correct field types"
+  pass "webhook JSON payload: valid structure with redacted summary"
 else
   fail "webhook JSON payload construction"
 fi
 
-# 10g. Test HMAC signature generation
+# 10h. Test HMAC signature generation
 (
   cd "$WEBHOOK_TEST_DIR"
   PAYLOAD='{"event":"ralph.run.completed","thread":"test"}'
@@ -852,7 +884,7 @@ else
   fail "HMAC signature generation"
 fi
 
-# 10h. Test review_needed payload variation
+# 10i. Test review_needed payload variation
 (
   cd "$WEBHOOK_TEST_DIR"
 
@@ -861,13 +893,14 @@ fi
 ## Phase 1 Complete
 
 All archive tasks done. Ready for Phase 2 (workflow creation).
+Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.reviewsecret1234567890
 REVIEW
 
   STATUS="review_needed"
   REVIEW_NEEDED="true"
-  REVIEW_BODY=$(python3 -c "
+  REVIEW_BODY=$(python3 "$REDACTOR" HUMAN_REVIEW_NEEDED.md | python3 -c "
 import sys, json
-print(json.dumps(open('HUMAN_REVIEW_NEEDED.md').read()))" 2>/dev/null | sed 's/^"//;s/"$//')
+print(json.dumps(sys.stdin.read()))" 2>/dev/null | sed 's/^"//;s/"$//')
 
   PAYLOAD=$(jq -n \
     --arg status "$STATUS" \
@@ -887,15 +920,17 @@ p = json.load(sys.stdin)
 assert p['status'] == 'review_needed', f'wrong status: {p[\"status\"]}'
 assert p['result']['review_needed'] == True, 'review_needed should be True'
 assert 'Phase 1 Complete' in p['result']['review_body'], 'review_body should contain review content'
+assert '[REDACTED]' in p['result']['review_body'], 'review_body should be redacted'
+assert 'Bearer eyJ' not in p['result']['review_body'], 'review_body leaked a bearer token'
 " || exit 1
 )
 if [ $? -eq 0 ]; then
-  pass "webhook payload: review_needed=true includes review body"
+  pass "webhook payload: review_needed=true includes redacted review body"
 else
   fail "webhook payload review_needed variation"
 fi
 
-# 10i. Verify summary step includes callback info
+# 10j. Verify summary step includes callback info and redaction
 if python3 -c "
 import yaml
 with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
@@ -904,16 +939,35 @@ for s in doc['jobs']['ralph-loop']['steps']:
     if 'summary' in s.get('name', '').lower():
         run = s.get('run', '')
         assert 'callback' in run.lower() or 'CALLBACK' in run, 'summary should mention callback'
+        assert 'redact_secrets.py' in run, 'summary should redact exported content'
         env = s.get('env', {})
         assert 'INPUT_CALLBACK_URL' in env, 'summary env missing INPUT_CALLBACK_URL'
         break
 " 2>/dev/null; then
-  pass "summary step: includes callback info"
+  pass "summary step: includes callback info and redaction"
 else
-  fail "summary step: missing callback info"
+  fail "summary step: missing callback info or redaction"
 fi
 
-# 10j. Verify webhook step comes before upload/summary (correct ordering)
+# 10k. Verify sanitized artifact preparation and upload path
+if python3 -c "
+import yaml
+with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
+    doc = yaml.safe_load(f)
+steps = doc['jobs']['ralph-loop']['steps']
+prep = next((s for s in steps if 'prepare sanitized artifact' in s.get('name', '').lower()), None)
+upload = next((s for s in steps if 'upload' in s.get('name', '').lower()), None)
+assert prep is not None, 'missing sanitized artifact preparation step'
+assert 'artifact-redacted' in prep.get('run', ''), 'prep step should build artifact-redacted bundle'
+assert upload is not None, 'missing upload step'
+assert upload.get('with', {}).get('path') == 'artifact-redacted/', 'upload should use sanitized artifact bundle'
+" 2>/dev/null; then
+  pass "artifact upload: sanitized bundle prepared and uploaded"
+else
+  fail "artifact upload: missing sanitized bundle"
+fi
+
+# 10l. Verify webhook step comes before upload/summary (correct ordering)
 if python3 -c "
 import yaml
 with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
@@ -932,6 +986,63 @@ assert webhook_idx < summary_idx, f'webhook (idx {webhook_idx}) should be before
   pass "webhook step: correctly ordered (after commit, before upload/summary)"
 else
   fail "webhook step ordering"
+fi
+
+# 10m. Simulate sanitized artifact bundle creation
+(
+  cd "$WEBHOOK_TEST_DIR"
+  mkdir -p ai-generated-outputs logs
+  cat > ai-generated-outputs/task.md << 'OUT'
+Agent note: ghp_abcdefghijklmnopqrstuvwxyz1234567890
+OUT
+  cat > logs/usage.jsonl << 'USAGE'
+{"result":"OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz1234567890"}
+USAGE
+
+  ARTIFACT_DIR="$WEBHOOK_TEST_DIR/artifact-redacted"
+  sanitize_copy() {
+    local src="$1"
+    local dst="$2"
+    mkdir -p "$(dirname "$dst")"
+    python3 "$REDACTOR" "$src" > "$dst"
+  }
+
+  rm -rf "$ARTIFACT_DIR"
+  mkdir -p "$ARTIFACT_DIR/ai-generated-outputs" "$ARTIFACT_DIR/logs"
+
+  for path in checkpoint.md implementation-plan.md HUMAN_REVIEW_NEEDED.md; do
+    if [ -f "$path" ]; then
+      sanitize_copy "$path" "$ARTIFACT_DIR/$path"
+    fi
+  done
+
+  while IFS= read -r path; do
+    sanitize_copy "$path" "$ARTIFACT_DIR/$path"
+  done < <(find ai-generated-outputs logs -type f | sort)
+
+  python3 -c "
+from pathlib import Path
+
+artifact = Path('$WEBHOOK_TEST_DIR/artifact-redacted')
+checkpoint = (artifact / 'checkpoint.md').read_text()
+review = (artifact / 'HUMAN_REVIEW_NEEDED.md').read_text()
+usage = (artifact / 'logs' / 'usage.jsonl').read_text()
+task = (artifact / 'ai-generated-outputs' / 'task.md').read_text()
+
+assert '[REDACTED]' in checkpoint
+assert 'sk-ant-webhooksecret' not in checkpoint
+assert '[REDACTED]' in review
+assert 'Bearer eyJ' not in review
+assert '[REDACTED]' in usage
+assert 'sk-proj-' not in usage
+assert '[REDACTED]' in task
+assert 'ghp_' not in task
+"
+)
+if [ $? -eq 0 ]; then
+  pass "sanitized artifact bundle: redacts checkpoint, review, logs, and AI outputs"
+else
+  fail "sanitized artifact bundle creation"
 fi
 
 rm -rf "$WEBHOOK_TEST_DIR"

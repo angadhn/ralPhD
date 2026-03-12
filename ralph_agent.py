@@ -21,6 +21,7 @@ import sys
 
 from pathlib import Path
 
+from tools.redact import preview_text, redact_text
 from tools import execute_tool, get_tools_for_agent
 from tools._pricing import PRICING
 from providers import (
@@ -192,14 +193,15 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
         for text in response.text_blocks:
             print(text)
         for tc in response.tool_calls:
-            print(f"  [tool] {tc.name}({json.dumps(tc.input, indent=None)})", file=sys.stderr)
+            tool_input = redact_text(json.dumps(tc.input, indent=None))
+            print(f"  [tool] {tc.name}({tool_input})", file=sys.stderr)
             tools_called.append(tc.name)
             try:
                 result = execute_tool(tc.name, tc.input)
             except Exception as e:
                 result = f"Tool error: {type(e).__name__}: {e}"
             result = truncate_result(result)
-            print(f"  [result] {result[:200]}{'...' if len(result) > 200 else ''}", file=sys.stderr)
+            print(f"  [result] {preview_text(result)}", file=sys.stderr)
             tool_results.append({
                 "type": "tool_result",
                 "tool_use_id": tc.id,
@@ -232,7 +234,7 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
         "duration_ms": duration_ms,
         "total_cost_usd": total_cost_usd,
         "tools_called": tools_called,
-        "result": response.text_blocks[0] if response.text_blocks else "",
+        "result": preview_text(response.text_blocks[0] if response.text_blocks else ""),
         "usage": {
             "input_tokens": total_input,
             "output_tokens": total_output,
@@ -248,10 +250,11 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
             }
         },
     }
+    usage_json = json.dumps(usage)
     if output_json:
         with open(output_json, "w") as f:
-            json.dump(usage, f)
-    print(json.dumps(usage), file=sys.stderr)
+            f.write(redact_text(usage_json))
+    print(redact_text(usage_json), file=sys.stderr)
 
 
 # ── CLI ────────────────────────────────────────────────────────
