@@ -65,7 +65,7 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `-p` | off | Headless mode — pipes prompt to Claude, logs output |
+| `-p` | off | Headless mode — pipes prompt to agent runner, logs output |
 | `plan` | — | Use plan-mode prompt instead of build |
 | `build` | default | Build mode (explicit, same as no flag) |
 | `N` | unlimited | Max iterations before stopping |
@@ -80,7 +80,11 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 | `RALPH_MODEL` | `claude-opus-4-6` | Which model to use (supports `claude-*`, `gpt-*`, `o3`, `o4-mini`) |
 | `CLAUDE_MODEL` | — | Alias for `RALPH_MODEL` (backward compatible) |
 | `RALPH_HOME` | script directory | Path to the ralPhD framework repo |
-| `OPENAI_API_KEY` | — | Required when using OpenAI models (`gpt-*`, `o3`, `o4-mini`) |
+| `OPENAI_API_KEY` | — | OpenAI API key (or use `codex login` — see auth below) |
+
+**OpenAI auth:** Ralph auto-discovers credentials in this order: `OPENAI_API_KEY` env var → Codex CLI auth file (`~/.codex/auth.json`) → Codex CLI keychain entry. If you have Codex CLI installed, just run `codex login` and Ralph will pick up the token automatically — no env var needed.
+
+**Interactive mode:** With Anthropic models, interactive mode uses the `claude` CLI (full TUI). With OpenAI models, interactive mode routes through `ralph_agent.py` (streaming output, no TUI). Headless mode (`-p`) uses `ralph_agent.py` for all providers.
 
 ## Agents
 
@@ -305,7 +309,7 @@ gh workflow run ralph-run.yml \
 | Secret | Required | Description |
 |--------|----------|-------------|
 | `ANTHROPIC_API_KEY` | yes (Anthropic models) | API key for Claude |
-| `OPENAI_API_KEY` | yes (OpenAI models) | API key for GPT-4o, o3, o4-mini, etc. |
+| `OPENAI_API_KEY` | yes (OpenAI models) | API key for GPT-4o, o3, o4-mini (or use Codex CLI auth locally) |
 | `TARGET_REPO_TOKEN` | conditional | PAT with `contents:write` on target repo |
 | `CALLBACK_SECRET` | no | HMAC-SHA256 key for signing webhook payloads |
 

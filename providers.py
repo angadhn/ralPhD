@@ -120,14 +120,57 @@ def _create_openai_client():
             "OpenAI support requires the openai package. Install it with: pip install openai"
         )
 
+    # 1. Explicit API key takes priority
     api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "No OpenAI auth found. Set the OPENAI_API_KEY environment variable."
-        )
+    if api_key:
+        print("Auth: using OPENAI_API_KEY", file=sys.stderr)
+        return openai.OpenAI(api_key=api_key)
 
-    print("Auth: using OPENAI_API_KEY", file=sys.stderr)
-    return openai.OpenAI(api_key=api_key)
+    # 2. Try Codex CLI auth file (~/.codex/auth.json)
+    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
+    auth_file = codex_home / "auth.json"
+    if auth_file.exists():
+        try:
+            creds = json.loads(auth_file.read_text())
+            # API key mode
+            if creds.get("openai_api_key"):
+                print("Auth: using Codex CLI API key from ~/.codex/auth.json", file=sys.stderr)
+                return openai.OpenAI(api_key=creds["openai_api_key"])
+            # ChatGPT OAuth mode
+            token = (creds.get("tokens") or {}).get("access_token")
+            if token:
+                print("Auth: using Codex CLI OAuth token from ~/.codex/auth.json", file=sys.stderr)
+                return openai.OpenAI(api_key=token)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # 3. Try Codex CLI keychain (macOS, service "Codex Auth")
+    try:
+        import hashlib
+        codex_canonical = str(codex_home.resolve())
+        account_hash = hashlib.sha256(codex_canonical.encode()).hexdigest()[:16]
+        account_key = f"cli|{account_hash}"
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", "Codex Auth", "-a", account_key, "-w"],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            creds = json.loads(result.stdout.strip())
+            if creds.get("openai_api_key"):
+                print("Auth: using Codex CLI API key from keychain", file=sys.stderr)
+                return openai.OpenAI(api_key=creds["openai_api_key"])
+            token = (creds.get("tokens") or {}).get("access_token")
+            if token:
+                print("Auth: using Codex CLI OAuth token from keychain", file=sys.stderr)
+                return openai.OpenAI(api_key=token)
+    except Exception:
+        pass
+
+    raise RuntimeError(
+        "No OpenAI auth found. Either:\n"
+        "  - Set OPENAI_API_KEY, or\n"
+        "  - Run `codex login` (reads ~/.codex/auth.json or macOS keychain)"
+    )
 
 
 # ── Tool schema translation ──────────────────────────────────

@@ -18,7 +18,7 @@ These helpers keep the shell logic separated by concern so the loop script can s
 | `config.sh` | CLI arg parsing, `RALPH_HOME` resolution, architecture resolution, bootstrap state |
 | `detect.sh` | Parse `checkpoint.md` / `implementation-plan.md` for next-task and phase information |
 | `monitor.sh` | Context budgeting, yield recommendation, heartbeat/status output |
-| `exec.sh` | Model resolution and parallel-phase execution helpers |
+| `exec.sh` | Model resolution (`resolve_model`, `is_openai_model`, `resolve_context_window`) and parallel-phase execution |
 | `post-run.sh` | Usage logging, eval capture, human-review gate, changelog/circuit-breaker helpers |
 
 Design notes:
