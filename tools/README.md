@@ -10,7 +10,11 @@ Based on [ghuntley's agent architecture](https://ghuntley.com/agent) ([repo](htt
 |--------|-------|-------|
 | `core.py` | read_file, write_file, bash | |
 | `search.py` | list_files, code_search | |
-| `checks.py` | check_language, check_journal, check_figure, citation_lint/lookup/verify/verify_all/manifest | Inlined from scripts; citation handlers use `_citation.py` |
+| `checks.py` | *(compatibility shim)* | Re-exports the split check/citation tool modules so existing imports keep working |
+| `check_language.py` | check_language | LaTeX/Markdown prose checks |
+| `check_journal.py` | check_journal | Word count, page estimate, bibliography field checks |
+| `check_figure.py` | check_figure | Raster/vector figure compliance checks |
+| `citations.py` | citation_lint, citation_lookup, citation_verify, citation_verify_all, citation_manifest | Citation handlers built on `_citation.py` |
 | `claims.py` | check_claims | Cross-ref .tex + evidence-ledger + .bib |
 | `pdf.py` | pdf_metadata, extract_figure | Inlined from scripts; fitz lazy-imported |
 | `download.py` | citation_download | Unpaywall + SciHub fallback; uses `_citation.manifest_add` |

@@ -148,7 +148,7 @@ Full reflections go to `ai-generated-outputs/reflections/reflection-iter-N.md`. 
 
 ## Usage tracking
 
-Every iteration logs token usage and cost to `logs/usage.jsonl`. In headless mode (`-p`), usage is extracted from Claude's `--output-format json` output. In interactive mode, usage is extracted from the session JSONL file via `scripts/extract_session_usage.py`.
+Every iteration logs token usage and cost to `logs/usage.jsonl`. In headless mode (`-p`), usage is written by `ralph_agent.py` to a machine-readable JSON file that `ralph-loop.sh` appends to the usage log. In interactive mode, usage is extracted from the Claude session JSONL file via `scripts/extract_session_usage.py`.
 
 Run `python3 scripts/usage_report.py` to see a summary of token usage and costs across all iterations.
 
@@ -159,6 +159,12 @@ Run `python3 scripts/usage_report.py` to see a summary of token usage and costs 
 ```
 ralPhD/
 ├── ralph-loop.sh               # The loop (shell infrastructure)
+├── lib/                        # Sourced shell helpers for the loop
+│   ├── config.sh               # CLI parsing, env/bootstrap, architecture resolution
+│   ├── detect.sh               # Next-task parsing, phase detection, task collection
+│   ├── monitor.sh              # Context budgeting and heartbeat/status monitoring
+│   ├── exec.sh                 # Model resolution and parallel execution helpers
+│   └── post-run.sh             # Usage logging, eval capture, human-review gate, circuit breaker
 ├── ralph_agent.py              # Python agent runner (replaces claude -p)
 ├── prompt-build.md             # Build-mode dispatcher
 ├── prompt-plan.md              # Plan-mode dispatcher
@@ -168,7 +174,11 @@ ralPhD/
 ├── tools/                      # Tool registry + per-agent tool implementations
 │   ├── __init__.py             # Merged registry, AGENT_TOOLS, dispatch
 │   ├── core.py                 # read_file, write_file, bash
-│   ├── checks.py               # check_language, citation_lint/lookup/verify/manifest, citation_verify_all
+│   ├── checks.py               # Compatibility shim over the check/citation modules
+│   ├── check_language.py       # Language-quality checks
+│   ├── check_journal.py        # Journal-compliance checks
+│   ├── check_figure.py         # Figure-compliance checks
+│   ├── citations.py            # citation_lint/lookup/verify/verify_all/manifest
 │   ├── claims.py               # check_claims (cross-ref .tex + evidence-ledger + .bib)
 │   ├── pdf.py                  # pdf_metadata, extract_figure
 │   ├── download.py             # citation_download
@@ -208,7 +218,7 @@ When running from the ralPhD repo directly, framework and workspace files coexis
 
 ## Tool registry
 
-`ralph_agent.py` is a thin Python runner (~200 lines) that replaces `claude -p` inside `ralph-loop.sh`. It gives each agent a curated tool set instead of Claude Code's full ~20+ built-in tools.
+`ralph_agent.py` is a thin Python runner that replaces `claude -p` inside `ralph-loop.sh`. It gives each agent a curated tool set instead of Claude Code's full ~20+ built-in tools.
 
 Tools are defined in `tools/` and registered per-agent in `tools/__init__.py`:
 
@@ -227,7 +237,7 @@ Tools are defined in `tools/` and registered per-agent in `tools/__init__.py`:
 | figure-stylist | check_figure |
 | coder | (essentials only) |
 
-Every agent gets 5 essentials: `read_file`, `write_file`, `bash`, `list_files`, `code_search`. 17 tools total across 7 modules.
+Every agent gets 5 essentials: `read_file`, `write_file`, `bash`, `list_files`, `code_search`. 17 tools total, with `tools/checks.py` kept as a compatibility shim over the split check modules.
 
 Based on [ghuntley's agent architecture](https://ghuntley.com/agent): the agent = the loop + tool registry, the prompt = behavioral guidance.
 
