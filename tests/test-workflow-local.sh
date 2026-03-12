@@ -364,7 +364,7 @@ sys.path.insert(0, '$RALPH_HOME')
 from tools import TOOLS, AGENT_TOOLS, SERVER_TOOLS, get_tools_for_agent
 
 # All 21 tools should be registered
-assert len(TOOLS) == 21, f'Expected 21 tools, got {len(TOOLS)}'
+assert len(TOOLS) == 22, f'Expected 22 tools, got {len(TOOLS)}'
 
 # Every tool in AGENT_TOOLS must exist in TOOLS or SERVER_TOOLS
 for agent, tool_list in AGENT_TOOLS.items():
@@ -377,9 +377,9 @@ for agent in AGENT_TOOLS:
     assert len(names) > 0, f'Agent {agent} has no tools'
     assert len(schemas) == len(names), f'Schema count mismatch for {agent}'
 " 2>/dev/null; then
-  pass "tools/__init__.py: all 21 tools load, agent registries valid"
+  pass "tools/__init__.py: all 22 tools load, agent registries valid"
 else
-  fail "tools/__init__.py: all 21 tools load, agent registries valid"
+  fail "tools/__init__.py: all 22 tools load, agent registries valid"
 fi
 
 # Test checks.py, pdf.py, download.py all use the shared _scripts_dir

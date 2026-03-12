@@ -342,10 +342,16 @@ def _convert_messages_to_openai(messages: list[dict]) -> list[dict]:
             # Anthropic tool results: [{"type": "tool_result", ...}]
             if isinstance(content, list) and content and isinstance(content[0], dict) and content[0].get("type") == "tool_result":
                 for tr in content:
+                    raw_content = tr.get("content", "")
+                    if isinstance(raw_content, list):
+                        text_parts = [b["text"] for b in raw_content if isinstance(b, dict) and b.get("type") == "text"]
+                        oai_content = "\n".join(text_parts) if text_parts else "(image content)"
+                    else:
+                        oai_content = raw_content
                     oai_messages.append({
                         "role": "tool",
                         "tool_call_id": tr["tool_use_id"],
-                        "content": tr.get("content", ""),
+                        "content": oai_content,
                     })
             else:
                 oai_messages.append({"role": "user", "content": content})

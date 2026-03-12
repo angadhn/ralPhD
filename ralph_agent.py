@@ -202,13 +202,20 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
                 result = execute_tool(tc.name, tc.input)
             except Exception as e:
                 result = f"Tool error: {type(e).__name__}: {e}"
-            result = truncate_result(result)
-            print(f"  [result] {preview_text(result)}", file=sys.stderr)
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": tc.id,
-                "content": result,
-            })
+            if isinstance(result, list):
+                # Multimodal result (image + text content blocks)
+                text_parts = [b["text"] for b in result if b.get("type") == "text"]
+                log_preview = "; ".join(text_parts) if text_parts else "(image content)"
+                print(f"  [result] {preview_text(log_preview)}", file=sys.stderr)
+                tool_results.append({"type": "tool_result", "tool_use_id": tc.id, "content": result})
+            else:
+                result = truncate_result(result)
+                print(f"  [result] {preview_text(result)}", file=sys.stderr)
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tc.id,
+                    "content": result,
+                })
 
         # If no tools were called, agent is done
         if not tool_results:

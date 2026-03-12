@@ -3,6 +3,7 @@
 All implementation is inline — no subprocess calls.
 """
 
+import base64
 import io
 import json
 import math
@@ -284,6 +285,38 @@ def extract_page_as_image(pdf_path: str, page_num: int, output_path: str, dpi: i
     return result
 
 
+def _handle_view_pdf_page(inp):
+    """Render a PDF page as an image and return as content blocks."""
+    import fitz
+
+    pdf_path = inp["pdf_path"]
+    page = inp["page"]
+    doc = fitz.open(pdf_path)
+    if page < 1 or page > len(doc):
+        doc.close()
+        return f"Error: Page {page} doesn't exist (PDF has {len(doc)} pages)"
+
+    # Render at 150 DPI, cap longest side at 1600px
+    dpi = 150
+    zoom = dpi / 72
+    mat = fitz.Matrix(zoom, zoom)
+    pix = doc[page - 1].get_pixmap(matrix=mat)
+
+    if max(pix.width, pix.height) > 1600:
+        scale = 1600 / max(pix.width, pix.height)
+        mat = fitz.Matrix(zoom * scale, zoom * scale)
+        pix = doc[page - 1].get_pixmap(matrix=mat)
+
+    png_bytes = pix.tobytes("png")
+    doc.close()
+    b64 = base64.b64encode(png_bytes).decode("ascii")
+
+    return [
+        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
+        {"type": "text", "text": f"Page {page} of {Path(pdf_path).name} ({pix.width}x{pix.height}, {len(png_bytes)//1024}KB)"},
+    ]
+
+
 def _handle_pdf_metadata(inp):
     meta = get_fast_metadata(inp["pdf_path"])
     return json.dumps(meta, indent=2)
@@ -347,5 +380,23 @@ TOOLS = {
             "required": ["pdf_path"],
         },
         "function": _handle_extract_figure,
+    },
+    "view_pdf_page": {
+        "name": "view_pdf_page",
+        "description": (
+            "Render a PDF page as a PNG image and return it as visual content. "
+            "Use this to inspect figures, equations, layouts, and other visual elements. "
+            "Returns an image content block that Claude can see directly. "
+            "Cost: ~3,400 tokens per page — use for targeted inspection, not bulk reading."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pdf_path": {"type": "string", "description": "Path to the PDF file"},
+                "page": {"type": "integer", "description": "Page number to render (1-indexed)"},
+            },
+            "required": ["pdf_path", "page"],
+        },
+        "function": _handle_view_pdf_page,
     },
 }

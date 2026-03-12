@@ -39,9 +39,9 @@ AGENT_TOOLS = {
     "paper-writer": _ESSENTIALS + ["bash", "check_language", "citation_lint"],
     "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure", "check_claims", "citation_verify_all"],
     "scout": _ESSENTIALS + ["web_search", "pdf_metadata", "citation_lookup", "citation_verify", "citation_verify_all", "citation_manifest", "citation_download"],
-    "deep-reader": _ESSENTIALS + ["pdf_metadata", "extract_figure"],
+    "deep-reader": _ESSENTIALS + ["pdf_metadata", "extract_figure", "view_pdf_page"],
     "research-coder": _ESSENTIALS + ["bash"],
-    "figure-stylist": _ESSENTIALS + ["check_figure"],
+    "figure-stylist": _ESSENTIALS + ["check_figure", "view_pdf_page"],
     "editor": _ESSENTIALS + ["check_claims", "check_language", "citation_lint", "citation_verify_all"],
     "coherence-reviewer": _ESSENTIALS + ["check_claims", "check_language"],
     "provocateur": _ESSENTIALS + [],
@@ -61,7 +61,7 @@ def api_schema(tool: dict) -> dict:
     return {k: v for k, v in tool.items() if k != "function"}
 
 
-def execute_tool(name: str, tool_input: dict) -> str:
+def execute_tool(name: str, tool_input: dict):
     """Dispatch a tool call to its colocated handler."""
     tool = TOOLS.get(name)
     if not tool:
