@@ -29,6 +29,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 USAGE_LOG = PROJECT_ROOT / "logs" / "usage.jsonl"
 EVAL_LOG = PROJECT_ROOT / "logs" / "eval.jsonl"
 CHECKPOINT = PROJECT_ROOT / "checkpoint.md"
@@ -236,7 +237,10 @@ def main():
 
     # If we don't have a context reading from the file, estimate from tokens
     if peak_ctx == 0 and usage.get("input_tokens", 0) > 0:
-        peak_ctx = int(usage["input_tokens"] / 200_000 * 100)
+        from providers import get_context_window
+        model = usage.get("model", "claude-opus-4-6")
+        ctx_window = get_context_window(model)
+        peak_ctx = int(usage["input_tokens"] / ctx_window * 100)
 
     # 5. Task completion
     task_done, task_name = get_task_completion(args.iteration)

@@ -17,15 +17,17 @@ Usage:
 import argparse
 import json
 import os
-import subprocess
 import sys
 
 from pathlib import Path
 
-import anthropic
-
 from tools import execute_tool, get_tools_for_agent
 from tools._pricing import PRICING
+from providers import (
+    detect_provider, create_client, call_model,
+    format_assistant_message, format_tool_results,
+    get_transient_errors, get_status_error_class,
+)
 
 
 def truncate_result(result: str, limit: int = 50000) -> str:
@@ -116,52 +118,19 @@ def build_path_preamble(ralph_home: Path) -> str:
 
 # ── Agent loop ─────────────────────────────────────────────────
 
-def get_client() -> anthropic.Anthropic:
-    """Create Anthropic client. Tries: 1) ANTHROPIC_API_KEY, 2) keychain.
-
-    OAuth tokens (sk-ant-oat01-...) must be sent via X-Api-Key header, not
-    Authorization: Bearer. The API rejects Bearer-based OAuth with
-    "OAuth authentication is currently not supported." Passing the token
-    as api_key routes it through X-Api-Key, which works.
-
-    Keychain is preferred because OAuth tokens expire and get refreshed —
-    the keychain always has the current token from `claude login`.
-    """
-    # 1. Explicit API key takes priority (e.g. CI, or user preference)
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        print("Auth: using ANTHROPIC_API_KEY", file=sys.stderr)
-        return anthropic.Anthropic()
-
-    # 2. Otherwise, read OAuth token from macOS keychain (always fresh)
-    try:
-        result = subprocess.run(
-            ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
-            capture_output=True, text=True,
-        )
-        if result.returncode == 0:
-            creds = json.loads(result.stdout.strip())
-            token = creds.get("claudeAiOauth", {}).get("accessToken")
-            if token:
-                print("Auth: using Claude Code OAuth token from keychain", file=sys.stderr)
-                return anthropic.Anthropic(api_key=token)
-    except Exception:
-        pass
-
-    raise RuntimeError(
-        "No auth found. Set ANTHROPIC_API_KEY or run `claude login`."
-    )
-
-
 def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
               max_tokens: int, output_json: str = None):
     import time as _time
     start_ms = int(_time.time() * 1000)
-    client = get_client()
+
+    provider = detect_provider(model)
+    client = create_client(provider)
 
     # Build tool list for this agent
     tool_names, tools = get_tools_for_agent(agent_name)
 
     print(f"Agent: {agent_name}", file=sys.stderr)
+    print(f"Provider: {provider}", file=sys.stderr)
     print(f"Tools: {', '.join(tool_names)}", file=sys.stderr)
     print(f"Model: {model}", file=sys.stderr)
     print("", file=sys.stderr)
@@ -174,80 +143,75 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
     total_cache_read = 0
     tools_called = []
 
+    _TRANSIENT = get_transient_errors(provider)
+    _STATUS_ERROR = get_status_error_class(provider)
+    _MAX_RETRIES = 3
+    _RETRY_DELAYS = [5, 15, 45]
+
     while True:
         # Retry transient API errors (rate limit, overload, network).
         # Non-transient errors (auth, bad request) propagate immediately.
-        _TRANSIENT = (
-            anthropic.RateLimitError,
-            anthropic.APIConnectionError,
-        )
-        _MAX_RETRIES = 3
-        _RETRY_DELAYS = [5, 15, 45]
-
         response = None
         for _attempt in range(_MAX_RETRIES + 1):
             try:
-                response = client.messages.create(
-                    model=model,
-                    max_tokens=max_tokens,
-                    system=system_prompt,
-                    tools=tools,
-                    messages=messages,
+                response = call_model(
+                    client, provider, model, system_prompt,
+                    tools, messages, max_tokens,
                 )
                 break
-            except anthropic.APIStatusError as e:
-                # 500 = internal server error, 529 = overloaded — both transient
-                if e.status_code in (500, 529) and _attempt < _MAX_RETRIES:
-                    delay = _RETRY_DELAYS[_attempt]
-                    print(f"  [retry] API error ({e.status_code}), attempt {_attempt + 1}/{_MAX_RETRIES}, waiting {delay}s", file=sys.stderr)
-                    _time.sleep(delay)
-                    continue
-                raise
-            except _TRANSIENT as e:
-                if _attempt < _MAX_RETRIES:
-                    delay = _RETRY_DELAYS[_attempt]
-                    print(f"  [retry] {type(e).__name__}, attempt {_attempt + 1}/{_MAX_RETRIES}, waiting {delay}s", file=sys.stderr)
-                    _time.sleep(delay)
-                    continue
+            except Exception as e:
+                if _STATUS_ERROR and isinstance(e, _STATUS_ERROR):
+                    if e.status_code in (500, 529) and _attempt < _MAX_RETRIES:
+                        delay = _RETRY_DELAYS[_attempt]
+                        print(f"  [retry] API error ({e.status_code}), attempt {_attempt + 1}/{_MAX_RETRIES}, waiting {delay}s", file=sys.stderr)
+                        _time.sleep(delay)
+                        continue
+                    raise
+                if _TRANSIENT and isinstance(e, _TRANSIENT):
+                    if _attempt < _MAX_RETRIES:
+                        delay = _RETRY_DELAYS[_attempt]
+                        print(f"  [retry] {type(e).__name__}, attempt {_attempt + 1}/{_MAX_RETRIES}, waiting {delay}s", file=sys.stderr)
+                        _time.sleep(delay)
+                        continue
+                    raise
                 raise
 
         if response is None:
             raise RuntimeError("API call failed after all retries")
         num_turns += 1
-        total_input += response.usage.input_tokens
-        total_output += response.usage.output_tokens
-        total_cache_create += getattr(response.usage, 'cache_creation_input_tokens', 0) or 0
-        total_cache_read += getattr(response.usage, 'cache_read_input_tokens', 0) or 0
+        total_input += response.input_tokens
+        total_output += response.output_tokens
+        total_cache_create += response.cache_creation_input_tokens
+        total_cache_read += response.cache_read_input_tokens
 
         # Add assistant response to conversation
-        messages.append({"role": "assistant", "content": response.content})
+        messages.append(format_assistant_message(provider, response))
 
-        # Process response blocks
+        # Process response
         tool_results = []
-        for block in response.content:
-            if block.type == "text":
-                print(block.text)
-            elif block.type == "tool_use":
-                print(f"  [tool] {block.name}({json.dumps(block.input, indent=None)})", file=sys.stderr)
-                tools_called.append(block.name)
-                try:
-                    result = execute_tool(block.name, block.input)
-                except Exception as e:
-                    result = f"Tool error: {type(e).__name__}: {e}"
-                result = truncate_result(result)
-                print(f"  [result] {result[:200]}{'...' if len(result) > 200 else ''}", file=sys.stderr)
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": result,
-                })
+        for text in response.text_blocks:
+            print(text)
+        for tc in response.tool_calls:
+            print(f"  [tool] {tc.name}({json.dumps(tc.input, indent=None)})", file=sys.stderr)
+            tools_called.append(tc.name)
+            try:
+                result = execute_tool(tc.name, tc.input)
+            except Exception as e:
+                result = f"Tool error: {type(e).__name__}: {e}"
+            result = truncate_result(result)
+            print(f"  [result] {result[:200]}{'...' if len(result) > 200 else ''}", file=sys.stderr)
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": tc.id,
+                "content": result,
+            })
 
         # If no tools were called, agent is done
         if not tool_results:
             break
 
         # Feed results back, loop again
-        messages.append({"role": "user", "content": tool_results})
+        messages.append(format_tool_results(provider, tool_results))
 
     duration_ms = int(_time.time() * 1000) - start_ms
 
@@ -268,7 +232,7 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
         "duration_ms": duration_ms,
         "total_cost_usd": total_cost_usd,
         "tools_called": tools_called,
-        "result": response.content[0].text if response.content and response.content[0].type == "text" else "",
+        "result": response.text_blocks[0] if response.text_blocks else "",
         "usage": {
             "input_tokens": total_input,
             "output_tokens": total_output,

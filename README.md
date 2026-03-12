@@ -77,8 +77,9 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CLAUDE_MODEL` | `claude-opus-4-6` | Which model to use |
+| `CLAUDE_MODEL` | `claude-opus-4-6` | Which model to use (supports `claude-*`, `gpt-*`, `o3`, `o4-mini`) |
 | `RALPH_HOME` | script directory | Path to the ralPhD framework repo |
+| `OPENAI_API_KEY` | — | Required when using OpenAI models (`gpt-*`, `o3`, `o4-mini`) |
 
 ## Agents
 
@@ -166,6 +167,7 @@ ralPhD/
 │   ├── exec.sh                 # Model resolution and parallel execution helpers
 │   └── post-run.sh             # Usage logging, eval capture, human-review gate, circuit breaker
 ├── ralph_agent.py              # Python agent runner (replaces claude -p)
+├── providers.py                # Provider abstraction (Anthropic + OpenAI)
 ├── prompt-build.md             # Build-mode dispatcher
 ├── prompt-plan.md              # Plan-mode dispatcher
 ├── prompt-build-single.md      # Single-agent combined prompt (benchmarking)
@@ -301,7 +303,8 @@ gh workflow run ralph-run.yml \
 
 | Secret | Required | Description |
 |--------|----------|-------------|
-| `ANTHROPIC_API_KEY` | yes | API key for Claude |
+| `ANTHROPIC_API_KEY` | yes (Anthropic models) | API key for Claude |
+| `OPENAI_API_KEY` | yes (OpenAI models) | API key for GPT-4o, o3, o4-mini, etc. |
 | `TARGET_REPO_TOKEN` | conditional | PAT with `contents:write` on target repo |
 | `CALLBACK_SECRET` | no | HMAC-SHA256 key for signing webhook payloads |
 

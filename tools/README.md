@@ -19,6 +19,8 @@ Based on [ghuntley's agent architecture](https://ghuntley.com/agent) ([repo](htt
 | `pdf.py` | pdf_metadata, extract_figure | Inlined from scripts; fitz lazy-imported |
 | `download.py` | citation_download | Unpaywall + SciHub fallback; uses `_citation.manifest_add` |
 | `_citation.py` | *(internal)* | Shared citation functions (17 funcs from former `scripts/citation_tools.py`) |
+| `_pricing.py` | *(internal)* | Shared pricing table for Anthropic + OpenAI models |
+| `_helpers.py` | *(internal)* | Shared helper utilities |
 | `_paths.py` | *(internal)* | `_scripts_dir()` path resolution |
 
 `__init__.py` merges all modules into a single TOOLS dict, defines AGENT_TOOLS (per-agent tool assignments), and provides `execute_tool()` and `get_tools_for_agent()` for dispatch. 17 tools total, 5 essentials shared by all agents.
