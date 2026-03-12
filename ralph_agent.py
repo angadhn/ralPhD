@@ -260,8 +260,9 @@ def main():
     parser = argparse.ArgumentParser(description="Ralph agent runner")
     parser.add_argument("--agent", required=True, help="Agent name (e.g., paper-writer)")
     parser.add_argument("--task", required=True, help="Task prompt (or - to read from stdin)")
-    parser.add_argument("--model", default=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
-                        help="Model to use")
+    default_model = os.environ.get("RALPH_MODEL") or os.environ.get("CLAUDE_MODEL", "claude-opus-4-6")
+    parser.add_argument("--model", default=default_model,
+                        help="Model to use (auto-detects provider from name)")
     parser.add_argument("--max-tokens", type=int, default=None, help="Max output tokens (default: from context-budgets.json or 8096)")
     parser.add_argument("--output-json", help="Write usage JSON to this path (compatible with ralph-loop.sh)")
     args = parser.parse_args()

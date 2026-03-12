@@ -9,9 +9,26 @@ resolve_model() {
     model=$(jq -r --arg a "$agent_name" '.[$a].model // empty' "$budgets_file" 2>/dev/null || true)
   fi
   if [ -z "$model" ]; then
-    model="${CLAUDE_MODEL:-claude-opus-4-6}"
+    # RALPH_MODEL takes priority, falls back to CLAUDE_MODEL for backward compat
+    model="${RALPH_MODEL:-${CLAUDE_MODEL:-claude-opus-4-6}}"
   fi
   echo "$model"
+}
+
+is_openai_model() {
+  local model="${1:-}"
+  case "$model" in
+    gpt-*|o1*|o3*|o4*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+resolve_context_window() {
+  local model="${1:-claude-opus-4-6}"
+  case "$model" in
+    gpt-4o|gpt-4o-mini) echo 128000 ;;
+    *) echo 200000 ;;
+  esac
 }
 
 run_parallel_phase() {

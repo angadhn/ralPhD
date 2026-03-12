@@ -136,7 +136,8 @@ context efficiency, and task completion.
 - **What:** Highest context window utilization observed during the iteration.
 - **How collected:** Read from `/tmp/ralph-context-pct` at iteration end,
   or from the budget info file's `context_pct` field. Falls back to
-  estimating from `input_tokens / 200000 * 100`.
+  estimating from `input_tokens / context_window * 100` (context window
+  is model-aware: 200k for Claude/o3/o4-mini, 128k for GPT-4o).
 - **Unit:** Integer percentage (0–100).
 - **Good:** < 55 (below yield threshold). Iterations that hit the yield
   threshold (55%) may have been truncated.

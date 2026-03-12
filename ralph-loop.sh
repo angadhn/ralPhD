@@ -173,7 +173,8 @@ while true; do
       if [ -x "$_s" ]; then MONITOR_SCRIPT="$_s"; break; fi
     done
     if [ -n "$MONITOR_SCRIPT" ]; then
-      bash "$MONITOR_SCRIPT" "$CONTEXT_THRESHOLD" 200000 &
+      CONTEXT_WINDOW=$(resolve_context_window "$CLAUDE_MODEL")
+      bash "$MONITOR_SCRIPT" "$CONTEXT_THRESHOLD" "$CONTEXT_WINDOW" &
       JSONL_MONITOR_PID=$!
       echo "  JSONL context monitor started (pid $JSONL_MONITOR_PID)"
     fi
@@ -260,31 +261,51 @@ while true; do
       exit 0
     fi
   else
-    # Interactive: claude gets the terminal, monitor runs in background
-    # Start a subshell monitor that will print starting context + watch threshold
-    # Use the same monitor_context function (runs in background)
+    # Interactive: monitor runs in background, agent gets the terminal
     monitor_context "$$" "$ITER_START" "$IGNORE_UNTIL" "$CURRENT_AGENT" &
     MONITOR_PID=$!
 
     CLAUDE_MODEL=$(resolve_model "$CURRENT_AGENT")
-    SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-    echo "$PROMPT" | claude --model "$CLAUDE_MODEL" --session-id "$SESSION_ID" --dangerously-skip-permissions
-    EXIT_CODE=$?
 
-    kill "$MONITOR_PID" 2>/dev/null || true
-    wait "$MONITOR_PID" 2>/dev/null || true
-    MONITOR_PID=""
+    if is_openai_model "$CLAUDE_MODEL"; then
+      # OpenAI models: use ralph_agent.py (no claude CLI equivalent)
+      echo "  Model: $CLAUDE_MODEL (OpenAI — using ralph_agent.py)"
+      echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json
+      EXIT_CODE=$?
 
-    # Log interactive session usage
-    AGENT_NAME=$(extract_agent_name)
-    PROJECT_DIR=$(echo "$PWD" | tr '/' '-' | sed 's/^-//')
-    SESSION_FILE="$HOME/.claude/projects/${PROJECT_DIR}/${SESSION_ID}.jsonl"
-    if [ -f "$SESSION_FILE" ]; then
-      log_interactive_session_usage "$SESSION_FILE" "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
-        && echo "  Usage logged to $USAGE_LOG" \
-        || echo "  (could not log usage data)"
+      kill "$MONITOR_PID" 2>/dev/null || true
+      wait "$MONITOR_PID" 2>/dev/null || true
+      MONITOR_PID=""
+
+      # Log usage
+      AGENT_NAME=$(extract_agent_name)
+      if [ -f /tmp/ralph-output.json ]; then
+        print_output_json_summary /tmp/ralph-output.json
+        log_usage_from_output_json /tmp/ralph-output.json "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
+          && echo "  Usage logged to $USAGE_LOG" \
+          || echo "  (could not log usage data)"
+      fi
     else
-      echo "  (session file not found — usage not logged)"
+      # Anthropic models: use claude CLI for interactive TUI
+      SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+      echo "$PROMPT" | claude --model "$CLAUDE_MODEL" --session-id "$SESSION_ID" --dangerously-skip-permissions
+      EXIT_CODE=$?
+
+      kill "$MONITOR_PID" 2>/dev/null || true
+      wait "$MONITOR_PID" 2>/dev/null || true
+      MONITOR_PID=""
+
+      # Log interactive session usage
+      AGENT_NAME=$(extract_agent_name)
+      PROJECT_DIR=$(echo "$PWD" | tr '/' '-' | sed 's/^-//')
+      SESSION_FILE="$HOME/.claude/projects/${PROJECT_DIR}/${SESSION_ID}.jsonl"
+      if [ -f "$SESSION_FILE" ]; then
+        log_interactive_session_usage "$SESSION_FILE" "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
+          && echo "  Usage logged to $USAGE_LOG" \
+          || echo "  (could not log usage data)"
+      else
+        echo "  (session file not found — usage not logged)"
+      fi
     fi
 
 

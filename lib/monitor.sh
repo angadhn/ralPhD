@@ -6,7 +6,9 @@ estimate_input_cost() {
   local total_bytes=0
 
   local BYTES_PER_TOKEN=35
-  local CONTEXT_WINDOW=200000
+  # Use model-aware context window if resolve_context_window is available
+  local CONTEXT_WINDOW
+  CONTEXT_WINDOW=$(resolve_context_window "${CLAUDE_MODEL:-claude-opus-4-6}" 2>/dev/null || echo 200000)
   local BASELINE_OVERHEAD=3000
   local EFFECTIVE_WINDOW=$(( CONTEXT_WINDOW - BASELINE_OVERHEAD ))
 

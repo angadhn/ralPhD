@@ -77,7 +77,8 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CLAUDE_MODEL` | `claude-opus-4-6` | Which model to use (supports `claude-*`, `gpt-*`, `o3`, `o4-mini`) |
+| `RALPH_MODEL` | `claude-opus-4-6` | Which model to use (supports `claude-*`, `gpt-*`, `o3`, `o4-mini`) |
+| `CLAUDE_MODEL` | — | Alias for `RALPH_MODEL` (backward compatible) |
 | `RALPH_HOME` | script directory | Path to the ralPhD framework repo |
 | `OPENAI_API_KEY` | — | Required when using OpenAI models (`gpt-*`, `o3`, `o4-mini`) |
 
