@@ -150,9 +150,9 @@ while true; do
 
   # --- Build prompt ---
   if [ "$CURRENT_AGENT" = "single" ]; then
-    # Single mode: system prompt (prompt-build-single.md) has all instructions.
-    # Task is just a kick — don't send prompt-build.md (it contradicts single-mode behavior).
-    PROMPT="Begin. Read checkpoint.md and implementation-plan.md, then work through the tasks."
+    # Single mode: CLI paths need full instructions as user message;
+    # ralph_agent.py paths get instructions via --system-prompt-file instead.
+    PROMPT=$(cat "${RALPH_HOME}/prompt-build-single.md")
   else
     PROMPT=$(cat "$PROMPT_FILE")
   fi
@@ -198,7 +198,13 @@ while true; do
     while true; do
       rm -f /tmp/ralph-output.json
 
-      echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json "${AGENT_EXTRA_ARGS[@]}" &
+      # Single mode: ralph_agent.py gets instructions via --system-prompt-file,
+      # so pipe a minimal task instead of the full prompt (avoids duplication).
+      AGENT_TASK="$PROMPT"
+      if [ "$CURRENT_AGENT" = "single" ]; then
+        AGENT_TASK="Begin. Read checkpoint.md and implementation-plan.md, then work through the tasks."
+      fi
+      echo "$AGENT_TASK" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json "${AGENT_EXTRA_ARGS[@]}" &
       CLAUDE_PID=$!
 
       # Wait for first context reading (after ignore window) and print it
@@ -290,13 +296,24 @@ while true; do
         echo "$PROMPT" | codex --model "$CLAUDE_MODEL" --full-auto -
         EXIT_CODE=$?
       else
-        echo "  Model: $CLAUDE_MODEL (OpenAI — codex CLI not found, using ralph_agent.py)"
-        AGENT_EXTRA_ARGS=()
-        if [ "$CURRENT_AGENT" = "single" ]; then
-          AGENT_EXTRA_ARGS+=(--system-prompt-file "${RALPH_HOME}/prompt-build-single.md")
+        if [ "$LOOP_MODE" = "plan" ]; then
+          echo "  Error: plan mode requires an interactive CLI (codex or claude)."
+          echo "  Install codex CLI: npm install -g @anthropic-ai/codex"
+          EXIT_CODE=1
+        else
+          echo "  Model: $CLAUDE_MODEL (OpenAI — codex CLI not found, using ralph_agent.py)"
+          AGENT_EXTRA_ARGS=()
+          if [ "$CURRENT_AGENT" = "single" ]; then
+            AGENT_EXTRA_ARGS+=(--system-prompt-file "${RALPH_HOME}/prompt-build-single.md")
+          fi
+          # Single mode: pipe minimal task (instructions via --system-prompt-file)
+          AGENT_TASK="$PROMPT"
+          if [ "$CURRENT_AGENT" = "single" ]; then
+            AGENT_TASK="Begin. Read checkpoint.md and implementation-plan.md, then work through the tasks."
+          fi
+          echo "$AGENT_TASK" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json "${AGENT_EXTRA_ARGS[@]}"
+          EXIT_CODE=$?
         fi
-        echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json "${AGENT_EXTRA_ARGS[@]}"
-        EXIT_CODE=$?
       fi
 
       kill "$MONITOR_PID" 2>/dev/null || true
