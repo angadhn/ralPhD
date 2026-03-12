@@ -20,57 +20,162 @@ If `checkpoint.md` and `implementation-plan.md` are both uninitialized
 (contain placeholder `<` markers or are empty), run a structured Q&A
 before planning. Skip this step if either file has real content.
 
-### 1a. What kind of work?
+### Interaction style
 
-Ask the user what they're trying to do. Don't assume — the workspace
-could be any of:
+Walk the user through intake **one question at a time**. Do NOT present
+multiple questions in one message. The flow is:
 
-- **Writing** — paper, proposal, rewrite, response to reviewers
-- **Literature review** — survey a topic, build a reading corpus
-- **Coding** — analysis scripts, experiments, tooling
-- **Editing** — revise an existing draft (IFP rewrite, resubmission)
+1. Ask a single question with numbered options.
+2. Wait for the user's response.
+3. Acknowledge their choice briefly (one line).
+4. Ask the next question, adapted to prior answers.
 
-If the workspace is a code repository (has source files, not just .tex),
-note that — it changes which agents and tools are relevant.
+Keep each message short — the question plus its options, nothing else.
+If the workspace scan (1b) reveals something relevant, weave it into
+the next question naturally ("I see you have reviewer feedback in
+human-inputs/ — are we doing a revision?") rather than dumping a
+separate report.
 
-### 1b. What exists already?
+### 1a. What kind of project?
 
-Scan the workspace for signals:
+Present a numbered menu. Ask the user to pick one (or describe
+something else):
 
-- `.tex` / `.bib` files → writing project, note which sections exist
-- `inputs/` directory → prior submissions, reviewer feedback, venue docs
+```
+What kind of project is this?
+
+1. Write a paper — conference paper, journal article, thesis chapter
+2. Literature review — survey a topic, build and synthesize a corpus
+3. Grant / research proposal — funding application, research plan
+4. Revision / resubmission — revise a draft from reviewer feedback
+5. Coding / analysis — scripts, experiments, data pipelines, tooling
+6. Something else — describe it and I'll adapt
+```
+
+Record the choice as `PROJECT_TYPE` — all subsequent questions branch
+on this.
+
+### 1b. Workspace scan
+
+Before asking more questions, silently scan the workspace for signals
+and report a brief summary of what exists:
+
+- `.tex` / `.bib` files → note which sections exist
+- `inputs/` or `human-inputs/` → prior submissions, reviewer feedback, venue docs
 - `specs/publication-requirements.md` → venue already configured
 - `AI-generated-outputs/` → previous ralPhD thread exists
-- Source code files → coding project, note language and structure
+- Source code files → note language and structure
 - `corpus/` or `papers/` → literature already gathered
 
-Report what you found. Ask the user to confirm or correct.
+Report what you found in 2-3 lines. Ask the user to confirm or correct.
 
-### 1c. What's the goal this session?
+### 1c. Type-specific follow-ups
 
-Now that you know the work type and existing state, ask a focused
-question. Examples:
+Ask follow-up questions adapted to the PROJECT_TYPE. Present options
+as numbered lists where possible — the user can pick a number or
+type a short answer.
 
-- "You have a draft with intro + methods. What's next — write results,
-  or revise what's there?"
-- "No .tex files yet. Are we starting from a literature review, or do
-  you have an outline?"
-- "This looks like a code repo. What needs to happen — new analysis,
-  fix something, or add a feature?"
-- "There's reviewer feedback in inputs/. Are we doing a point-by-point
-  rewrite?"
+**If Write a paper (1):**
+
+```
+Who is the audience?
+1. ML / AI conference (NeurIPS, ICML, ICLR, AAAI, etc.)
+2. Robotics / controls (ICRA, IROS, RSS, CoRL, etc.)
+3. Domain-specific journal (which field?)
+4. Thesis chapter / dissertation
+5. Other — describe
+```
+
+Then ask:
+- Do you have an outline or structure in mind, or should I propose one?
+- What stage are you at — starting from scratch, have notes, or
+  have a partial draft?
+- Any page / word limits or formatting requirements?
+
+**If Literature review (2):**
+
+```
+What kind of review?
+1. Broad survey — map the landscape of a topic
+2. Focused synthesis — compare specific methods/approaches
+3. Background section — lit review as part of a larger paper
+4. Systematic review — structured search with inclusion criteria
+```
+
+Then ask:
+- What is the topic or research question?
+- Do you already have papers to include, or should I search?
+- Target scope — how many papers roughly? (10? 30? 50+?)
+
+**If Grant / research proposal (3):**
+
+```
+What stage?
+1. Starting from scratch — need to develop the idea
+2. Have a research question — need to structure the proposal
+3. Have a draft — need to refine and strengthen it
+```
+
+Then ask:
+- What funding body / call? (affects structure and tone)
+- Page or word limit?
+- Deadline?
+
+**If Revision / resubmission (4):**
+
+```
+What are you revising from?
+1. Peer reviewer feedback (have reviews)
+2. Advisor / collaborator feedback
+3. Self-revision — improving a previous draft
+4. Resubmission to a different venue
+```
+
+Then ask:
+- Is the reviewer feedback in `human-inputs/`? If not, where?
+- Are there specific points you agree/disagree with?
+- Same venue or different target?
+
+**If Coding / analysis (5):**
+
+```
+What needs to happen?
+1. New analysis — build something from scratch
+2. Extend existing code — add a feature or capability
+3. Fix / debug — something is broken
+4. Refactor / clean up — improve structure, tests, docs
+5. Data pipeline — processing, transformation, visualization
+```
+
+Then ask:
+- What language / framework?
+- Is there existing code to build on, or greenfield?
+- Any specific outputs expected (plots, tables, models)?
+
+**If Something else (6):**
+
+Ask the user to describe the project in a few sentences, then
+adapt by picking the closest built-in type or designing a
+custom flow.
 
 ### 1d. Autonomy level
 
-Ask the user how much oversight they want. Frame it as a spectrum:
+Present as a numbered choice:
 
-- **Full autopilot** — agents run the entire plan uninterrupted.
-  Only stops on errors or when the plan is complete.
-- **Stage gates** — runs autonomously within a phase, pauses between
-  phases for review. (e.g., finish all lit review tasks, pause before
-  writing starts). This is the default if the user has no preference.
-- **Step-by-step** — pauses after every task for approval before
-  continuing to the next.
+```
+How much oversight do you want?
+
+1. Full autopilot — agents run the whole plan, only stops on errors
+2. Stage gates — runs within a phase, pauses between phases for review (recommended)
+3. Step-by-step — pauses after every single task for your approval
+```
+
+If the user picks stage gates (or has no preference, default to it),
+ask one follow-up: "Which transitions should pause for review?" and
+suggest common gates based on the project type:
+- Writing: after lit review → before drafting, after draft → before editing
+- Coding: after implementation → before testing, after tests → before deploy
+- Revision: after analysis → before rewrite, after rewrite → before final check
 
 Record the choice in `implementation-plan.md` as a frontmatter field
 (`**Autonomy:** autopilot | stage-gates | step-by-step`) so build mode
@@ -81,18 +186,19 @@ Also set the **Architecture** field:
 any phases have independent agents (see Step 5), `serial` if all phases
 are strictly sequential, or `auto` to let the loop decide.
 
-For stage gates: ask which transitions warrant a pause. Common gates:
-- After literature review, before writing begins
-- After first draft, before editing passes
-- After edits, before final review / submission prep
+### 1e. Constraints
 
-### 1e. Constraints and preferences
+Ask ONE final question that covers remaining constraints. Adapt to
+what you already know — skip anything already answered:
 
-Ask about anything else that shapes the plan:
+```
+Anything else I should know? (pick any that apply, or say "no")
 
-- Venue / format requirements (if not already in specs/)
-- Deadline pressure (affects how many review cycles to plan)
-- What the user wants to handle themselves vs. delegate to agents
+1. Specific venue / format requirements
+2. Tight deadline (affects how many review passes to plan)
+3. Parts you want to handle yourself (vs. delegate to agents)
+4. No, that covers it
+```
 
 After this intake, you have enough to proceed to Step 2.
 
