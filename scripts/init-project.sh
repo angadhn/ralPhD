@@ -9,6 +9,16 @@ set -euo pipefail
 # Options:
 #   --ci    CI mode: copy specs/templates instead of symlinking,
 #           skip ralphd launcher and brownfield detection.
+#
+# Layout:
+#   Content directories (human-inputs, ai-generated-outputs, papers, corpus,
+#   sections, references, figures) live at PROJECT_ROOT (cwd).
+#   Framework state (logs, archive, ralphd, .ralphrc, etc.) lives in WORKSPACE.
+#   Symlinks inside WORKSPACE point to the project-root content dirs so agents
+#   see everything via relative paths from cwd — zero prompt/tool changes.
+#
+#   In CI mode or same-dir mode (workspace = .), all dirs live in WORKSPACE
+#   directly (no symlinks except inputs → human-inputs for backward compat).
 
 # Resolve RALPH_HOME (env var > script location)
 RALPH_HOME="${RALPH_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
@@ -26,21 +36,58 @@ for arg in "$@"; do
 done
 WORKSPACE="${WORKSPACE:-.ralph}"
 
+PROJECT_ROOT="$(pwd)"
+
 mkdir -p "$WORKSPACE"
 WORKSPACE="$(cd "$WORKSPACE" && pwd)"
+
+# CI mode: all content in WORKSPACE (same-dir semantics — CI always runs from workspace)
+if $CI_MODE; then
+  PROJECT_ROOT="$WORKSPACE"
+fi
 
 echo "Initializing ralph workspace: $WORKSPACE"
 echo "Framework: $RALPH_HOME"
 $CI_MODE && echo "Mode: CI (copy, no symlinks)"
 
-# --- Directories ---
-# inputs/ — user-provided context: reviewer feedback, prior submissions,
-#            venue-specific guidelines, style files, supplementary material.
-#            Agents (editor, paper-writer, coherence-reviewer) read from here
-#            but never write to it. Only humans populate this directory.
-for dir in ai-generated-outputs papers corpus sections references figures logs archive inputs; do
+# --- Content directories ---
+# human-inputs/ — user-provided context: reviewer feedback, prior submissions,
+#                  venue-specific guidelines, style files, supplementary material.
+#                  Agents (editor, paper-writer, coherence-reviewer) read from here
+#                  but never write to it. Only humans populate this directory.
+CONTENT_DIRS="ai-generated-outputs papers corpus sections references figures"
+mkdir -p "$PROJECT_ROOT/human-inputs"
+for dir in $CONTENT_DIRS; do
+  mkdir -p "$PROJECT_ROOT/$dir"
+done
+
+# --- Workspace-only directories (framework state, disposable) ---
+for dir in logs archive; do
   mkdir -p "$WORKSPACE/$dir"
 done
+
+# --- Content symlinks inside WORKSPACE ---
+# When WORKSPACE is a subdirectory of PROJECT_ROOT (the default .ralph/ case),
+# create symlinks so agents can access content dirs via WORKSPACE-relative paths.
+if [ "$WORKSPACE" != "$PROJECT_ROOT" ]; then
+  for dir in $CONTENT_DIRS; do
+    link="$WORKSPACE/$dir"
+    if [ ! -e "$link" ]; then
+      ln -s "../$dir" "$link"
+    fi
+  done
+  # inputs → ../human-inputs (backward-compat name mapping)
+  link="$WORKSPACE/inputs"
+  if [ ! -e "$link" ]; then
+    ln -s "../human-inputs" "$link"
+  fi
+else
+  # Same-dir mode (ralphd-init . or CI): inputs → human-inputs for backward compat
+  link="$WORKSPACE/inputs"
+  if [ ! -e "$link" ]; then
+    ln -s "human-inputs" "$link"
+  fi
+fi
 
 # --- specs and templates ---
 if $CI_MODE; then
@@ -84,10 +131,10 @@ if $CI_MODE; then
   fi
 fi
 
-# --- inputs/ README (first-init only) ---
-if [ ! -f "$WORKSPACE/inputs/README.md" ]; then
-  cat > "$WORKSPACE/inputs/README.md" << 'INPUTS_README'
-# inputs/
+# --- human-inputs/ README (first-init only) ---
+if [ ! -f "$PROJECT_ROOT/human-inputs/README.md" ]; then
+  cat > "$PROJECT_ROOT/human-inputs/README.md" << 'INPUTS_README'
+# human-inputs/
 
 Human-provided context for the writing pipeline. Place files here for agents to read.
 
@@ -104,7 +151,7 @@ Human-provided context for the writing pipeline. Place files here for agents to 
 ## Convention
 
 - Agents read from this directory but never write to it.
-- Only humans populate `inputs/`.
+- Only humans populate `human-inputs/`.
 - Filenames should be descriptive — agents use them to decide relevance.
 INPUTS_README
 fi
@@ -125,7 +172,7 @@ if [ -z "${RALPH_HOME:-}" ] && [ -f "$SCRIPT_DIR/.ralphrc" ]; then
 fi
 export RALPH_HOME
 
-# Self-healing symlinks
+# Self-healing symlinks — specs/templates → RALPH_HOME
 for dir in specs templates; do
   target="$RALPH_HOME/$dir"
   link="$SCRIPT_DIR/$dir"
@@ -135,6 +182,26 @@ for dir in specs templates; do
     ln -s "$target" "$link"
   fi
 done
+
+# Self-healing content symlinks (only when workspace is a subdirectory)
+PARENT_DIR="$(dirname "$SCRIPT_DIR")"
+if [ "$SCRIPT_DIR" != "$PARENT_DIR" ] && [ "$(basename "$SCRIPT_DIR")" = ".ralph" ]; then
+  for dir in ai-generated-outputs papers corpus sections references figures; do
+    link="$SCRIPT_DIR/$dir"
+    if [ -L "$link" ] && [ ! -e "$link" ]; then
+      rm "$link" && ln -s "../$dir" "$link"
+    elif [ ! -e "$link" ]; then
+      ln -s "../$dir" "$link"
+    fi
+  done
+  # inputs → ../human-inputs
+  link="$SCRIPT_DIR/inputs"
+  if [ -L "$link" ] && [ ! -e "$link" ]; then
+    rm "$link" && ln -s "../human-inputs" "$link"
+  elif [ ! -e "$link" ]; then
+    ln -s "../human-inputs" "$link"
+  fi
+fi
 
 exec "$RALPH_HOME/ralph-loop.sh" "$@"
 LAUNCHER

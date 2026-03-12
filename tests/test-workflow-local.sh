@@ -19,6 +19,7 @@ set -euo pipefail
 #   13. Parallel phase detection (phase heading annotations)
 #   14. eval.jsonl output format (evaluate_iteration.py --dry-run)
 #   15. Single-agent mode (prompt-build-single.md)
+#   16. Local init layout (split content/workspace, symlinks)
 #
 # Usage: bash tests/test-workflow-local.sh
 
@@ -71,6 +72,9 @@ check "templates/ is directory (not symlink)" test -d "$WORKSPACE/templates" -a 
 check ".claude/agents/ copied" test -d "$WORKSPACE/.claude/agents"
 check "ralphd not created in CI mode" test ! -f "$WORKSPACE/ralphd"
 check ".ralphrc created" test -f "$WORKSPACE/.ralphrc"
+check "human-inputs/ created" test -d "$WORKSPACE/human-inputs"
+check "inputs is symlink to human-inputs" test -L "$WORKSPACE/inputs"
+check "inputs symlink resolves" test -d "$WORKSPACE/inputs"
 
 # Verify agents are present
 AGENT_COUNT=$(ls "$WORKSPACE/.claude/agents/"*.md 2>/dev/null | wc -l | tr -d ' ')
@@ -1963,6 +1967,69 @@ if grep -q 'parallel\|Architecture' "$RALPH_HOME/prompt-plan.md" 2>/dev/null; th
 else
   fail "15g: prompt-plan.md missing parallelism guidance"
 fi
+
+echo ""
+
+# ── Test 16: Local init layout (split content/workspace) ─────
+echo "--- 16. Local Init Layout ---"
+
+LOCAL_PROJECT=$(mktemp -d)
+LOCAL_CLEANUP() { rm -rf "$LOCAL_PROJECT"; }
+
+# 16a. Default init: content at project root, framework state in .ralph/
+(
+  cd "$LOCAL_PROJECT"
+  RALPH_HOME="$RALPH_HOME" bash "$RALPH_HOME/scripts/init-project.sh" > /dev/null 2>&1
+)
+LOCAL_WS="$LOCAL_PROJECT/.ralph"
+
+# Content dirs exist at project root
+for dir in human-inputs ai-generated-outputs papers corpus sections references figures; do
+  check "16a: $dir/ at project root" test -d "$LOCAL_PROJECT/$dir"
+done
+
+# Symlinks exist inside .ralph/ and point to project root
+for dir in ai-generated-outputs papers corpus sections references figures; do
+  check "16a: .ralph/$dir is symlink" test -L "$LOCAL_WS/$dir"
+done
+check "16a: .ralph/inputs is symlink" test -L "$LOCAL_WS/inputs"
+
+# Symlinks resolve correctly
+check "16a: .ralph/ai-generated-outputs resolves" test -d "$LOCAL_WS/ai-generated-outputs"
+check "16a: .ralph/inputs resolves to human-inputs" test -d "$LOCAL_WS/inputs"
+
+# Framework state inside .ralph/
+check "16a: .ralph/logs/ exists" test -d "$LOCAL_WS/logs"
+check "16a: .ralph/archive/ exists" test -d "$LOCAL_WS/archive"
+check "16a: .ralph/ralphd exists" test -f "$LOCAL_WS/ralphd"
+check "16a: .ralph/.ralphrc exists" test -f "$LOCAL_WS/.ralphrc"
+
+# human-inputs/ README created at project root
+check "16a: human-inputs/README.md exists" test -f "$LOCAL_PROJECT/human-inputs/README.md"
+
+# 16b. Files created through symlinks appear at project root
+echo "test-content" > "$LOCAL_WS/ai-generated-outputs/testfile.txt"
+if [ -f "$LOCAL_PROJECT/ai-generated-outputs/testfile.txt" ] && \
+   grep -q "test-content" "$LOCAL_PROJECT/ai-generated-outputs/testfile.txt"; then
+  pass "16b: file through symlink appears at project root"
+else
+  fail "16b: file through symlink appears at project root"
+fi
+
+# 16c. Same-dir mode (init .): no content symlinks, inputs → human-inputs
+LOCAL_SAMEDIR=$(mktemp -d)
+(
+  cd "$LOCAL_SAMEDIR"
+  RALPH_HOME="$RALPH_HOME" bash "$RALPH_HOME/scripts/init-project.sh" . > /dev/null 2>&1
+)
+check "16c: same-dir human-inputs/ exists" test -d "$LOCAL_SAMEDIR/human-inputs"
+check "16c: same-dir inputs is symlink" test -L "$LOCAL_SAMEDIR/inputs"
+check "16c: same-dir inputs resolves" test -d "$LOCAL_SAMEDIR/inputs"
+# In same-dir mode, content dirs are real dirs (not symlinks)
+check "16c: same-dir ai-generated-outputs is real dir" test -d "$LOCAL_SAMEDIR/ai-generated-outputs" -a ! -L "$LOCAL_SAMEDIR/ai-generated-outputs"
+
+rm -rf "$LOCAL_SAMEDIR"
+rm -rf "$LOCAL_PROJECT"
 
 echo ""
 

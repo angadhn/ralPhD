@@ -65,6 +65,8 @@ if [ -f iteration_count ]; then
 fi
 
 # Archive per-thread agent outputs (ai-generated-outputs/<thread>/)
+# Note: ai-generated-outputs/ may be a symlink to ../ai-generated-outputs in
+# split-layout mode. mv and find resolve through symlinks transparently.
 if [ -d "ai-generated-outputs/$THREAD" ]; then
   mkdir -p "$ARCHIVE_DIR/ai-generated-outputs"
   mv "ai-generated-outputs/$THREAD" "$ARCHIVE_DIR/ai-generated-outputs/"

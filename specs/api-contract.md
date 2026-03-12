@@ -78,6 +78,54 @@ await octokit.actions.createWorkflowDispatch({
 
 ## Expected Repo Structure
 
+### Layout: content at root, framework state in `.ralph/`
+
+Content directories (human-provided inputs and AI-generated deliverables) live
+at the **project root**, outside the framework workspace. Disposable framework
+state lives inside `.ralph/`. Symlinks inside `.ralph/` point to the project-root
+directories, so agents see everything via relative paths from cwd — **zero changes
+to agent prompts, tools, or specs**.
+
+```
+myproject/                              ← PROJECT_ROOT (cwd when init runs)
+├── human-inputs/                       ← renamed from inputs/
+├── ai-generated-outputs/
+├── corpus/
+├── references/
+├── papers/
+├── sections/
+├── figures/
+├── .ralph/                             ← WORKSPACE (framework state, re-initable)
+│   ├── ralphd                          ← launcher
+│   ├── .ralphrc
+│   ├── checkpoint.md
+│   ├── implementation-plan.md
+│   ├── iteration_count
+│   ├── inbox.md
+│   ├── CHANGELOG.md
+│   ├── HUMAN_REVIEW_NEEDED.md
+│   ├── logs/
+│   ├── archive/
+│   ├── specs/        → RALPH_HOME/specs
+│   ├── templates/    → RALPH_HOME/templates
+│   ├── inputs/       → ../human-inputs         ← symlink (backward compat)
+│   ├── ai-generated-outputs/ → ../ai-generated-outputs
+│   ├── corpus/       → ../corpus
+│   ├── references/   → ../references
+│   ├── papers/       → ../papers
+│   ├── sections/     → ../sections
+│   └── figures/      → ../figures
+```
+
+The `inputs → human-inputs` symlink preserves backward compatibility so agents
+that reference `inputs/` continue to work.
+
+### CI mode (same-dir)
+
+In CI mode (`--ci`), all directories are created directly inside the workspace
+(no split, no content symlinks). Only `inputs → human-inputs` is created for
+backward compatibility.
+
 ### Target repo (workspace) — first run
 
 The workspace needs **no** pre-existing ralph files. On first run, the workflow's
@@ -89,6 +137,8 @@ workspace/
 ├── implementation-plan.md      # From templates/implementation-plan.md
 ├── inbox.md                    # Created, populated with prompt input
 ├── iteration_count             # Set to 0
+├── human-inputs/               # User-provided context
+├── inputs/                     # → human-inputs (symlink, backward compat)
 ├── specs/                      # Copied from RALPH_HOME/specs/
 ├── templates/                  # Copied from RALPH_HOME/templates/
 ├── .claude/agents/             # Copied from RALPH_HOME/.claude/agents/
