@@ -5,12 +5,19 @@ resolve_model() {
   local budgets_file="${RALPH_HOME}/context-budgets.json"
   local model=""
 
+  # RALPH_MODEL is a global override — when set, it wins over per-agent config.
+  # This lets `RALPH_MODEL=gpt-5.4 ./ralphd -p build` run ALL agents on GPT-5.4.
+  if [ -n "${RALPH_MODEL:-}" ]; then
+    echo "$RALPH_MODEL"
+    return
+  fi
+
+  # Otherwise check per-agent model in context-budgets.json
   if [ -n "$agent_name" ] && [ -f "$budgets_file" ] && command -v jq >/dev/null 2>&1; then
     model=$(jq -r --arg a "$agent_name" '.[$a].model // empty' "$budgets_file" 2>/dev/null || true)
   fi
   if [ -z "$model" ]; then
-    # RALPH_MODEL takes priority, falls back to CLAUDE_MODEL for backward compat
-    model="${RALPH_MODEL:-${CLAUDE_MODEL:-claude-opus-4-6}}"
+    model="${CLAUDE_MODEL:-claude-opus-4-6}"
   fi
   echo "$model"
 }
