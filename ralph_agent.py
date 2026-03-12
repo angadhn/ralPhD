@@ -133,7 +133,7 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
     # Build tool list for this agent
     tool_names, tools = get_tools_for_agent(agent_name)
 
-    print(fmt_banner(agent_name, provider, tool_names, model), file=sys.stderr)
+    fmt_banner(agent_name, provider, tool_names, model)
 
     messages = [{"role": "user", "content": task}]
     num_turns = 0
@@ -192,9 +192,9 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
         for text in response.text_blocks:
             print(text)
         if response.tool_calls:
-            print(fmt_separator(), file=sys.stderr)
+            fmt_separator()
         for tc in response.tool_calls:
-            print(fmt_tool_call(tc.name, tc.input), file=sys.stderr)
+            fmt_tool_call(tc.name, tc.input)
             tools_called.append(tc.name)
             try:
                 result = execute_tool(tc.name, tc.input)
@@ -204,11 +204,11 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
                 # Multimodal result (image + text content blocks)
                 text_parts = [b["text"] for b in result if b.get("type") == "text"]
                 log_preview = "; ".join(text_parts) if text_parts else "(image content)"
-                print(fmt_tool_result(tc.name, preview_text(log_preview)), file=sys.stderr)
+                fmt_tool_result(tc.name, preview_text(log_preview))
                 tool_results.append({"type": "tool_result", "tool_use_id": tc.id, "content": result})
             else:
                 result = truncate_result(result)
-                print(fmt_tool_result(tc.name, preview_text(result)), file=sys.stderr)
+                fmt_tool_result(tc.name, preview_text(result))
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": tc.id,

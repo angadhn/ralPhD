@@ -181,7 +181,7 @@ ralPhD/
 ├── .claude/agents/             # 12 agent prompts + agent-base.md shared protocol
 ├── tools/                      # Tool registry + per-agent tool implementations
 │   ├── __init__.py             # Merged registry, AGENT_TOOLS, dispatch
-│   ├── core.py                 # read_file, write_file, bash
+│   ├── core.py                 # read_file, write_file, bash, git_commit, git_push
 │   ├── checks.py               # Compatibility shim over the check/citation modules
 │   ├── check_language.py       # Language-quality checks
 │   ├── check_journal.py        # Journal-compliance checks
@@ -193,7 +193,8 @@ ralPhD/
 │   ├── search.py               # list_files, code_search
 │   ├── interact.py             # ask_choice, ask_question, scan_workspace (unused — plan uses claude CLI)
 │   ├── redact.py               # Secret redaction + preview truncation
-│   └── fmt.py                  # ANSI color output for headless mode
+│   ├── fmt.py                  # Rich formatted output for headless mode
+│   └── github.py               # gh CLI wrapper (PRs, issues, releases)
 ├── scripts/                    # Utility scripts + project scaffolding
 │   ├── init-project.sh         # Scaffold a new project workspace
 │   ├── evaluate_iteration.py   # Post-iteration metric capture → eval.jsonl
@@ -246,9 +247,9 @@ Tools are defined in `tools/` and registered per-agent in `tools/__init__.py`:
 | coherence-reviewer | check_claims, check_language |
 | research-coder | (essentials only) |
 | figure-stylist | check_figure |
-| coder | (essentials only) |
+| coder | bash, gh |
 
-Every agent gets 5 essentials: `read_file`, `write_file`, `bash`, `list_files`, `code_search`. 17 tools total, with `tools/checks.py` kept as a compatibility shim over the split check modules.
+Every agent gets 6 essentials: `read_file`, `write_file`, `git_commit`, `git_push`, `list_files`, `code_search`. 19 tools total, with `tools/checks.py` kept as a compatibility shim over the split check modules.
 
 Based on [ghuntley's agent architecture](https://ghuntley.com/agent): the agent = the loop + tool registry, the prompt = behavioral guidance.
 

@@ -211,12 +211,16 @@ exec "$RALPH_HOME/ralph-loop.sh" "$@"
 LAUNCHER
   chmod +x "$WORKSPACE/ralphd"
 
-  # Brownfield detection: if workspace is inside another git repo, isolate
+  # --- Ensure workspace is a git repo ---
+  if [ ! -d "$WORKSPACE/.git" ]; then
+    echo "  Initializing git repository"
+    git init "$WORKSPACE"
+  fi
+
+  # Brownfield: add workspace to parent's .gitignore
   if [ "$WORKSPACE" != "$RALPH_HOME" ]; then
-    PARENT_GIT=$(git -C "$WORKSPACE" rev-parse --git-dir 2>/dev/null || true)
-    if [ -n "$PARENT_GIT" ] && [ "$PARENT_GIT" != "$WORKSPACE/.git" ]; then
-      echo "  Detected parent git repo — initializing isolated git for workspace"
-      git init "$WORKSPACE"
+    PARENT_GIT=$(git -C "$WORKSPACE/.." rev-parse --git-dir 2>/dev/null || true)
+    if [ -n "$PARENT_GIT" ]; then
       PARENT_DIR=$(dirname "$WORKSPACE")
       BASENAME=$(basename "$WORKSPACE")
       if [ -d "$PARENT_DIR" ]; then

@@ -1,4 +1,4 @@
-"""Core tools: read_file, write_file, bash, git_commit.
+"""Core tools: read_file, write_file, bash, git_commit, git_push.
 
 These are ghuntley's essential primitives — every agent gets them
 (except bash, which is restricted to agents that need full shell access).
@@ -96,6 +96,38 @@ def _handle_git_commit(inp):
     return output if output.strip() else "(committed)"
 
 
+def _handle_git_push(inp):
+    remote = inp.get("remote", "origin")
+    branch = inp.get("branch", "")
+
+    if not branch:
+        r = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True,
+        )
+        if r.returncode != 0:
+            return "Error: not in a git repository or HEAD is detached"
+        branch = r.stdout.strip()
+        if not branch or branch == "HEAD":
+            return "Error: HEAD is detached — specify a branch name"
+
+    r = subprocess.run(
+        ["git", "remote", "get-url", remote],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return f"No remote '{remote}' configured. Add one with: git remote add {remote} <url>"
+
+    r = subprocess.run(
+        ["git", "push", remote, branch],
+        capture_output=True, text=True, timeout=120,
+    )
+    output = r.stdout + r.stderr
+    if r.returncode != 0:
+        return f"Push failed: {output.strip()}"
+    return output.strip() or f"Pushed to {remote}/{branch}"
+
+
 TOOLS = {
     "read_file": {
         "name": "read_file",
@@ -150,5 +182,18 @@ TOOLS = {
             "required": ["message"],
         },
         "function": _handle_git_commit,
+    },
+    "git_push": {
+        "name": "git_push",
+        "description": "Push local commits to a remote repository. Returns an error message if no remote is configured. Never force-pushes.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "remote": {"type": "string", "description": "Remote name (default: 'origin')"},
+                "branch": {"type": "string", "description": "Branch to push (default: current branch)"},
+            },
+            "required": [],
+        },
+        "function": _handle_git_push,
     },
 }

@@ -11,6 +11,7 @@ from tools.search import TOOLS as _search_tools
 from tools.download import TOOLS as _download_tools
 from tools.claims import TOOLS as _claims_tools
 from tools.interact import TOOLS as _interact_tools
+from tools.github import TOOLS as _github_tools
 
 # ── Merged registry ───────────────────────────────────────────
 
@@ -22,12 +23,13 @@ TOOLS.update(_search_tools)
 TOOLS.update(_download_tools)
 TOOLS.update(_claims_tools)
 TOOLS.update(_interact_tools)
+TOOLS.update(_github_tools)
 
 # ── Per-agent tool registries ─────────────────────────────────
 # Every agent gets the essentials: read_file, write_file, git_commit, list_files, code_search
 # Only agents that genuinely need full shell access get bash.
 
-_ESSENTIALS = ["read_file", "write_file", "git_commit", "list_files", "code_search"]
+_ESSENTIALS = ["read_file", "write_file", "git_commit", "git_push", "list_files", "code_search"]
 
 # Server-side tools — executed by the API, not locally.
 # Keyed by tool name; values are the raw tool definitions sent to the API.
@@ -47,7 +49,7 @@ AGENT_TOOLS = {
     "provocateur": _ESSENTIALS + [],
     "synthesizer": _ESSENTIALS + ["citation_lint", "citation_verify_all"],
     "triage": _ESSENTIALS + ["pdf_metadata", "citation_verify_all"],
-    "coder": _ESSENTIALS + ["bash"],
+    "coder": _ESSENTIALS + ["bash", "gh"],
     # plan mode uses claude CLI (not ralph_agent.py) — no tool registry needed
 }
 

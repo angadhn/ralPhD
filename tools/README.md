@@ -23,7 +23,8 @@ Based on [ghuntley's agent architecture](https://ghuntley.com/agent) ([repo](htt
 | `_helpers.py` | *(internal)* | Shared helper utilities |
 | `_paths.py` | *(internal)* | `_scripts_dir()` path resolution |
 | `redact.py` | *(utility)* | Secret redaction + preview truncation for logs |
-| `fmt.py` | *(utility)* | ANSI color output for ralph_agent.py headless mode |
+| `fmt.py` | *(utility)* | Rich formatted output for ralph_agent.py headless mode |
 | `interact.py` | ask_choice, ask_question, scan_workspace | Interactive intake tools (unused — plan mode uses claude CLI) |
+| `github.py` | gh | GitHub CLI wrapper for PRs, issues, releases |
 
-`__init__.py` merges all modules into a single TOOLS dict, defines AGENT_TOOLS (per-agent tool assignments), and provides `execute_tool()` and `get_tools_for_agent()` for dispatch. 17 tools total, 5 essentials shared by all agents.
+`__init__.py` merges all modules into a single TOOLS dict, defines AGENT_TOOLS (per-agent tool assignments), and provides `execute_tool()` and `get_tools_for_agent()` for dispatch. 19 tools total, 6 essentials shared by all agents.

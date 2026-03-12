@@ -1,58 +1,52 @@
-"""ANSI formatting for ralph_agent.py headless output.
+"""Rich formatting for ralph_agent.py headless output.
 
 Pure formatting utility — no TOOLS dict, so it won't affect the tool registry.
-Respects NO_COLOR env var and non-TTY stderr.
+Auto-handles NO_COLOR env var and non-TTY stderr via Rich's Console.
 """
 
 import os
 import sys
 
-_COLOR = (
-    hasattr(sys.stderr, "isatty")
-    and sys.stderr.isatty()
-    and os.environ.get("NO_COLOR") is None
-)
+from rich.console import Console
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.text import Text
+from rich import box
 
-# ANSI codes
-_RESET = "\033[0m" if _COLOR else ""
-_BOLD = "\033[1m" if _COLOR else ""
-_DIM = "\033[2m" if _COLOR else ""
-_RED = "\033[31m" if _COLOR else ""
-_GREEN = "\033[32m" if _COLOR else ""
-_YELLOW = "\033[33m" if _COLOR else ""
-_BLUE = "\033[34m" if _COLOR else ""
-_MAGENTA = "\033[35m" if _COLOR else ""
-_CYAN = "\033[36m" if _COLOR else ""
+# Rich auto-respects NO_COLOR and non-TTY
+_stderr = Console(file=sys.stderr)
 
 # Tool → color mapping by category
 _TOOL_COLORS = {
     # Mutations (green)
-    "write_file": _GREEN,
-    "git_commit": _GREEN,
+    "write_file": "green",
+    "git_commit": "green",
+    "git_push": "green",
     # Read/inspect (cyan)
-    "read_file": _CYAN,
-    "list_files": _CYAN,
-    "code_search": _CYAN,
-    "pdf_metadata": _CYAN,
-    "view_pdf_page": _CYAN,
-    "extract_figure": _CYAN,
+    "read_file": "cyan",
+    "list_files": "cyan",
+    "code_search": "cyan",
+    "pdf_metadata": "cyan",
+    "view_pdf_page": "cyan",
+    "extract_figure": "cyan",
     # Shell (yellow)
-    "bash": _YELLOW,
+    "bash": "yellow",
     # Verification (magenta)
-    "check_language": _MAGENTA,
-    "check_journal": _MAGENTA,
-    "check_figure": _MAGENTA,
-    "check_claims": _MAGENTA,
-    "citation_lint": _MAGENTA,
-    "citation_verify": _MAGENTA,
-    "citation_verify_all": _MAGENTA,
-    "citation_lookup": _MAGENTA,
-    "citation_manifest": _MAGENTA,
+    "check_language": "magenta",
+    "check_journal": "magenta",
+    "check_figure": "magenta",
+    "check_claims": "magenta",
+    "citation_lint": "magenta",
+    "citation_verify": "magenta",
+    "citation_verify_all": "magenta",
+    "citation_lookup": "magenta",
+    "citation_manifest": "magenta",
     # Network/external (blue)
-    "search_papers": _BLUE,
-    "download_paper": _BLUE,
-    "citation_download": _BLUE,
-    "web_search": _BLUE,
+    "search_papers": "blue",
+    "download_paper": "blue",
+    "citation_download": "blue",
+    "web_search": "blue",
+    "gh": "blue",
 }
 
 # Primary argument key per tool (for concise display)
@@ -62,12 +56,21 @@ _PRIMARY_KEYS = {
     "bash": "command",
     "code_search": "pattern",
     "git_commit": "message",
+    "git_push": "branch",
     "list_files": "path",
+    "gh": "subcommand",
+}
+
+# File extensions → Syntax lexer names
+_LEXERS = {
+    ".py": "python", ".md": "markdown", ".tex": "latex", ".sh": "bash",
+    ".json": "json", ".yaml": "yaml", ".yml": "yaml", ".js": "javascript",
+    ".ts": "typescript", ".toml": "toml", ".bib": "bibtex",
 }
 
 
 def _tool_color(name: str) -> str:
-    return _TOOL_COLORS.get(name, _DIM)
+    return _TOOL_COLORS.get(name, "dim")
 
 
 def _extract_primary(name: str, inp: dict) -> str:
@@ -85,45 +88,64 @@ def _extract_primary(name: str, inp: dict) -> str:
     return ""
 
 
-def fmt_banner(agent: str, provider: str, tools: list[str], model: str) -> str:
-    """Format the agent startup banner."""
-    lines = [
-        f"{_BOLD}Agent:{_RESET} {agent}",
-        f"{_DIM}Provider:{_RESET} {provider}",
-        f"{_DIM}Tools:{_RESET} {', '.join(tools)}",
-        f"{_DIM}Model:{_RESET} {model}",
-        "",
-    ]
-    return "\n".join(lines)
+def fmt_banner(agent: str, provider: str, tools: list[str], model: str):
+    """Print the agent startup banner as a bordered panel to stderr."""
+    body = (
+        f"[bold]{agent}[/bold]\n"
+        f"[dim]Provider:[/dim] {provider}\n"
+        f"[dim]Model:[/dim] {model}\n"
+        f"[dim]Tools:[/dim] {', '.join(tools)}"
+    )
+    _stderr.print(Panel(
+        body,
+        title="[bold blue]ralph[/bold blue]",
+        border_style="blue",
+        box=box.ROUNDED,
+    ))
 
 
-def fmt_tool_call(name: str, inp: dict) -> str:
-    """Format a tool call: colored tool name + primary argument."""
-    color = _tool_color(name)
+def fmt_tool_call(name: str, inp: dict):
+    """Print a tool call: colored tool name + primary argument to stderr."""
+    text = Text()
+    text.append(f"  {name}", style=f"bold {_tool_color(name)}")
     primary = _extract_primary(name, inp)
     if primary:
-        return f"  {color}{name}{_RESET}  {_BOLD}{primary}{_RESET}"
-    return f"  {color}{name}{_RESET}"
+        text.append(f"  {primary}", style="bold")
+    _stderr.print(text)
 
 
-def fmt_tool_result(tool_name: str, preview: str) -> str:
-    """Format a tool result preview."""
+def fmt_tool_result(tool_name: str, preview: str):
+    """Print a tool result preview to stderr."""
     if not preview:
-        return f"  {_DIM}(empty result){_RESET}"
+        _stderr.print(Text("  (empty result)", style="dim"))
+        return
 
-    # Detect errors
     lower = preview.lower()
+
+    # Errors → red bordered panel
     if lower.startswith("tool error:") or lower.startswith("error:"):
-        return f"  {_RED}{preview}{_RESET}"
+        _stderr.print(Panel(preview, border_style="red", title="Error", box=box.ROUNDED))
+        return
 
-    # Detect successful writes
+    # Successful writes → green bordered panel
     if "wrote" in lower and ("chars" in lower or "bytes" in lower):
-        return f"  {_GREEN}{preview}{_RESET}"
+        _stderr.print(Panel(preview, border_style="green", box=box.ROUNDED))
+        return
 
-    return f"  {_DIM}{preview}{_RESET}"
+    # Normal → dim text
+    _stderr.print(Text(f"  {preview}", style="dim"))
 
 
-def fmt_separator() -> str:
-    """Dim horizontal line between model text and tool execution."""
-    width = min(os.get_terminal_size(fallback=(80, 24)).columns, 80)
-    return f"{_DIM}{'─' * width}{_RESET}"
+def fmt_code_result(code: str, filepath: str):
+    """Print syntax-highlighted code to stderr when a file was read."""
+    ext = os.path.splitext(filepath)[1].lower()
+    lexer = _LEXERS.get(ext)
+    if not lexer:
+        _stderr.print(Text(code, style="dim"))
+        return
+    _stderr.print(Syntax(code, lexer, line_numbers=True, theme="monokai"))
+
+
+def fmt_separator():
+    """Print a dim horizontal rule to stderr."""
+    _stderr.rule(style="dim")
