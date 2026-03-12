@@ -302,7 +302,7 @@ while true; do
       rm -f /tmp/ralph-output.json
       if command -v codex >/dev/null 2>&1; then
         echo "  Model: $CLAUDE_MODEL (OpenAI — using codex CLI)"
-        echo "$PROMPT" | codex --model "$CLAUDE_MODEL" --full-auto -
+        codex --model "$CLAUDE_MODEL" --full-auto "$PROMPT"
         EXIT_CODE=$?
       else
         if [ "$LOOP_MODE" = "plan" ]; then
