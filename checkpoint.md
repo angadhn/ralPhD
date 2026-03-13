@@ -3,7 +3,7 @@
 **Thread:** fix-headless-oauth-fallback
 **Last updated:** 2026-03-13
 **Last agent:** coder
-**Status:** in progress — task 4 done, task 5 next
+**Status:** in progress — task 5 done, task 6 next
 
 ## Knowledge State
 
@@ -13,7 +13,7 @@
 | 2. Create `templates/tool-via-bash.md` | done | System prompt appendix for `claude -p` fallback; `{{RALPH_TOOLS}}` placeholder |
 | 3. Add helpers to `lib/exec.sh` | done | `build_claude_system_prompt`, `has_anthropic_api_key`, `is_anthropic_model` |
 | 4. Auth branch in `ralph-loop.sh` pipe mode | done | Auth-detection + claude -p fallback in pipe mode |
-| 5. Auth branch in `run_parallel_phase()` | pending | Same fallback for parallel execution |
+| 5. Auth branch in `run_parallel_phase()` | done | Same fallback per-task in parallel spawn loop |
 | 6. Validate usage JSON parsing | pending | Ensure `claude -p` JSON output is compatible |
 | 7. Update `providers.py` error messages | pending | Mention fallback in error text |
 
@@ -23,4 +23,4 @@ Iter-20 (2026-03-13): on track. Tasks 1-2 committed cleanly; foundation for oaut
 
 ## Next Task
 
-5. Add same auth-detection fallback in `run_parallel_phase()` in `lib/exec.sh` (~line 70) — If `is_anthropic_model` and `! has_anthropic_api_key`, fall back to `claude -p` with `--append-system-prompt`, `--output-format json`, `--dangerously-skip-permissions`. Otherwise use existing `ralph_agent.py` path. — **coder**
+6. Validate/adapt usage JSON parsing in `lib/post-run.sh` — Check if `claude -p --output-format json` output is compatible with `print_output_json_summary` and `log_usage_from_output_json`. Adapt if needed. — **coder**

@@ -156,14 +156,31 @@ run_parallel_phase() {
 
     local agent_model
     agent_model=$(resolve_model "$agent_name")
-    echo "  Spawning parallel agent: $agent_name (task $task_idx, model $agent_model)"
+
+    # Auth-detection: Anthropic model but no API key → use claude -p fallback (OAuth/Max plan)
+    local use_claude_fallback=false
+    if is_anthropic_model "$agent_model" && ! has_anthropic_api_key; then
+      use_claude_fallback=true
+      echo "  Spawning parallel agent: $agent_name (task $task_idx, model $agent_model, claude -p fallback)"
+    else
+      echo "  Spawning parallel agent: $agent_name (task $task_idx, model $agent_model)"
+    fi
 
     local task_prompt
     task_prompt=$(cat "$PROMPT_FILE")
 
-    echo "$task_prompt" | python3 "${RALPH_HOME}/ralph_agent.py" \
-      --agent "$agent_name" --task - --model "$agent_model" \
-      --output-json "${output_dir}/output.json" &
+    if $use_claude_fallback; then
+      local agent_system_prompt
+      agent_system_prompt=$(build_claude_system_prompt "$agent_name")
+      echo "$task_prompt" | claude --model "$agent_model" \
+        --append-system-prompt "$agent_system_prompt" \
+        --output-format json \
+        --dangerously-skip-permissions > "${output_dir}/output.json" &
+    else
+      echo "$task_prompt" | python3 "${RALPH_HOME}/ralph_agent.py" \
+        --agent "$agent_name" --task - --model "$agent_model" \
+        --output-json "${output_dir}/output.json" &
+    fi
     pids+=($!)
     agents+=("$agent_name")
   done < <(collect_phase_tasks "implementation-plan.md" "$phase_line")

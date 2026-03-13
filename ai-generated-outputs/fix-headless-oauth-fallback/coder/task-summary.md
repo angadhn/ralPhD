@@ -1,29 +1,34 @@
-# Task Summary — Task 3: Shell helpers in lib/exec.sh
+# Task Summary — Tasks 4 & 5: Auth-detection branch in pipe mode and parallel phase
 
-## What was changed
+## Task 4: Auth-detection branch in ralph-loop.sh pipe mode
 
-**File:** `lib/exec.sh`
+**File:** `ralph-loop.sh` (pipe mode section, ~line 190)
 
-Added three new functions after `is_openai_model()`:
+Added auth-detection block before the agent retry loop. Before launching any agent process, the script now:
+1. Checks `is_anthropic_model "$CLAUDE_MODEL"` — true for all non-OpenAI models
+2. Checks `! has_anthropic_api_key` — true when `ANTHROPIC_API_KEY` is missing or is an OAuth token (`sk-ant-oat*`)
+3. If both conditions hold: sets `USE_CLAUDE_FALLBACK=true`, logs a message, and calls `build_claude_system_prompt "$CURRENT_AGENT"` to construct the full system prompt once (before the retry loop, to avoid rebuilding on each retry)
 
-1. **`has_anthropic_api_key()`** — Returns 0 if `ANTHROPIC_API_KEY` is set to a regular API key (`sk-ant-api*`). OAuth tokens (`sk-ant-oat*`) and missing/empty keys return 1. Mirrors the auth detection logic in `providers.py`.
+Inside the retry loop, the `ralph_agent.py` invocation is now guarded:
+- **Fallback path:** `echo "$PROMPT" | claude --model ... --append-system-prompt ... --output-format json --dangerously-skip-permissions > /tmp/ralph-output.json &`
+- **Normal path:** unchanged `python3 ralph_agent.py ...` invocation
 
-2. **`is_anthropic_model(model)`** — Returns 0 if the model is an Anthropic model. Implemented as the inverse of `is_openai_model()` (any model not matched by `gpt-*|o1*|o3*|o4*`).
+## Task 5: Auth-detection fallback in run_parallel_phase()
 
-3. **`build_claude_system_prompt(agent_name)`** — Outputs the full system prompt for `claude -p` headless mode to stdout:
-   - Resolves agent `.md` file (workspace-first: `.claude/agents/{name}.md`, then `${RALPH_HOME}/.claude/agents/{name}.md`)
-   - Prepends path preamble when `RALPH_HOME != CWD` (mirrors `ralph_agent.py:build_path_preamble()`)
-   - Gets non-essential tools for the agent via inline Python (filters out `_ESSENTIALS`)
-   - Appends `templates/tool-via-bash.md` with `{{RALPH_TOOLS}}` replaced by the custom tool list (using awk for multi-line substitution)
+**File:** `lib/exec.sh` (`run_parallel_phase()`, ~line 160)
+
+Same auth-detection pattern applied per-task inside the parallel spawn loop. For each task:
+1. After resolving `agent_model`, checks `is_anthropic_model` and `! has_anthropic_api_key`
+2. If fallback: sets local `use_claude_fallback=true`, logs "claude -p fallback" in the spawn message, calls `build_claude_system_prompt "$agent_name"`, runs `claude ... > ${output_dir}/output.json &`
+3. Otherwise: runs `ralph_agent.py` as before
+
+This ensures OAuth/Max plan users can also use parallel execution phases without API key errors.
 
 ## Why
 
-These helpers are the building blocks for the claude -p fallback in tasks 4 and 5. They isolate the auth detection and system prompt construction logic so the pipe mode branch (task 4) and parallel phase branch (task 5) can call them cleanly.
+Max plan / OAuth users have `ANTHROPIC_API_KEY` set to `sk-ant-oat*`, which the API rejects. The `claude` CLI handles OAuth transparently. This fallback routes those users through the CLI instead of `ralph_agent.py` in both serial pipe mode and parallel phase mode.
 
 ## Test results
 
-- All existing tests: 215/216 (1 pre-existing failure unrelated to this change)
-- Manual function tests: all pass
-  - has_anthropic_api_key: correctly handles empty, api key, oauth token, unknown patterns
-  - is_anthropic_model: correctly handles claude-*, gpt-*, o3*/o1*/o4* patterns
-  - build_claude_system_prompt: correct output for coder (gh custom tool), paper-writer (check_language/citation_lint), missing agent (error)
+- `bash -n lib/exec.sh`: syntax OK
+- `bash tests/test-workflow-local.sh`: 215/216 passed (1 pre-existing failure unrelated to this change)
