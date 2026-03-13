@@ -187,13 +187,30 @@ while true; do
       echo "  JSONL context monitor started (pid $JSONL_MONITOR_PID)"
     fi
 
+    # Auth-detection: Anthropic model but no API key → use claude -p fallback (OAuth/Max plan)
+    USE_CLAUDE_FALLBACK=false
+    AGENT_SYSTEM_PROMPT=""
+    if is_anthropic_model "$CLAUDE_MODEL" && ! has_anthropic_api_key; then
+      USE_CLAUDE_FALLBACK=true
+      echo "  No API key detected — using claude -p fallback (OAuth/Max plan)"
+      AGENT_SYSTEM_PROMPT=$(build_claude_system_prompt "$CURRENT_AGENT")
+    fi
+
     # Launch agent runner with bash-level retries for transient failures
     AGENT_ATTEMPT=0
     while true; do
       rm -f /tmp/ralph-output.json
 
-      echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json &
-      CLAUDE_PID=$!
+      if $USE_CLAUDE_FALLBACK; then
+        echo "$PROMPT" | claude --model "$CLAUDE_MODEL" \
+          --append-system-prompt "$AGENT_SYSTEM_PROMPT" \
+          --output-format json \
+          --dangerously-skip-permissions > /tmp/ralph-output.json &
+        CLAUDE_PID=$!
+      else
+        echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json &
+        CLAUDE_PID=$!
+      fi
 
       # Wait for first context reading (after ignore window) and print it
       for i in $(seq 1 30); do
