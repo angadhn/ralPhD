@@ -1,28 +1,26 @@
-# Checkpoint — Fix init-project path resolution and symlink fragility
+# Checkpoint — Fix headless auth for Max plan (OAuth) users
 
-**Thread:** fix-init-paths
+**Thread:** fix-headless-oauth-fallback
 **Last updated:** 2026-03-13
 **Last agent:** plan
-**Status:** planning complete
+**Status:** planned — ready to execute
 
 ## Knowledge State
 
 | Task | Status | Notes |
 |------|--------|-------|
-| 1. Fix PROJECT_ROOT derivation | done | Derive from WORKSPACE basename heuristic; dangling symlink fix; test 15d added |
-| 2. Symlink .claude/agents | done | Symlinked to RALPH_HOME; self-healing added to ralphd launcher |
-| 3. Fix launcher cwd + self-healing | done | Added `cd "$SCRIPT_DIR"` before exec; removed `basename=.ralph` guard |
-| 4. Update docs | done | README Quick Start B + api-contract layout (Layout A/B) |
-| 5. Test all quick-start paths | done | Test 17 added: 55 new tests for QS-A/B/C; 215/216 pass |
+| 1. Create `tools/cli.py` | done | CLI dispatcher for ralph tools via Bash |
+| 2. Create `templates/tool-via-bash.md` | pending | System prompt template for tool-via-bash instructions |
+| 3. Add helpers to `lib/exec.sh` | pending | `build_claude_system_prompt`, `has_anthropic_api_key`, `is_anthropic_model` |
+| 4. Auth branch in `ralph-loop.sh` pipe mode | pending | Main fallback logic |
+| 5. Auth branch in `run_parallel_phase()` | pending | Same fallback for parallel execution |
+| 6. Validate usage JSON parsing | pending | Ensure `claude -p` JSON output is compatible |
+| 7. Update `providers.py` error messages | pending | Mention fallback in error text |
 
 ## Last Reflection
 
-Iter 15 (2026-03-13): Trajectory on track. Fresh thread start — plan is solid, 3-entry-point fix strategy is correct. No course correction needed. Proceeding with Phase 1 (PROJECT_ROOT derivation).
-Iter 16 (2026-03-13): Phase 2 complete. .claude/agents now symlinked to RALPH_HOME in local mode; self-healing added to embedded ralphd launcher. 160/161 tests pass (pre-existing failure unrelated).
-Iter 17 (2026-03-13): Phase 3 complete. ralphd launcher now cds to SCRIPT_DIR before exec; basename=.ralph guard removed from content symlink self-healing. 160/161 tests pass (same pre-existing failure).
-Iter 18 (2026-03-13): Phase 4 complete. README Quick Start B updated to clarify content dirs go into workspace (not cwd). api-contract.md split into Layout A (all-in-one, QS-B) and Layout B (split, QS-C), both showing .claude/agents/ symlink. 160/161 tests pass.
-Iter 19 (2026-03-13): Reflection — on track. Phases 1–4 complete and tested. Proceeding with Phase 5: add QS-A/B/C test cases to test-workflow-local.sh.
+<none yet>
 
 ## Next Task
 
-Thread complete — all 5 phases done.
+2. Create `templates/tool-via-bash.md` — System prompt appendix telling Claude Code how to invoke ralph custom tools via Bash. — **coder**
