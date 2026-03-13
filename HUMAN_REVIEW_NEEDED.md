@@ -1,25 +1,32 @@
-# Human Review Needed — Phase 3 → 4 Gate
+# Human Review Needed — Phase 4 → Phase 5 Gate
 
-## What was completed (Phases 1–3)
+## What was completed (Phases 1–4)
 
-**Phase 1** — Fixed `PROJECT_ROOT` derivation in `init-project.sh`: derived from WORKSPACE argument (not `pwd`), fixed dangling symlink detection.
+| Phase | Task | Status |
+|-------|------|--------|
+| 1 | Fix PROJECT_ROOT derivation in init-project.sh | ✅ done |
+| 2 | Symlink .claude/agents in local mode + self-healing | ✅ done |
+| 3 | Fix ralphd launcher cwd + remove basename guard | ✅ done |
+| 4 | Update README Quick Start B + api-contract layout docs | ✅ done |
 
-**Phase 2** — Symlinked `.claude/agents/` to `RALPH_HOME` in local mode; added self-healing for `.claude/agents` in the embedded ralphd launcher.
+All 160/161 tests pass (1 pre-existing failure in tools/__init__.py unrelated to this thread).
 
-**Phase 3** — Fixed ralphd launcher cwd and self-healing:
-- Added `cd "$SCRIPT_DIR"` before `exec ralph-loop.sh` so all relative paths resolve against the workspace
-- Removed `basename = .ralph` guard from content symlink self-healing so it works for any workspace directory name
+## What Phase 5 will do
 
-All phases: 160/161 tests pass (1 pre-existing failure unrelated to these changes).
+Add test cases to `tests/test-workflow-local.sh` covering all three quick-start paths:
 
-## What Phase 4 will do
+- **(a) Quick Start A** — run ralph-loop.sh from ralPhD repo directly (verify unchanged behavior)
+- **(b) Quick Start B** — `init-project.sh /tmp/test-qs-b` run from a different directory; verify content dirs + symlinks + `.claude/agents` are all inside `/tmp/test-qs-b/`
+- **(c) Quick Start C** — `init-project.sh /tmp/test-qs-c/.ralph` run from `/tmp/test-qs-c`; verify content at project root, framework state in `.ralph/`, symlinks resolve
 
-**Phase 4** — Update README and api-contract layout docs:
-- Update Quick Start B in README.md to clarify content dirs are created inside the workspace (not cwd)
-- Update directory tree in `specs/api-contract.md` to reflect that split layout only applies to brownfield `.ralph/` case (Quick Start C), not Quick Start B
-- Verify Quick Start A (run from ralPhD repo) is unaffected
+Each test: init, verify dirs exist, verify symlinks resolve, verify `ralphd` is executable and `--help` works.
 
-## Files to be modified in Phase 4
+## To resume
 
-- `README.md`
-- `specs/api-contract.md`
+Review the changes above, then:
+
+```bash
+rm HUMAN_REVIEW_NEEDED.md
+```
+
+The loop will proceed to Phase 5.
