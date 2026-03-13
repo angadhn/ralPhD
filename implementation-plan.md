@@ -15,4 +15,4 @@
 - [x] 4. Add auth-detection branch in `ralph-loop.sh` pipe mode (line ~167) — If `is_anthropic_model` and `! has_anthropic_api_key`, fall back to `claude -p` with `--append-system-prompt`, `--output-format json`, `--dangerously-skip-permissions`. Otherwise use existing `ralph_agent.py` path. — **coder**
 - [x] 5. Add same auth-detection fallback in `run_parallel_phase()` in `lib/exec.sh` (~line 70) — **coder**
 - [x] 6. Validate/adapt usage JSON parsing in `lib/post-run.sh` — Check if `claude -p --output-format json` output is compatible with `print_output_json_summary` and `log_usage_from_output_json`. Adapt if needed. — **coder**
-- [ ] 7. Update `providers.py` error messages to mention the `claude -p` fallback — "ralph_agent.py requires an API key, but ralph-loop.sh will automatically fall back to claude -p when no key is set." — **coder**
+- [x] 7. Update `providers.py` error messages to mention the `claude -p` fallback — "ralph_agent.py requires an API key, but ralph-loop.sh will automatically fall back to claude -p when no key is set." — **coder**

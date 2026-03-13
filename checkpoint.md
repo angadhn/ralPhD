@@ -4,7 +4,7 @@
 **Last updated:** 2026-03-13
 **Last agent:** coder
 **Last iteration:** task 6 validation
-**Status:** in progress — task 6 done, task 7 next
+**Status:** complete — all 7 tasks done
 
 ## Knowledge State
 
@@ -16,7 +16,7 @@
 | 4. Auth branch in `ralph-loop.sh` pipe mode | done | Auth-detection + claude -p fallback in pipe mode |
 | 5. Auth branch in `run_parallel_phase()` | done | Same fallback per-task in parallel spawn loop |
 | 6. Validate usage JSON parsing | done | `claude -p --output-format json` is fully compatible; no code changes needed |
-| 7. Update `providers.py` error messages | pending | Mention fallback in error text |
+| 7. Update `providers.py` error messages | done | All 3 error paths now mention ralph-loop.sh automatic fallback |
 
 ## Last Reflection
 
@@ -24,4 +24,4 @@ Iter-20 (2026-03-13): on track. Tasks 1-2 committed cleanly; foundation for oaut
 
 ## Next Task
 
-7. Update `providers.py` error messages to mention the `claude -p` fallback — "ralph_agent.py requires an API key, but ralph-loop.sh will automatically fall back to claude -p when no key is set." — **coder**
+All tasks complete. Thread ready to archive.

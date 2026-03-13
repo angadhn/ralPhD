@@ -98,12 +98,29 @@ def create_client(provider: str):
 def _create_anthropic_client():
     import anthropic
 
-    # 1. Explicit API key takes priority
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        print("Auth: using ANTHROPIC_API_KEY", file=sys.stderr)
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
+    # 1. Regular API key (sk-ant-api*) — use directly
+    if api_key and not api_key.startswith("sk-ant-oat"):
+        print("Auth: using ANTHROPIC_API_KEY (API key)", file=sys.stderr)
         return anthropic.Anthropic()
 
-    # 2. Read OAuth token from macOS keychain
+    # 2. OAuth tokens (sk-ant-oat*) from env or keychain do NOT work with
+    #    the Anthropic API directly. Claude Code uses an internal SDK
+    #    integration that ralph_agent.py cannot replicate.
+    #    Users need a real API key from console.anthropic.com.
+    if api_key and api_key.startswith("sk-ant-oat"):
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY contains an OAuth token (sk-ant-oat*), which cannot be "
+            "used with the Anthropic API directly. ralph_agent.py requires a regular "
+            "API key (sk-ant-api*) from console.anthropic.com.\n"
+            "  Note: ralph-loop.sh -p detects this automatically and falls back to "
+            "claude -p, so this error only appears when invoking ralph_agent.py directly.\n"
+            "  Alternatively, use interactive mode (no -p flag) which routes through "
+            "the claude CLI and supports OAuth natively."
+        )
+
+    # 3. Check macOS keychain — if only OAuth token is available, explain the limitation
     try:
         result = subprocess.run(
             ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
@@ -113,13 +130,25 @@ def _create_anthropic_client():
             creds = json.loads(result.stdout.strip())
             token = creds.get("claudeAiOauth", {}).get("accessToken")
             if token:
-                print("Auth: using Claude Code OAuth token from keychain", file=sys.stderr)
-                return anthropic.Anthropic(api_key=token)
+                raise RuntimeError(
+                    "Found Claude Code OAuth token in keychain, but OAuth tokens cannot "
+                    "be used with the Anthropic API directly. ralph_agent.py requires a "
+                    "regular API key (sk-ant-api*) from console.anthropic.com.\n"
+                    "  Note: ralph-loop.sh -p detects this automatically and falls back to "
+                    "claude -p, so this error only appears when invoking ralph_agent.py directly.\n"
+                    "  Set: export ANTHROPIC_API_KEY=sk-ant-api03-...\n"
+                    "  Or use interactive mode (no -p flag) which supports OAuth natively."
+                )
+    except RuntimeError:
+        raise
     except Exception:
         pass
 
     raise RuntimeError(
-        "No Anthropic auth found. Set ANTHROPIC_API_KEY or run `claude login`."
+        "No Anthropic auth found. Set ANTHROPIC_API_KEY (sk-ant-api* from "
+        "console.anthropic.com) or use interactive mode (no -p flag) with `claude login`.\n"
+        "  Note: ralph-loop.sh -p automatically falls back to claude -p when no API key "
+        "is set, so this error only appears when invoking ralph_agent.py directly."
     )
 
 
