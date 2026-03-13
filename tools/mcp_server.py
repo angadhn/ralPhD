@@ -24,6 +24,14 @@ from mcp.types import Tool, TextContent
 
 from tools import TOOLS, AGENT_TOOLS, DEFAULT_TOOLS, SERVER_TOOLS, execute_tool
 
+_LOG_FILE = os.environ.get("RALPH_MCP_LOG", "")
+
+
+def _log(msg: str):
+    if _LOG_FILE:
+        with open(_LOG_FILE, "a") as f:
+            f.write(f"[MCP] {msg}\n")
+
 
 def build_server(agent_name: str) -> Server:
     """Create an MCP server with tools scoped to the given agent."""
@@ -49,7 +57,9 @@ def build_server(agent_name: str) -> Server:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict):
+        _log(f"tool_call: {name} args={arguments}")
         result = execute_tool(name, arguments)
+        _log(f"tool_done: {name} result_len={len(str(result))}")
         return [TextContent(type="text", text=str(result))]
 
     return server
