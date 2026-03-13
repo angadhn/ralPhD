@@ -1,29 +1,27 @@
-# Human Review Needed
-
-**Thread:** fix-init-paths
-**Date:** 2026-03-13
-**Completed phase:** Phase 1 — Fix PROJECT_ROOT derivation
+# Human Review Needed — Phase 2 → Phase 3 Gate
 
 ## What was completed
 
-**Phase 1: Fix PROJECT_ROOT derivation in `scripts/init-project.sh`**
+**Phase 1** — Fixed `PROJECT_ROOT` derivation in `init-project.sh`:
+- `PROJECT_ROOT` now derived from WORKSPACE argument (not cwd)
+- Dangling symlink detection fixed (`[ -L ] || [ ! -e ]` pattern)
+- Test 15d added: verifies Quick Start B creates dirs inside workspace
 
-- `PROJECT_ROOT` now derives from WORKSPACE using a basename heuristic:
-  - WORKSPACE ends in `.ralph` → PROJECT_ROOT = parent directory (split layout)
-  - Otherwise → PROJECT_ROOT = WORKSPACE (all-in-one layout, Quick Start B)
-- Dangling symlink detection fixed: `[ -L link ] || [ ! -e link ]` + `rm -f` prevents `set -e` exit on broken symlinks
-- Test 15d added: verifies Quick Start B puts content dirs in WORKSPACE, not in cwd
+**Phase 2** — Symlinked `.claude/agents` in local mode:
+- `init-project.sh` now symlinks `$WORKSPACE/.claude/agents` → `$RALPH_HOME/.claude/agents` (matching `specs/` and `templates/` pattern)
+- `ralphd` launcher now self-heals `.claude/agents` symlink alongside `specs/templates`
+- 160/161 tests pass (1 pre-existing failure in tools/__init__.py unrelated to this work)
 
-All 160 previously-passing tests continue to pass (1 pre-existing failure unrelated to this change).
+## What Phase 3 will do
 
-## What Phase 2 will do
+**Fix `ralphd` launcher cwd and self-healing** (`init-project.sh`):
+- Add `cd "$SCRIPT_DIR"` to the embedded `ralphd` launcher before `exec ralph-loop.sh`, so all relative paths in `ralph-loop.sh` resolve against the workspace directory
+- Remove the `basename = .ralph` guard from content symlink self-healing so it works for any workspace directory name (not just `.ralph`)
 
-**Phase 2: Symlink `.claude/agents/` in local mode**
+This is a safe change: the launcher already sets `SCRIPT_DIR` to its own directory; `cd` just ensures cwd matches. Removing the basename guard generalizes healing to Quick Start B workspaces.
 
-Currently `init-project.sh` creates an empty `$WORKSPACE/.claude/agents/` directory in local mode. Phase 2 will:
-1. Replace `mkdir -p "$WORKSPACE/.claude/agents"` with a symlink to `$RALPH_HOME/.claude/agents` (same pattern as `specs/` and `templates/`)
-2. Add self-healing for `.claude/agents` in the embedded `ralphd` launcher alongside the existing specs/templates healing
+## Files modified so far
 
-This means new local workspaces will automatically see all framework agents via the symlink, without needing to copy them.
-
-**Files that will be changed:** `scripts/init-project.sh` only (the local-mode `.claude/agents` block and the embedded ralphd launcher template)
+- `scripts/init-project.sh` — PROJECT_ROOT derivation + .claude/agents symlink + launcher self-healing
+- `tests/test-workflow-local.sh` — test 15d (Quick Start B path verification)
+- `checkpoint.md`, `implementation-plan.md` — updated state
