@@ -1,8 +1,9 @@
 # tools/
 
-Self-contained tool implementations for `ralph_agent.py`. Each module contains both
-the tool schema definitions and their full handler logic — no subprocess indirection.
-Per-agent tool registries defined in `__init__.py`.
+Self-contained tool implementations for `ralph_agent.py` and the MCP fallback
+(`mcp_server.py` exposes the same tools to `claude -p` for OAuth/Max plan users).
+Each module contains both the tool schema definitions and their full handler logic —
+no subprocess indirection. Per-agent tool registries defined in `__init__.py`.
 
 Based on [ghuntley's agent architecture](https://ghuntley.com/agent) ([repo](https://github.com/ghuntley/how-to-build-a-coding-agent)): colocated tool definitions + handlers, registered per-agent.
 
@@ -26,5 +27,7 @@ Based on [ghuntley's agent architecture](https://ghuntley.com/agent) ([repo](htt
 | `fmt.py` | *(utility)* | Rich formatted output for ralph_agent.py headless mode |
 | `interact.py` | ask_choice, ask_question, scan_workspace | Interactive intake tools (unused — plan mode uses claude CLI) |
 | `github.py` | gh | GitHub CLI wrapper for PRs, issues, releases |
+| `mcp_server.py` | *(server)* | MCP stdio server exposing per-agent tools for `claude -p` fallback (Python ≥ 3.10) |
+| `cli.py` | *(dispatcher)* | CLI entry point — invoke any tool from Bash (`cli.py <tool> '<json>'`) |
 
 `__init__.py` merges all modules into a single TOOLS dict, defines AGENT_TOOLS (per-agent tool assignments), and provides `execute_tool()` and `get_tools_for_agent()` for dispatch. 19 tools total, 6 essentials shared by all agents.
