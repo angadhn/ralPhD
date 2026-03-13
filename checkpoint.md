@@ -3,7 +3,8 @@
 **Thread:** fix-headless-oauth-fallback
 **Last updated:** 2026-03-13
 **Last agent:** coder
-**Status:** in progress — task 5 done, task 6 next
+**Last iteration:** task 6 validation
+**Status:** in progress — task 6 done, task 7 next
 
 ## Knowledge State
 
@@ -14,7 +15,7 @@
 | 3. Add helpers to `lib/exec.sh` | done | `build_claude_system_prompt`, `has_anthropic_api_key`, `is_anthropic_model` |
 | 4. Auth branch in `ralph-loop.sh` pipe mode | done | Auth-detection + claude -p fallback in pipe mode |
 | 5. Auth branch in `run_parallel_phase()` | done | Same fallback per-task in parallel spawn loop |
-| 6. Validate usage JSON parsing | pending | Ensure `claude -p` JSON output is compatible |
+| 6. Validate usage JSON parsing | done | `claude -p --output-format json` is fully compatible; no code changes needed |
 | 7. Update `providers.py` error messages | pending | Mention fallback in error text |
 
 ## Last Reflection
@@ -23,4 +24,4 @@ Iter-20 (2026-03-13): on track. Tasks 1-2 committed cleanly; foundation for oaut
 
 ## Next Task
 
-6. Validate/adapt usage JSON parsing in `lib/post-run.sh` — Check if `claude -p --output-format json` output is compatible with `print_output_json_summary` and `log_usage_from_output_json`. Adapt if needed. — **coder**
+7. Update `providers.py` error messages to mention the `claude -p` fallback — "ralph_agent.py requires an API key, but ralph-loop.sh will automatically fall back to claude -p when no key is set." — **coder**
