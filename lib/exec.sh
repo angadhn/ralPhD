@@ -30,6 +30,100 @@ is_openai_model() {
   esac
 }
 
+# Returns 0 if ANTHROPIC_API_KEY is set to a regular API key (sk-ant-api*).
+# OAuth tokens (sk-ant-oat*) and missing keys both return 1.
+has_anthropic_api_key() {
+  local key="${ANTHROPIC_API_KEY:-}"
+  [ -z "$key" ] && return 1
+  case "$key" in
+    sk-ant-api*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Returns 0 if the model is an Anthropic model (anything not matched by is_openai_model).
+is_anthropic_model() {
+  local model="${1:-}"
+  is_openai_model "$model" && return 1
+  return 0
+}
+
+# Build the full system prompt for claude -p headless mode.
+# Outputs to stdout: path preamble (if needed) + agent .md + tool-via-bash appendix.
+build_claude_system_prompt() {
+  local agent_name="${1:-}"
+
+  # Resolve agent file (workspace-first, same as ralph_agent.py)
+  local agent_file=""
+  local workspace_path=".claude/agents/${agent_name}.md"
+  local framework_path="${RALPH_HOME}/.claude/agents/${agent_name}.md"
+  if [ -f "$workspace_path" ]; then
+    agent_file="$workspace_path"
+  elif [ -f "$framework_path" ]; then
+    agent_file="$framework_path"
+  else
+    echo "Error: agent '${agent_name}' not found in workspace or framework" >&2
+    return 1
+  fi
+
+  # Build path preamble (mirrors ralph_agent.py:build_path_preamble)
+  local cwd rh
+  cwd=$(pwd -P)
+  rh=$(cd "$RALPH_HOME" && pwd -P)
+  if [ "$rh" != "$cwd" ]; then
+    cat <<PREAMBLE_EOF
+## Path Context
+
+ralPhD is running as an engine on a separate project.
+- **RALPH_HOME** (framework): \`${rh}\`
+- **Working directory** (project): \`${cwd}\`
+
+File paths in this prompt use short names. Resolve them as follows:
+- **Framework files** — prefix with RALPH_HOME:
+  \`specs/*\`, \`templates/*\`, \`prompt-*.md\`
+  Example: \`specs/writing-style.md\` → \`${rh}/specs/writing-style.md\`
+- **Agent files** — workspace-first: \`.claude/agents/{name}.md\` checks
+  project dir first, then RALPH_HOME
+- **Project files** — use as-is (relative to working directory):
+  \`checkpoint.md\`, \`implementation-plan.md\`, \`inbox.md\`,
+  \`AI-generated-outputs/*\`, \`sections/*\`, \`figures/*\`, \`corpus/*\`,
+  \`references/*\`, \`papers/*\`, \`logs/*\`
+
+PREAMBLE_EOF
+  fi
+
+  # Agent .md content
+  cat "$agent_file"
+
+  # Get non-essential tools for this agent and append tool-via-bash instructions
+  local template="${RALPH_HOME}/templates/tool-via-bash.md"
+  if [ -f "$template" ]; then
+    local custom_tools
+    custom_tools=$(python3 - <<PYEOF
+import sys, os
+sys.path.insert(0, os.environ.get('RALPH_HOME', '.'))
+from tools import AGENT_TOOLS, DEFAULT_TOOLS
+_ESSENTIALS = frozenset(["read_file", "write_file", "bash", "git_commit", "git_push", "list_files", "code_search"])
+tools = AGENT_TOOLS.get("${agent_name}", DEFAULT_TOOLS)
+custom = [t for t in tools if t not in _ESSENTIALS]
+for t in custom:
+    print(f"- \`{t}\`")
+PYEOF
+    )
+    if [ -n "$custom_tools" ]; then
+      echo ""
+      local tmpfile
+      tmpfile=$(mktemp)
+      printf '%s' "$custom_tools" > "$tmpfile"
+      awk -v tf="$tmpfile" '
+        /\{\{RALPH_TOOLS\}\}/ { while ((getline line < tf) > 0) print line; close(tf); next }
+        { print }
+      ' "$template"
+      rm -f "$tmpfile"
+    fi
+  fi
+}
+
 resolve_context_window() {
   local model="${1:-claude-opus-4-6}"
   case "$model" in
