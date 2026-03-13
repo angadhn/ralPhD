@@ -1960,6 +1960,27 @@ check "15c: same-dir ai-generated-outputs is real dir" test -d "$LOCAL_SAMEDIR/a
 rm -rf "$LOCAL_SAMEDIR"
 rm -rf "$LOCAL_PROJECT"
 
+# 15d. Quick Start B: init to absolute path from a different cwd
+#      Content dirs must be in WORKSPACE, not in cwd (/tmp)
+LOCAL_QSB=$(mktemp -d)
+(
+  cd /tmp
+  RALPH_HOME="$RALPH_HOME" bash "$RALPH_HOME/scripts/init-project.sh" "$LOCAL_QSB" > /dev/null 2>&1
+)
+# Content dirs exist in WORKSPACE (not in /tmp)
+for dir in human-inputs ai-generated-outputs papers corpus sections references figures; do
+  check "15d: QSB $dir/ in WORKSPACE" test -d "$LOCAL_QSB/$dir"
+done
+# Content dirs must NOT have been created in /tmp
+for dir in human-inputs ai-generated-outputs papers corpus sections references figures; do
+  check "15d: QSB $dir/ NOT in cwd (/tmp)" test ! -d "/tmp/$dir"
+done
+# Framework state in WORKSPACE (since WORKSPACE=PROJECT_ROOT, no sub-workspace)
+check "15d: QSB ralphd exists in WORKSPACE" test -f "$LOCAL_QSB/ralphd"
+check "15d: QSB .ralphrc exists in WORKSPACE" test -f "$LOCAL_QSB/.ralphrc"
+
+rm -rf "$LOCAL_QSB"
+
 echo ""
 
 # ── Test 16: Workspace-first agent resolution ─────────────────

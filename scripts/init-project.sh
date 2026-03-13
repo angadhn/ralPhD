@@ -36,10 +36,17 @@ for arg in "$@"; do
 done
 WORKSPACE="${WORKSPACE:-.ralph}"
 
-PROJECT_ROOT="$(pwd)"
-
 mkdir -p "$WORKSPACE"
 WORKSPACE="$(cd "$WORKSPACE" && pwd)"
+
+# Derive PROJECT_ROOT from WORKSPACE:
+#   Split layout (.ralph/): PROJECT_ROOT = parent directory
+#   All-in-one layout:      PROJECT_ROOT = WORKSPACE itself
+if [ "$(basename "$WORKSPACE")" = ".ralph" ]; then
+  PROJECT_ROOT="$(dirname "$WORKSPACE")"
+else
+  PROJECT_ROOT="$WORKSPACE"
+fi
 
 # CI mode: all content in WORKSPACE (same-dir semantics — CI always runs from workspace)
 if $CI_MODE; then
@@ -72,13 +79,15 @@ done
 if [ "$WORKSPACE" != "$PROJECT_ROOT" ]; then
   for dir in $CONTENT_DIRS; do
     link="$WORKSPACE/$dir"
-    if [ ! -e "$link" ]; then
+    if [ -L "$link" ] || [ ! -e "$link" ]; then
+      rm -f "$link"
       ln -s "../$dir" "$link"
     fi
   done
   # inputs → ../human-inputs (backward-compat name mapping)
   link="$WORKSPACE/inputs"
-  if [ ! -e "$link" ]; then
+  if [ -L "$link" ] || [ ! -e "$link" ]; then
+    rm -f "$link"
     ln -s "../human-inputs" "$link"
   fi
 else

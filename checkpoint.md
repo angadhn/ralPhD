@@ -1,19 +1,24 @@
-# Checkpoint — <thread name>
+# Checkpoint — Fix init-project path resolution and symlink fragility
 
-**Thread:** <thread-name>
-**Last updated:** <date>
-**Last agent:** <agent>
-**Status:** <current status>
+**Thread:** fix-init-paths
+**Last updated:** 2026-03-13
+**Last agent:** plan
+**Status:** planning complete
 
 ## Knowledge State
 
 | Task | Status | Notes |
 |------|--------|-------|
+| 1. Fix PROJECT_ROOT derivation | done | Derive from WORKSPACE basename heuristic; dangling symlink fix; test 15d added |
+| 2. Symlink .claude/agents | pending | Local mode currently creates empty dir |
+| 3. Fix launcher cwd + self-healing | pending | Add `cd`, remove basename guard, fix dangling detection |
+| 4. Update docs | pending | README Quick Start B + api-contract layout |
+| 5. Test all quick-start paths | pending | New test cases for A, B, C paths |
 
 ## Last Reflection
 
-<none yet>
+Iter 15 (2026-03-13): Trajectory on track. Fresh thread start — plan is solid, 3-entry-point fix strategy is correct. No course correction needed. Proceeding with Phase 1 (PROJECT_ROOT derivation).
 
 ## Next Task
 
-<next task from implementation plan>
+2. Symlink .claude/agents in local mode — coder
