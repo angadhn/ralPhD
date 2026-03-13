@@ -79,7 +79,7 @@ Once these three are fixed, all downstream relative paths (`ralph-loop.sh`, `lib
 
 ## Phase 4 — Update README and api-contract layout docs
 
-- [ ] 4. Update Quick Start B in README.md to clarify that content dirs are created inside the workspace (not cwd). Update the directory tree in `specs/api-contract.md` to reflect that split layout only applies to brownfield `.ralph/` case (Quick Start C), not Quick Start B. Verify Quick Start A (run from ralPhD repo) is unaffected — **coder**
+- [x] 4. Update Quick Start B in README.md to clarify that content dirs are created inside the workspace (not cwd). Update the directory tree in `specs/api-contract.md` to reflect that split layout only applies to brownfield `.ralph/` case (Quick Start C), not Quick Start B. Verify Quick Start A (run from ralPhD repo) is unaffected — **coder**
 
 <!-- gate -->
 

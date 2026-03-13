@@ -24,7 +24,7 @@ cp ~/Downloads/*.pdf papers/
 ./ralphd -p build              # headless build
 ```
 
-The init script creates directories, symlinks `specs/` and `templates/` back to the framework, copies starter files, and generates a `./ralphd` launcher.
+Content directories (`papers/`, `corpus/`, `sections/`, etc.) are created inside the workspace argument (`~/research/my-paper/`), regardless of your current working directory. The init script also symlinks `specs/`, `templates/`, and `.claude/agents/` back to the framework and generates a `./ralphd` launcher.
 
 ### C. Brownfield (inside an existing project)
 
