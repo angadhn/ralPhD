@@ -218,7 +218,7 @@ fi
 
 # Self-healing content symlinks (only when workspace is a subdirectory)
 PARENT_DIR="$(dirname "$SCRIPT_DIR")"
-if [ "$SCRIPT_DIR" != "$PARENT_DIR" ] && [ "$(basename "$SCRIPT_DIR")" = ".ralph" ]; then
+if [ "$SCRIPT_DIR" != "$PARENT_DIR" ]; then
   for dir in ai-generated-outputs papers corpus sections references figures; do
     link="$SCRIPT_DIR/$dir"
     if [ -L "$link" ] && [ ! -e "$link" ]; then
@@ -236,6 +236,7 @@ if [ "$SCRIPT_DIR" != "$PARENT_DIR" ] && [ "$(basename "$SCRIPT_DIR")" = ".ralph
   fi
 fi
 
+cd "$SCRIPT_DIR"
 exec "$RALPH_HOME/ralph-loop.sh" "$@"
 LAUNCHER
   chmod +x "$WORKSPACE/ralphd"

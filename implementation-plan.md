@@ -73,7 +73,7 @@ Once these three are fixed, all downstream relative paths (`ralph-loop.sh`, `lib
 
 ## Phase 3 — Fix ralphd launcher cwd and self-healing
 
-- [ ] 3. Add `cd "$SCRIPT_DIR"` to the ralphd launcher before `exec ralph-loop.sh` so that all relative paths in ralph-loop.sh resolve against the workspace directory. Remove the `basename = .ralph` guard from content symlink self-healing so it works for any workspace directory name — **coder**
+- [x] 3. Add `cd "$SCRIPT_DIR"` to the ralphd launcher before `exec ralph-loop.sh` so that all relative paths in ralph-loop.sh resolve against the workspace directory. Remove the `basename = .ralph` guard from content symlink self-healing so it works for any workspace directory name — **coder**
 
 <!-- gate -->
 
