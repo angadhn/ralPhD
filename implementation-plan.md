@@ -85,7 +85,7 @@ Once these three are fixed, all downstream relative paths (`ralph-loop.sh`, `lib
 
 ## Phase 5 — Test all three quick-start paths
 
-- [ ] 5. Add test cases to `tests/test-workflow-local.sh` covering: (a) Quick Start A — run from ralPhD repo, (b) Quick Start B — `init-project.sh /tmp/test-qs-b` run from a different directory, verify content dirs + symlinks + `.claude/agents` are all inside `/tmp/test-qs-b/`, (c) Quick Start C — `init-project.sh /tmp/test-qs-c/.ralph` run from `/tmp/test-qs-c`, verify content at project root, framework state in `.ralph/`, symlinks resolve. Each test: init, verify dirs exist, verify symlinks resolve, verify `ralphd` is executable and `--help` works — **coder**
+- [x] 5. Add test cases to `tests/test-workflow-local.sh` covering: (a) Quick Start A — run from ralPhD repo, (b) Quick Start B — `init-project.sh /tmp/test-qs-b` run from a different directory, verify content dirs + symlinks + `.claude/agents` are all inside `/tmp/test-qs-b/`, (c) Quick Start C — `init-project.sh /tmp/test-qs-c/.ralph` run from `/tmp/test-qs-c`, verify content at project root, framework state in `.ralph/`, symlinks resolve. Each test: init, verify dirs exist, verify symlinks resolve, verify `ralphd` is executable and `--help` works — **coder**
 
 ## Files Changed
 

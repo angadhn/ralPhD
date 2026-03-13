@@ -2043,6 +2043,116 @@ rm -rf "$AGENT_TEST_DIR" "$LOCAL_AGENT_DIR"
 
 echo ""
 
+# ── Test 17: Quick Start paths (A, B, C) ──────────────────────
+echo "--- 17. Quick Start Paths ---"
+
+# 17a. Quick Start A: run from ralPhD repo directly
+# No init needed — verify the ralPhD repo has everything needed to run ralph-loop.sh
+check "17a: ralph-loop.sh exists" test -f "$RALPH_HOME/ralph-loop.sh"
+check "17a: ralph-loop.sh is executable" test -x "$RALPH_HOME/ralph-loop.sh"
+check "17a: .claude/agents/ exists" test -d "$RALPH_HOME/.claude/agents"
+check "17a: templates/checkpoint.md exists" test -f "$RALPH_HOME/templates/checkpoint.md"
+check "17a: templates/implementation-plan.md exists" test -f "$RALPH_HOME/templates/implementation-plan.md"
+check "17a: specs/ directory exists" test -d "$RALPH_HOME/specs"
+QS_A_AGENT_COUNT=$(ls "$RALPH_HOME/.claude/agents/"*.md 2>/dev/null | wc -l | tr -d ' ')
+if [ "$QS_A_AGENT_COUNT" -gt 5 ]; then
+  pass "17a: RALPH_HOME has $QS_A_AGENT_COUNT agent files"
+else
+  fail "17a: expected >5 agents in RALPH_HOME/.claude/agents, got $QS_A_AGENT_COUNT"
+fi
+
+# 17b. Quick Start B: init-project.sh /abs/path run from a different cwd
+# Verifies content dirs, symlinks, .claude/agents, and ralphd from a fresh init
+QS_B_DIR=$(mktemp -d)
+(
+  cd /tmp
+  RALPH_HOME="$RALPH_HOME" bash "$RALPH_HOME/scripts/init-project.sh" "$QS_B_DIR" > /dev/null 2>&1
+)
+
+# Content dirs exist in WORKSPACE
+for dir in human-inputs ai-generated-outputs papers corpus sections references figures; do
+  check "17b: $dir/ in WORKSPACE" test -d "$QS_B_DIR/$dir"
+done
+
+# Content dirs were NOT scattered into cwd (/tmp)
+for dir in human-inputs ai-generated-outputs papers corpus; do
+  check "17b: $dir/ NOT created in /tmp" test ! -d "/tmp/$dir"
+done
+
+# Framework symlinks resolve
+check "17b: specs/ is symlink" test -L "$QS_B_DIR/specs"
+check "17b: templates/ is symlink" test -L "$QS_B_DIR/templates"
+check "17b: specs symlink resolves" test -d "$QS_B_DIR/specs"
+check "17b: templates symlink resolves" test -d "$QS_B_DIR/templates"
+
+# .claude/agents is a symlink pointing to RALPH_HOME
+check "17b: .claude/agents is symlink" test -L "$QS_B_DIR/.claude/agents"
+check "17b: .claude/agents symlink resolves" test -d "$QS_B_DIR/.claude/agents"
+QS_B_AGENTS_TARGET=$(readlink "$QS_B_DIR/.claude/agents")
+if [ "$QS_B_AGENTS_TARGET" = "$RALPH_HOME/.claude/agents" ]; then
+  pass "17b: .claude/agents → RALPH_HOME/.claude/agents"
+else
+  fail "17b: .claude/agents points to wrong target: '$QS_B_AGENTS_TARGET'"
+fi
+
+# ralphd is executable and --help works
+check "17b: ralphd is executable" test -x "$QS_B_DIR/ralphd"
+if "$QS_B_DIR/ralphd" --help 2>&1 | grep -q 'Usage:'; then
+  pass "17b: ralphd --help outputs usage"
+else
+  fail "17b: ralphd --help did not output expected 'Usage:' line"
+fi
+
+rm -rf "$QS_B_DIR"
+
+# 17c. Quick Start C: init-project.sh /path/.ralph (brownfield/split layout)
+# Content dirs at PROJECT_ROOT, framework state inside .ralph/, symlinks resolve
+QS_C_PROJECT=$(mktemp -d)
+QS_C_WS="$QS_C_PROJECT/.ralph"
+(
+  cd "$QS_C_PROJECT"
+  RALPH_HOME="$RALPH_HOME" bash "$RALPH_HOME/scripts/init-project.sh" "$QS_C_WS" > /dev/null 2>&1
+)
+
+# Content dirs at PROJECT_ROOT (not inside .ralph/)
+for dir in human-inputs ai-generated-outputs papers corpus sections references figures; do
+  check "17c: $dir/ at project root" test -d "$QS_C_PROJECT/$dir"
+done
+
+# Symlinks inside .ralph/ exist and resolve to project root
+for dir in ai-generated-outputs papers corpus sections references figures; do
+  check "17c: .ralph/$dir is symlink" test -L "$QS_C_WS/$dir"
+  check "17c: .ralph/$dir symlink resolves" test -d "$QS_C_WS/$dir"
+done
+check "17c: .ralph/inputs is symlink" test -L "$QS_C_WS/inputs"
+check "17c: .ralph/inputs symlink resolves" test -d "$QS_C_WS/inputs"
+
+# .claude/agents symlink points to RALPH_HOME
+check "17c: .ralph/.claude/agents is symlink" test -L "$QS_C_WS/.claude/agents"
+check "17c: .ralph/.claude/agents symlink resolves" test -d "$QS_C_WS/.claude/agents"
+QS_C_AGENTS_TARGET=$(readlink "$QS_C_WS/.claude/agents")
+if [ "$QS_C_AGENTS_TARGET" = "$RALPH_HOME/.claude/agents" ]; then
+  pass "17c: .ralph/.claude/agents → RALPH_HOME/.claude/agents"
+else
+  fail "17c: .ralph/.claude/agents points to wrong target: '$QS_C_AGENTS_TARGET'"
+fi
+
+# Framework state inside .ralph/
+check "17c: .ralph/logs/ exists" test -d "$QS_C_WS/logs"
+check "17c: .ralph/.ralphrc exists" test -f "$QS_C_WS/.ralphrc"
+
+# ralphd is executable and --help works
+check "17c: .ralph/ralphd is executable" test -x "$QS_C_WS/ralphd"
+if "$QS_C_WS/ralphd" --help 2>&1 | grep -q 'Usage:'; then
+  pass "17c: .ralph/ralphd --help outputs usage"
+else
+  fail "17c: .ralph/ralphd --help did not output expected 'Usage:' line"
+fi
+
+rm -rf "$QS_C_PROJECT"
+
+echo ""
+
 # ── Summary ───────────────────────────────────────────────────
 echo "=== Results: $PASS/$TESTS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then
