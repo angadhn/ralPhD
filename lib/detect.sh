@@ -22,7 +22,7 @@ detect_agent_from_checkpoint() {
   next_task=$(extract_next_task_from_checkpoint "$checkpoint_path")
 
   case "$next_task" in
-    none*|None*|"<"*|"")
+    none*|None*|"<"*|""|[Aa]ll\ tasks\ complete*|*ready\ to\ archive*)
       if [ -n "$plan_path" ]; then
         next_task=$(grep '^\- \[ \]' "$plan_path" 2>/dev/null \
           | grep -v '<task description>\|<agent>' \

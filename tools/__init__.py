@@ -29,7 +29,7 @@ TOOLS.update(_github_tools)
 # Every agent gets the essentials: read_file, write_file, git_commit, list_files, code_search
 # Only agents that genuinely need full shell access get bash.
 
-_ESSENTIALS = ["read_file", "write_file", "git_commit", "git_push", "list_files", "code_search"]
+_ESSENTIALS = ["read_file", "write_file", "bash", "git_commit", "git_push", "list_files", "code_search"]
 
 # Server-side tools — executed by the API, not locally.
 # Keyed by tool name; values are the raw tool definitions sent to the API.
@@ -38,18 +38,18 @@ SERVER_TOOLS = {
 }
 
 AGENT_TOOLS = {
-    "paper-writer": _ESSENTIALS + ["bash", "check_language", "citation_lint"],
+    "paper-writer": _ESSENTIALS + ["check_language", "citation_lint"],
     "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure", "check_claims", "citation_verify_all"],
     "scout": _ESSENTIALS + ["web_search", "pdf_metadata", "citation_lookup", "citation_verify", "citation_verify_all", "citation_manifest", "citation_download"],
     "deep-reader": _ESSENTIALS + ["pdf_metadata", "extract_figure", "view_pdf_page"],
-    "research-coder": _ESSENTIALS + ["bash"],
+    "research-coder": _ESSENTIALS,
     "figure-stylist": _ESSENTIALS + ["check_figure", "view_pdf_page"],
     "editor": _ESSENTIALS + ["check_claims", "check_language", "citation_lint", "citation_verify_all"],
     "coherence-reviewer": _ESSENTIALS + ["check_claims", "check_language"],
     "provocateur": _ESSENTIALS + [],
     "synthesizer": _ESSENTIALS + ["citation_lint", "citation_verify_all"],
     "triage": _ESSENTIALS + ["pdf_metadata", "citation_verify_all"],
-    "coder": _ESSENTIALS + ["bash", "gh"],
+    "coder": _ESSENTIALS + ["gh"],
     # plan mode uses claude CLI (not ralph_agent.py) — no tool registry needed
 }
 

@@ -119,14 +119,23 @@ while true; do
     CHECKED=$(grep -c '^\- \[x\]' implementation-plan.md 2>/dev/null) || CHECKED=0
     UNCHECKED=$(grep -c '^\- \[ \]' implementation-plan.md 2>/dev/null) || UNCHECKED=0
     if [ "$CHECKED" -gt 0 ] && [ "$UNCHECKED" -eq 0 ]; then
-      echo "  All tasks complete — auto-archiving thread."
-      bash "${RALPH_HOME}/scripts/archive.sh"
       echo ""
-      echo "=== Thread archived. Loop complete. ==="
+      echo "╔══════════════════════════════════════════════════════════╗"
+      echo "║  BUILD COMPLETE — all tasks done                        ║"
+      echo "╠══════════════════════════════════════════════════════════╣"
+      echo "║  To archive this thread, run:                           ║"
+      echo "║    bash scripts/archive.sh                              ║"
+      echo "║                                                         ║"
+      echo "║  This will move to archive/<date>_<thread>/:            ║"
+      echo "║    checkpoint.md, implementation-plan.md,               ║"
+      echo "║    ai-generated-outputs/<thread>/, reflections/,        ║"
+      echo "║    CHANGELOG.md, inbox.md                               ║"
+      echo "║  and restore blank templates.                           ║"
+      echo "╚══════════════════════════════════════════════════════════╝"
     else
       echo "  No task found in checkpoint.md — nothing to do."
-      echo "  Run 'bash \"$RALPH_HOME/ralph-loop.sh\" plan' to plan next steps,"
-      echo "  or 'bash \"$RALPH_HOME/scripts/archive.sh\"' to archive."
+      echo "  Run './ralph-loop.sh plan' to plan next steps,"
+      echo "  or 'bash scripts/archive.sh' to archive."
     fi
     break
   fi
@@ -202,7 +211,10 @@ while true; do
       rm -f /tmp/ralph-output.json
 
       if $USE_CLAUDE_FALLBACK; then
+        MCP_CONFIG=$(build_mcp_config "$CURRENT_AGENT")
         echo "$PROMPT" | claude --model "$CLAUDE_MODEL" \
+          --tools "" \
+          --mcp-config "$MCP_CONFIG" \
           --append-system-prompt "$AGENT_SYSTEM_PROMPT" \
           --output-format json \
           --dangerously-skip-permissions > /tmp/ralph-output.json &

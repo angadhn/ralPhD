@@ -95,33 +95,36 @@ PREAMBLE_EOF
   # Agent .md content
   cat "$agent_file"
 
-  # Get non-essential tools for this agent and append tool-via-bash instructions
-  local template="${RALPH_HOME}/templates/tool-via-bash.md"
-  if [ -f "$template" ]; then
-    local custom_tools
-    custom_tools=$(python3 - <<PYEOF
-import sys, os
-sys.path.insert(0, os.environ.get('RALPH_HOME', '.'))
-from tools import AGENT_TOOLS, DEFAULT_TOOLS
-_ESSENTIALS = frozenset(["read_file", "write_file", "bash", "git_commit", "git_push", "list_files", "code_search"])
-tools = AGENT_TOOLS.get("${agent_name}", DEFAULT_TOOLS)
-custom = [t for t in tools if t not in _ESSENTIALS]
-for t in custom:
-    print(f"- \`{t}\`")
-PYEOF
-    )
-    if [ -n "$custom_tools" ]; then
-      echo ""
-      local tmpfile
-      tmpfile=$(mktemp)
-      printf '%s' "$custom_tools" > "$tmpfile"
-      awk -v tf="$tmpfile" '
-        /\{\{RALPH_TOOLS\}\}/ { while ((getline line < tf) > 0) print line; close(tf); next }
-        { print }
-      ' "$template"
-      rm -f "$tmpfile"
+  # Tools are exposed via MCP server (tools/mcp_server.py), not via bash template.
+  # No tool-via-bash appendix needed.
+}
+
+# Generate a temporary MCP config JSON pointing to tools/mcp_server.py for the given agent.
+# Outputs the path to the config file.
+build_mcp_config() {
+  local agent_name="${1:-}"
+  local config_file="/tmp/ralph-mcp-${agent_name}.json"
+
+  # mcp requires Python ≥3.10; find the best available interpreter
+  local py="python3"
+  for candidate in python3.13 python3.12 python3.11 python3.10; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      py="$candidate"
+      break
     fi
-  fi
+  done
+
+  cat > "$config_file" <<EOF
+{
+  "mcpServers": {
+    "ralph-tools": {
+      "command": "${py}",
+      "args": ["${RALPH_HOME}/tools/mcp_server.py", "${agent_name}"]
+    }
+  }
+}
+EOF
+  echo "$config_file"
 }
 
 resolve_context_window() {
@@ -170,9 +173,12 @@ run_parallel_phase() {
     task_prompt=$(cat "$PROMPT_FILE")
 
     if $use_claude_fallback; then
-      local agent_system_prompt
+      local agent_system_prompt mcp_config
       agent_system_prompt=$(build_claude_system_prompt "$agent_name")
+      mcp_config=$(build_mcp_config "$agent_name")
       echo "$task_prompt" | claude --model "$agent_model" \
+        --tools "" \
+        --mcp-config "$mcp_config" \
         --append-system-prompt "$agent_system_prompt" \
         --output-format json \
         --dangerously-skip-permissions > "${output_dir}/output.json" &
