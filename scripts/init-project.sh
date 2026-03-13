@@ -140,8 +140,18 @@ if $CI_MODE; then
     echo "  Copied .claude/agents/"
   fi
 else
-  # Local: create empty landing zone for custom workspace agents
-  mkdir -p "$WORKSPACE/.claude/agents"
+  # Local: symlink to RALPH_HOME for live updates
+  mkdir -p "$WORKSPACE/.claude"
+  target="$RALPH_HOME/.claude/agents"
+  link="$WORKSPACE/.claude/agents"
+  if [ -L "$link" ]; then
+    rm "$link"  # recreate to ensure correct target
+  fi
+  if [ ! -e "$link" ]; then
+    ln -s "$target" "$link"
+  else
+    echo "  Skipping .claude/agents/ (already exists as regular dir)"
+  fi
 fi
 
 # --- human-inputs/ README (first-init only) ---
@@ -195,6 +205,16 @@ for dir in specs templates; do
     ln -s "$target" "$link"
   fi
 done
+
+# Self-healing .claude/agents → RALPH_HOME
+mkdir -p "$SCRIPT_DIR/.claude"
+target="$RALPH_HOME/.claude/agents"
+link="$SCRIPT_DIR/.claude/agents"
+if [ -L "$link" ] && [ "$(readlink "$link")" != "$target" ]; then
+  rm "$link" && ln -s "$target" "$link"
+elif [ ! -e "$link" ]; then
+  ln -s "$target" "$link"
+fi
 
 # Self-healing content symlinks (only when workspace is a subdirectory)
 PARENT_DIR="$(dirname "$SCRIPT_DIR")"

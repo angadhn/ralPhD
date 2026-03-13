@@ -67,7 +67,7 @@ Once these three are fixed, all downstream relative paths (`ralph-loop.sh`, `lib
 
 ## Phase 2 — Symlink .claude/agents in local mode
 
-- [ ] 2. In init-project.sh local-mode branch (the `else` at line 133), replace `mkdir -p "$WORKSPACE/.claude/agents"` with a symlink to `$RALPH_HOME/.claude/agents`, matching the pattern used for `specs/` and `templates/` (recreate if target changed, skip if regular dir exists). Add self-healing for `.claude/agents` in the embedded ralphd launcher alongside the existing specs/templates healing — **coder**
+- [x] 2. In init-project.sh local-mode branch (the `else` at line 133), replace `mkdir -p "$WORKSPACE/.claude/agents"` with a symlink to `$RALPH_HOME/.claude/agents`, matching the pattern used for `specs/` and `templates/` (recreate if target changed, skip if regular dir exists). Add self-healing for `.claude/agents` in the embedded ralphd launcher alongside the existing specs/templates healing — **coder**
 
 <!-- gate -->
 
