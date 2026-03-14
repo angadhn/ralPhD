@@ -30,25 +30,34 @@ pip install -r requirements.txt   # one-time setup
 
 ### B. Separate project workspace (recommended for multiple projects)
 
+Each project gets its own workspace with its own git history, checkpoint, and outputs. You can run as many projects as you like against one ralPhD install. Each workspace has its own `papers/` directory — drop in the PDFs relevant to that project.
+
 ```bash
-~/ralPhD/scripts/init-project.sh ~/research/my-paper
-cd ~/research/my-paper
-cp ~/Downloads/*.pdf papers/
-./ralphd plan                  # plan (uses launcher)
-./ralphd -p build              # headless build
+# First paper — solar energy review
+~/ralPhD/scripts/init-project.sh ~/research/solar-review
+cd ~/research/solar-review
+cp ~/Downloads/solar-*.pdf papers/
+./ralphd plan
+./ralphd -p build
+
+# Second paper — different topic, separate workspace and papers
+~/ralPhD/scripts/init-project.sh ~/research/battery-modeling
+cd ~/research/battery-modeling
+cp ~/Downloads/battery-*.pdf papers/
+./ralphd plan
 ```
 
-Content directories (`papers/`, `corpus/`, `sections/`, etc.) are created inside the workspace argument (`~/research/my-paper/`), regardless of your current working directory. The init script also symlinks `specs/`, `templates/`, and `.claude/agents/` back to the framework and generates a `./ralphd` launcher.
+The init script creates the directory, initializes a git repo (agents commit after every step), symlinks `specs/`, `templates/`, and `.claude/agents/` back to the framework, and generates a `./ralphd` launcher. The two workspaces are fully independent — different papers, different plans, different outputs.
 
 ### C. Brownfield (inside an existing project)
 
 ```bash
-~/ralPhD/scripts/init-project.sh ~/Howlerv2/.ralph
-cd ~/Howlerv2/.ralph
+~/ralPhD/scripts/init-project.sh ~/my-web-app/.ralph
+cd ~/my-web-app/.ralph
 ./ralphd plan
 ```
 
-Creates an isolated `.ralph/` workspace with its own git history. Agents can read parent code via `../src/`.
+Creates an isolated `.ralph/` workspace inside your existing project, with its own git history so it doesn't pollute your project's commits. Agents can read parent code via `../src/`.
 
 Plan mode produces `implementation-plan.md`. Build mode executes it.
 
