@@ -15,11 +15,15 @@ The `mcp` package is required for headless mode without an API key (OAuth / Max 
 
 ## Quick start
 
+```bash
+git clone https://github.com/angadhn/ralPhD.git
+cd ralPhD
+pip install -r requirements.txt   # one-time setup
+```
+
 ### A. Run from the ralPhD repo (simplest)
 
 ```bash
-cd ralPhD
-pip install -r requirements.txt   # one-time setup
 ./ralph-loop.sh plan               # plan your research goal
 ./ralph-loop.sh                    # build — let the loop run
 ```
