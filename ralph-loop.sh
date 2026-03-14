@@ -35,7 +35,7 @@ if [ ! -f "$PROMPT_FILE" ]; then
   exit 1
 fi
 
-CONTEXT_THRESHOLD=55
+CONTEXT_THRESHOLD=50  # default for ≤200k; overridden to 65 for 1M windows below
 CTX_FILE="/tmp/ralph-context-pct"
 YIELD_FILE="/tmp/ralph-yield"
 BUDGET_FILE="/tmp/ralph-budget-info"
@@ -191,6 +191,12 @@ while true; do
     done
     if [ -n "$MONITOR_SCRIPT" ]; then
       CONTEXT_WINDOW=$(resolve_context_window "$CLAUDE_MODEL")
+      # Larger windows can afford a higher yield threshold
+      if [ "$CONTEXT_WINDOW" -ge 1000000 ] 2>/dev/null; then
+        CONTEXT_THRESHOLD=65
+      else
+        CONTEXT_THRESHOLD=50
+      fi
       bash "$MONITOR_SCRIPT" "$CONTEXT_THRESHOLD" "$CONTEXT_WINDOW" &
       JSONL_MONITOR_PID=$!
       echo "  JSONL context monitor started (pid $JSONL_MONITOR_PID)"

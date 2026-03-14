@@ -35,7 +35,7 @@ it per-agent in `context-budgets.json`.
 ### 0c. Validate yield timing
 
 Compare the context % at which agents actually yielded (from eval data or
-stderr logs) against the `CONTEXT_THRESHOLD` (55%). If agents are yielding
+stderr logs) against the `CONTEXT_THRESHOLD` (50% for ≤200k, 65% for 1M). If agents are yielding
 too early (leaving >30% unused) or too late (exhausting context), adjust
 `CONTEXT_THRESHOLD` or per-agent `max_step` values.
 

@@ -139,8 +139,7 @@ context efficiency, and task completion.
   estimating from `input_tokens / context_window * 100` (context window
   is model-aware: 1M for Claude Opus/Sonnet, 200k for Haiku/o3/o4-mini, 128k for GPT-4o; override via `RALPH_CONTEXT_WINDOW`).
 - **Unit:** Integer percentage (0–100).
-- **Good:** < 55 (below yield threshold). Iterations that hit the yield
-  threshold (55%) may have been truncated.
+- **Good:** Below the yield threshold (50% for ≤200k windows, 65% for 1M windows). Iterations that hit the yield threshold may have been truncated.
 
 ### 4b. Context Yield Triggered (`context_yield`)
 
