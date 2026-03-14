@@ -37,6 +37,7 @@ Maps to claim-calibration rules in `specs/writing-style.md`.
 - [ ] Story arc section present
 - [ ] `master.bib` exists; `citation_lint` passes; no duplicates
 - [ ] `citation_verify_all` run on `master.bib` (unverified entries annotated)
+- [ ] Every `master.bib` entry has a `doi` field (or `note = {DOI not found}`)
 - [ ] `section_outline.md` exists; every section has ≥1 claim and a word budget (or "—")
 - [ ] Claim–Evidence Summary table covers all claims
 - [ ] No input files modified

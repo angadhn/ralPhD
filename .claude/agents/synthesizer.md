@@ -61,7 +61,7 @@ Full templates: see `specs/synthesizer-output-format.md` (read before writing ou
 4. **Merge bibliography:**
    a. Read all `.bib` files from deep-reader (and critic if present)
    b. Deduplicate by DOI, then by author+year+title fuzzy match
-   c. Write merged `master.bib`
+   c. Write merged `master.bib`. Ensure every entry has a `doi` field. If an entry lacks a DOI, run `citation_lookup` to find it.
    d. Run `citation_lint` on `master.bib` — fix any issues
    e. Run `citation_verify_all` on `master.bib` — note unverifiable entries
 5. Read `specs/synthesizer-output-format.md` — load templates.

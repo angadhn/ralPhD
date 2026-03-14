@@ -12,6 +12,7 @@ from tools.download import TOOLS as _download_tools
 from tools.claims import TOOLS as _claims_tools
 from tools.interact import TOOLS as _interact_tools
 from tools.github import TOOLS as _github_tools
+from tools.latex import TOOLS as _latex_tools
 
 # ── Merged registry ───────────────────────────────────────────
 
@@ -24,6 +25,7 @@ TOOLS.update(_download_tools)
 TOOLS.update(_claims_tools)
 TOOLS.update(_interact_tools)
 TOOLS.update(_github_tools)
+TOOLS.update(_latex_tools)
 
 # ── Per-agent tool registries ─────────────────────────────────
 # Every agent gets the essentials: read_file, write_file, git_commit, list_files, code_search
@@ -38,7 +40,7 @@ SERVER_TOOLS = {
 }
 
 AGENT_TOOLS = {
-    "paper-writer": _ESSENTIALS + ["check_language", "citation_lint"],
+    "paper-writer": _ESSENTIALS + ["check_language", "citation_lint", "compile_latex"],
     "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure", "check_claims", "citation_verify_all"],
     "scout": _ESSENTIALS + ["web_search", "pdf_metadata", "citation_lookup", "citation_verify", "citation_verify_all", "citation_manifest", "citation_download"],
     "deep-reader": _ESSENTIALS + ["pdf_metadata", "extract_figure", "view_pdf_page"],

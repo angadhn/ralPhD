@@ -132,6 +132,21 @@ while true; do
       echo "║    CHANGELOG.md, inbox.md                               ║"
       echo "║  and restore blank templates.                           ║"
       echo "╚══════════════════════════════════════════════════════════╝"
+
+      # Auto-compile LaTeX if main.tex exists
+      if [ -f "main.tex" ]; then
+        echo "║  Compiling LaTeX..."
+        compile_result=$(pdflatex -interaction=nonstopmode main.tex 2>&1 && \
+                         bibtex main 2>&1 && \
+                         pdflatex -interaction=nonstopmode main.tex 2>&1 && \
+                         pdflatex -interaction=nonstopmode main.tex 2>&1)
+        if [ -f "main.pdf" ]; then
+          echo "║  PDF generated: main.pdf"
+        else
+          echo "║  WARNING: LaTeX compilation failed"
+          echo "$compile_result" | grep "^!" | head -5
+        fi
+      fi
     else
       echo "  No task found in checkpoint.md — nothing to do."
       echo "  Run './ralph-loop.sh plan' to plan next steps,"

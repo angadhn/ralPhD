@@ -28,3 +28,9 @@ Follow `specs/grading-rubric.md` entry format exactly. Each paper entry includes
 - **DOI:** 10.xxxx/xxxxx
 - **Key contribution:** [1-2 sentences]
 ```
+
+## report.bib format
+
+Every entry MUST include a `doi` field if one was found during lookup.
+Format: `doi = {10.xxxx/xxxxx}` (no URL prefix, just the DOI string).
+Entries without a verified DOI should include `note = {DOI not found}`.

@@ -62,7 +62,7 @@ Full templates for `summary.md` and `scored_papers.md`: see `specs/scout-output-
 9. Run `pdf_metadata` on each downloaded PDF
 10. Append verified papers to `corpus/corpus_index.jsonl`
 11. Read `specs/scout-output-format.md` — load templates for summary + scored_papers
-12. Write `summary.md` + `scored_papers.md` + `report.bib`
+12. Write `summary.md` + `scored_papers.md` + `report.bib`. Every `report.bib` entry must include `doi = {10.xxxx/xxxxx}` from the `citation_lookup` result.
 13. Update `checkpoint.md` — replace Knowledge State with current table, update Next Task
 
 ## Yield

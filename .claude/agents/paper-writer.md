@@ -144,7 +144,7 @@ Full `outline.md` template: see `specs/paper-writer-output-format.md` (read at s
 
 13. Assemble `main.tex` from all section files
 14. Run `check_language` on all sections, `citation_lint` on all .bib files
-15. `pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex`
+15. Run `compile_latex` on `main.tex` — fix any errors before committing.
 
 ## Yield
 
