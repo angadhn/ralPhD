@@ -192,7 +192,11 @@ run_parallel_phase() {
     fi
 
     local task_prompt
-    task_prompt=$(cat "$PROMPT_FILE")
+    task_prompt="## Assigned Task
+
+${task_desc}
+
+$(cat "$PROMPT_FILE")"
 
     if $use_claude_fallback; then
       local agent_system_prompt mcp_config
