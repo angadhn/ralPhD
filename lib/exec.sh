@@ -137,7 +137,8 @@ resolve_context_window() {
   case "$model" in
     gpt-5.4*) echo 272000 ;;
     gpt-4o|gpt-4o-mini) echo 128000 ;;
-    *) echo 200000 ;;  # Claude default 200k; set RALPH_CONTEXT_WINDOW=1000000 for 1M plans
+    claude-haiku*) echo 200000 ;;
+    *) echo 1000000 ;;  # Claude Opus/Sonnet default 1M; set RALPH_CONTEXT_WINDOW=200000 to revert
   esac
 }
 

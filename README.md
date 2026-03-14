@@ -103,7 +103,7 @@ The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED
 | `RALPH_HOME` | script directory | Path to the ralPhD framework repo |
 | `ANTHROPIC_API_KEY` | — | Anthropic API key (for headless mode via `ralph_agent.py`; not needed for OAuth/Max plan users) |
 | `OPENAI_API_KEY` | — | OpenAI API key (or use `codex login` — see auth below) |
-| `RALPH_CONTEXT_WINDOW` | per-model | Context window override in tokens (e.g. `1000000` for 1M plans) |
+| `RALPH_CONTEXT_WINDOW` | per-model | Context window override in tokens (e.g. `200000` to revert to 200k) |
 | `RALPH_MCP_LOG` | — | Path to MCP server debug log (opt-in; e.g. `/tmp/ralph-mcp.log`) |
 
 By default each agent uses the model specified in `context-budgets.json` (Opus for reasoning-heavy agents, Sonnet for coder/research-coder/figure-stylist). Setting `RALPH_MODEL` overrides this globally — all agents use that one model.

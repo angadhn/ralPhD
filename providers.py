@@ -44,8 +44,8 @@ class LLMResponse:
 # ── Context windows ───────────────────────────────────────────
 
 _CONTEXT_WINDOWS = {
-    "claude-opus-4-6": 200_000,   # 1M available on some plans; override via RALPH_CONTEXT_WINDOW
-    "claude-sonnet-4-6": 200_000, # 1M available on some plans; override via RALPH_CONTEXT_WINDOW
+    "claude-opus-4-6": 1_000_000,
+    "claude-sonnet-4-6": 1_000_000,
     "claude-haiku-4-5": 200_000,
     "gpt-5.4": 272_000,          # 272k standard; 1.05M experimental (not enabled)
     "gpt-4o": 128_000,

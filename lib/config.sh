@@ -42,8 +42,8 @@ Options:
   --help, -h        Show this help and exit
 
 Supported models:
-  claude-opus-4-6       Anthropic Opus 4.6  (200k context)
-  claude-sonnet-4-6     Anthropic Sonnet 4.6 (200k context)
+  claude-opus-4-6       Anthropic Opus 4.6  (1M context)
+  claude-sonnet-4-6     Anthropic Sonnet 4.6 (1M context)
   claude-haiku-4-5      Anthropic Haiku 4.5  (200k context)
   gpt-5.4               OpenAI GPT-5.4       (272k context)
   gpt-4o                OpenAI GPT-4o        (128k context)
