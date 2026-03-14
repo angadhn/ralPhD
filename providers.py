@@ -44,8 +44,8 @@ class LLMResponse:
 # ── Context windows ───────────────────────────────────────────
 
 _CONTEXT_WINDOWS = {
-    "claude-opus-4-6": 1_000_000,
-    "claude-sonnet-4-6": 1_000_000,
+    "claude-opus-4-6": 200_000,   # 1M available on some plans; override via RALPH_CONTEXT_WINDOW
+    "claude-sonnet-4-6": 200_000, # 1M available on some plans; override via RALPH_CONTEXT_WINDOW
     "claude-haiku-4-5": 200_000,
     "gpt-5.4": 272_000,          # 272k standard; 1.05M experimental (not enabled)
     "gpt-4o": 128_000,
@@ -56,7 +56,17 @@ _CONTEXT_WINDOWS = {
 
 
 def get_context_window(model: str) -> int:
-    """Return context window size in tokens for the given model."""
+    """Return context window size in tokens for the given model.
+
+    Override with RALPH_CONTEXT_WINDOW env var (e.g. 1000000 for 1M plans).
+    """
+    import os
+    override = os.environ.get("RALPH_CONTEXT_WINDOW", "")
+    if override:
+        try:
+            return int(override)
+        except ValueError:
+            pass
     return _CONTEXT_WINDOWS.get(model, 200_000)
 
 

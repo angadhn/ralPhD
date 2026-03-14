@@ -128,12 +128,16 @@ EOF
 }
 
 resolve_context_window() {
+  # RALPH_CONTEXT_WINDOW overrides per-model defaults (e.g. 1000000 for 1M plans)
+  if [ -n "${RALPH_CONTEXT_WINDOW:-}" ]; then
+    echo "$RALPH_CONTEXT_WINDOW"
+    return
+  fi
   local model="${1:-claude-opus-4-6}"
   case "$model" in
-    claude-opus-4-6|claude-sonnet-4-6) echo 1000000 ;;
     gpt-5.4*) echo 272000 ;;
     gpt-4o|gpt-4o-mini) echo 128000 ;;
-    *) echo 200000 ;;
+    *) echo 200000 ;;  # Claude default 200k; set RALPH_CONTEXT_WINDOW=1000000 for 1M plans
   esac
 }
 
