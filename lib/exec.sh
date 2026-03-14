@@ -127,6 +127,22 @@ EOF
   echo "$config_file"
 }
 
+resolve_cli_model() {
+  # Append [1m] to Claude model names when the context window is 1M.
+  # This tells the claude CLI to use the extended context window.
+  local model="${1:-claude-opus-4-6}"
+  local ctx_window
+  ctx_window=$(resolve_context_window "$model")
+  if [ "$ctx_window" -ge 1000000 ] 2>/dev/null; then
+    case "$model" in
+      claude-*) echo "${model}[1m]" ;;
+      *) echo "$model" ;;
+    esac
+  else
+    echo "$model"
+  fi
+}
+
 resolve_context_window() {
   # RALPH_CONTEXT_WINDOW overrides per-model defaults (e.g. 1000000 for 1M plans)
   if [ -n "${RALPH_CONTEXT_WINDOW:-}" ]; then
@@ -182,7 +198,9 @@ run_parallel_phase() {
       local agent_system_prompt mcp_config
       agent_system_prompt=$(build_claude_system_prompt "$agent_name")
       mcp_config=$(build_mcp_config "$agent_name")
-      echo "$task_prompt" | claude --model "$agent_model" \
+      local cli_model
+      cli_model=$(resolve_cli_model "$agent_model")
+      echo "$task_prompt" | claude --model "$cli_model" \
         --tools "" \
         --mcp-config "$mcp_config" \
         --append-system-prompt "$agent_system_prompt" \

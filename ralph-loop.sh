@@ -176,7 +176,7 @@ while true; do
   if $PIPE_MODE; then
     # Non-interactive: pipe prompt, background claude, poll for context via JSONL monitor
     CLAUDE_MODEL=$(resolve_model "$CURRENT_AGENT")
-    echo "  Model: $CLAUDE_MODEL"
+    echo "  Model: $(resolve_cli_model "$CLAUDE_MODEL")"
 
     # Create start marker for JSONL monitor (before launching claude)
     touch /tmp/ralph-monitor-start
@@ -218,7 +218,8 @@ while true; do
 
       if $USE_CLAUDE_FALLBACK; then
         MCP_CONFIG=$(build_mcp_config "$CURRENT_AGENT")
-        echo "$PROMPT" | claude --model "$CLAUDE_MODEL" \
+        BUILD_CLI_MODEL=$(resolve_cli_model "$CLAUDE_MODEL")
+        echo "$PROMPT" | claude --model "$BUILD_CLI_MODEL" \
           --tools "" \
           --mcp-config "$MCP_CONFIG" \
           --append-system-prompt "$AGENT_SYSTEM_PROMPT" \
@@ -326,8 +327,9 @@ while true; do
       # Plan mode: use claude CLI for interactive TUI
       PLAN_SYSTEM="$(cat "${RALPH_HOME}/.claude/agents/plan.md")"
       SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-      echo "  Model: $CLAUDE_MODEL (plan mode — claude CLI)"
-      echo "$PROMPT" | claude --model "$CLAUDE_MODEL" \
+      PLAN_CLI_MODEL=$(resolve_cli_model "$CLAUDE_MODEL")
+      echo "  Model: $PLAN_CLI_MODEL (plan mode — claude CLI)"
+      echo "$PROMPT" | claude --model "$PLAN_CLI_MODEL" \
         --append-system-prompt "$PLAN_SYSTEM" \
         --session-id "$SESSION_ID" \
         --dangerously-skip-permissions
@@ -387,7 +389,9 @@ while true; do
     else
       # Anthropic models: use claude CLI for interactive TUI
       SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-      echo "$PROMPT" | claude --model "$CLAUDE_MODEL" --session-id "$SESSION_ID" --dangerously-skip-permissions
+      INTERACTIVE_CLI_MODEL=$(resolve_cli_model "$CLAUDE_MODEL")
+      echo "  Model: $INTERACTIVE_CLI_MODEL (interactive build — claude CLI)"
+      echo "$PROMPT" | claude --model "$INTERACTIVE_CLI_MODEL" --session-id "$SESSION_ID" --dangerously-skip-permissions
       EXIT_CODE=$?
 
       kill "$MONITOR_PID" 2>/dev/null || true
