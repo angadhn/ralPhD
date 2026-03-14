@@ -52,12 +52,12 @@ The init script creates the directory, initializes a git repo (agents commit aft
 ### C. Brownfield (inside an existing project)
 
 ```bash
-~/ralPhD/scripts/init-project.sh ~/my-web-app/.ralph
-cd ~/my-web-app/.ralph
+~/ralPhD/scripts/init-project.sh ~/my-existing-codebase/.ralph
+cd ~/my-existing-codebase/.ralph
 ./ralphd plan
 ```
 
-Creates an isolated `.ralph/` workspace inside your existing project, with its own git history so it doesn't pollute your project's commits. Agents can read parent code via `../src/`.
+Creates an isolated `.ralph/` workspace inside your existing project, with its own git history so it doesn't pollute your project's commits. Agents can read parent code via `../`.
 
 Plan mode produces `implementation-plan.md`. Build mode executes it.
 
