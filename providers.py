@@ -244,23 +244,27 @@ def _anthropic_tools_to_openai(tools: list[dict]) -> list[dict]:
 
 def call_model(client, provider: str, model: str, system_prompt: str,
                tools: list[dict], messages: list[dict],
-               max_tokens: int) -> LLMResponse:
+               max_tokens: int, effort: str = None) -> LLMResponse:
     """Call the model and return a normalized LLMResponse."""
     if provider == "anthropic":
-        return _call_anthropic(client, model, system_prompt, tools, messages, max_tokens)
+        return _call_anthropic(client, model, system_prompt, tools, messages, max_tokens, effort)
     if provider == "openai":
         return _call_openai(client, model, system_prompt, tools, messages, max_tokens)
     raise ValueError(f"Unknown provider: {provider}")
 
 
-def _call_anthropic(client, model, system_prompt, tools, messages, max_tokens):
-    response = client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=system_prompt,
-        tools=tools,
-        messages=messages,
-    )
+def _call_anthropic(client, model, system_prompt, tools, messages, max_tokens, effort=None):
+    kwargs = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system_prompt,
+        "tools": tools,
+        "messages": messages,
+    }
+    if effort:
+        kwargs["thinking"] = {"type": "adaptive"}
+        kwargs["output_config"] = {"effort": effort}
+    response = client.messages.create(**kwargs)
 
     text_blocks = []
     tool_calls = []

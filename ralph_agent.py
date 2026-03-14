@@ -123,7 +123,7 @@ def build_path_preamble(ralph_home: Path) -> str:
 # ── Agent loop ─────────────────────────────────────────────────
 
 def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
-              max_tokens: int, output_json: str = None):
+              max_tokens: int, output_json: str = None, effort: str = None):
     import time as _time
     start_ms = int(_time.time() * 1000)
 
@@ -156,7 +156,7 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
             try:
                 response = call_model(
                     client, provider, model, system_prompt,
-                    tools, messages, max_tokens,
+                    tools, messages, max_tokens, effort=effort,
                 )
                 break
             except Exception as e:
@@ -281,13 +281,16 @@ def main():
     # Resolve RALPH_HOME: env var > script directory
     ralph_home = Path(os.environ.get("RALPH_HOME", str(Path(__file__).parent)))
 
-    # Resolve max_tokens: CLI flag > context-budgets.json > 8096
+    # Resolve max_tokens + effort: CLI flag > context-budgets.json > defaults
+    effort = None
     if args.max_tokens is None:
         budgets_path = ralph_home / "context-budgets.json"
         if budgets_path.exists():
             try:
                 budgets = json.loads(budgets_path.read_text())
-                args.max_tokens = budgets.get(args.agent, {}).get("max_tokens", 8096)
+                agent_budget = budgets.get(args.agent, {})
+                args.max_tokens = agent_budget.get("max_tokens", 8096)
+                effort = agent_budget.get("effort")
             except (json.JSONDecodeError, KeyError):
                 args.max_tokens = 8096
         else:
@@ -319,7 +322,7 @@ def main():
     # Read task from stdin if -
     task = sys.stdin.read() if args.task == "-" else args.task
 
-    run_agent(args.agent, system_prompt, task, args.model, args.max_tokens, args.output_json)
+    run_agent(args.agent, system_prompt, task, args.model, args.max_tokens, args.output_json, effort=effort)
 
 
 if __name__ == "__main__":
