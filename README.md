@@ -4,14 +4,24 @@ Autonomous loop for writing research papers. Claude reads papers, builds argumen
 
 Designed for PhD-level STEM work targeting peer-reviewed journals. All claims must be substantiated by peer-reviewed or conference papers.
 
+## Prerequisites
+
+- **Python ≥ 3.10** (3.13 recommended)
+- **Claude CLI** — `npm install -g @anthropic-ai/claude-code` then `claude login`
+- **jq** — `brew install jq` (macOS) or `apt install jq` (Linux)
+- **Python deps** — `pip install -r requirements.txt` (installs `mcp` and `rich`)
+
+The `mcp` package is required for headless mode without an API key (OAuth / Max plan). If you have `ANTHROPIC_API_KEY` set, `ralph_agent.py` handles everything and `mcp` is not needed.
+
 ## Quick start
 
 ### A. Run from the ralPhD repo (simplest)
 
 ```bash
 cd ralPhD
-./ralph-loop.sh plan          # plan your research goal
-./ralph-loop.sh               # build — let the loop run
+pip install -r requirements.txt   # one-time setup
+./ralph-loop.sh plan               # plan your research goal
+./ralph-loop.sh                    # build — let the loop run
 ```
 
 ### B. Separate project workspace (recommended for multiple projects)
@@ -256,8 +266,6 @@ Tools are defined in `tools/` and registered per-agent in `tools/__init__.py`:
 Every agent gets 6 essentials: `read_file`, `write_file`, `git_commit`, `git_push`, `list_files`, `code_search`. 19 tools total, with `tools/checks.py` kept as a compatibility shim over the split check modules.
 
 Based on [ghuntley's agent architecture](https://ghuntley.com/agent): the agent = the loop + tool registry, the prompt = behavioral guidance.
-
-> **Note:** The MCP fallback path (`mcp_server.py`) requires Python ≥ 3.10 for the `mcp` package. This only affects users running without `ANTHROPIC_API_KEY` (OAuth / Max plan). The `ralph_agent.py` path works on Python ≥ 3.8.
 
 ## RALPH_HOME
 

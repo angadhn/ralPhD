@@ -28,7 +28,7 @@ context efficiency, and task completion.
 - **What:** Total input tokens consumed (prompt + context).
 - **How collected:** From `logs/usage.jsonl` entry for the iteration.
 - **Unit:** Integer token count.
-- **Good:** < 150k (leaves headroom in 200k context window).
+- **Good:** < 150k for 200k-window models; scales with context window (e.g. 1M for Opus/Sonnet 4.6).
 
 ### 1c. Output Tokens (`output_tokens`)
 
@@ -137,7 +137,7 @@ context efficiency, and task completion.
 - **How collected:** Read from `/tmp/ralph-context-pct` at iteration end,
   or from the budget info file's `context_pct` field. Falls back to
   estimating from `input_tokens / context_window * 100` (context window
-  is model-aware: 200k for Claude/o3/o4-mini, 128k for GPT-4o).
+  is model-aware: 1M for Opus/Sonnet 4.6, 200k for Haiku/o3/o4-mini, 128k for GPT-4o).
 - **Unit:** Integer percentage (0–100).
 - **Good:** < 55 (below yield threshold). Iterations that hit the yield
   threshold (55%) may have been truncated.

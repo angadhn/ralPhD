@@ -130,6 +130,7 @@ EOF
 resolve_context_window() {
   local model="${1:-claude-opus-4-6}"
   case "$model" in
+    claude-opus-4-6|claude-sonnet-4-6) echo 1000000 ;;
     gpt-5.4*) echo 272000 ;;
     gpt-4o|gpt-4o-mini) echo 128000 ;;
     *) echo 200000 ;;
