@@ -154,7 +154,7 @@ handle_human_review_gate() {
 
 restore_truncated_files() {
   local truncated
-  truncated=$(git diff --numstat 2>/dev/null | awk '$1 == 0 && $2 > 0 {print $3}')
+  truncated=$(git diff --numstat 2>/dev/null | awk '$1 == 0 && $2 > 0 {print $3}' || true)
   if [ -n "$truncated" ]; then
     echo "  ⚠  TRUNCATED FILES DETECTED:"
     echo "$truncated" | sed 's/^/    /'
