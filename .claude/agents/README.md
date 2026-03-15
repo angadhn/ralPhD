@@ -1,7 +1,9 @@
 # Agents — Planner's Menu
 
-Twelve agents forming the Ralph loop. Each reads `checkpoint.md`, produces outputs, updates checkpoint, and yields.
+Thirteen agents forming the Ralph loop. Each reads `checkpoint.md`, produces outputs, updates checkpoint, and yields.
 All agents inherit shared protocol from `agent-base.md`.
+
+Custom workspace agents (in project `.claude/agents/`) override framework agents of the same name and declare their tools in a `## Tools` section.
 
 ## Agent Reference
 
@@ -19,6 +21,7 @@ All agents inherit shared protocol from `agent-base.md`.
 | research-coder | Analysis scripts, simulations, figures from data | — | critic (FIGURE-PROPOSAL), planner | figure-stylist (figures), paper-writer (data) | When figures proposed or data analysis needed |
 | figure-stylist | Visual clarity + print readiness review | check_figure | research-coder | research-coder (revise) or next phase | After each figure is generated |
 | coder | Read, modify, and test application code | — | planner | planner (task complete) | When implementation tasks require source code changes |
+| orchestrator | AI-driven dispatch at phase boundaries | read_file, list_files | planner | parallel/serial agents | When Architecture is `orchestrated` |
 
 ## Typical flow
 
@@ -28,13 +31,21 @@ scout → triage → deep-reader → critic → provocateur → synthesizer
   → paper-writer (REVIEW-EDITS) → research-coder (figures) → figure-stylist
 ```
 
+## Architecture modes
+
+| Mode | Flag | How it works |
+|------|------|--------------|
+| serial | `--serial` (default) | One agent at a time, deterministic |
+| parallel | `--parallel` | Phases marked `(parallel)` run concurrently in git worktrees |
+| orchestrated | `--orchestrated` | AI orchestrator decides dispatch strategy per phase (can batch, adapt, split) |
+
 ## Adding a new agent
 
 1. Copy `agent-template.md` and fill in each section
 2. Target **60 lines or fewer** — offload verbose templates to `specs/`
 3. Agent inherits `agent-base.md` for yield/commit/checkpoint protocol
 4. If structured output, add `specs/<agent>-output-format.md` and `templates/` if needed
-5. Register tool set in `tools/__init__.py` `AGENT_TOOLS`
+5. Declare tools in the `## Tools` section of your agent `.md` file — `ralph_agent.py` parses it automatically. Only add to `tools/__init__.py` `AGENT_TOOLS` for framework agents.
 
 ## The `inputs/` directory
 
