@@ -172,6 +172,37 @@ while true; do
     break
   fi
 
+  # --- Orchestrated mode: AI-driven dispatch ---
+  if [ "$ARCH_MODE" = "orchestrated" ] && [ "$LOOP_MODE" = "build" ]; then
+    run_orchestrated_phase
+    ORCH_RC=$?
+    if [ "$ORCH_RC" -eq 2 ]; then
+      # Orchestrator says all tasks complete
+      echo ""
+      echo "╔══════════════════════════════════════════════════════════╗"
+      echo "║  BUILD COMPLETE — orchestrator confirmed all tasks done ║"
+      echo "╚══════════════════════════════════════════════════════════╝"
+      break
+    elif [ "$ORCH_RC" -eq 0 ] && [ -n "$CURRENT_AGENT" ]; then
+      # Orchestrator set CURRENT_AGENT for serial dispatch — fall through to build prompt
+      echo "  Agent dispatched by orchestrator: $CURRENT_AGENT"
+    elif [ "$ORCH_RC" -eq 0 ]; then
+      # Orchestrator handled everything (parallel dispatch or adaptation)
+      capture_eval_metrics || true
+      echo ""
+      echo "=== Iteration $ITERATION complete (orchestrated). Fresh context in 3s... ==="
+      sleep 3
+      if [ -n "${MAX_ITERATIONS:-}" ] && [ "$ITERATION" -ge "$MAX_ITERATIONS" ]; then
+        echo "=== Max iterations ($MAX_ITERATIONS) reached. Exiting. ==="
+        break
+      fi
+      continue
+    else
+      # Orchestrator failed — fall through to plan-driven logic
+      echo "  Falling back to plan-driven execution"
+    fi
+  fi
+
   # --- Parallel mode: run all tasks in current phase concurrently ---
   if [ "$ARCH_MODE" = "parallel" ] && [ "$LOOP_MODE" = "build" ]; then
     CURRENT_PHASE=$(detect_current_phase "implementation-plan.md")

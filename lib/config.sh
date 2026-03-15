@@ -17,6 +17,7 @@ parse_loop_args() {
       build) LOOP_MODE="build"; PROMPT_FILE="prompt-build.md" ;;
       --serial) ARCH_MODE="serial" ;;
       --parallel) ARCH_MODE="parallel" ;;
+      --orchestrated) ARCH_MODE="orchestrated" ;;
       --run-tag=*) RUN_TAG="${arg#--run-tag=}" ;;
       --model=*) CLI_MODEL="${arg#--model=}" ;;
       --help|-h) SHOW_HELP=true ;;
@@ -83,7 +84,7 @@ resolve_arch_mode_from_plan() {
       | tr '[:upper:]' '[:lower:]' || true)
   fi
 
-  if [ -z "$arch_mode" ] || ! echo "$arch_mode" | grep -qE '^(serial|parallel|auto)$'; then
+  if [ -z "$arch_mode" ] || ! echo "$arch_mode" | grep -qE '^(serial|parallel|orchestrated|auto)$'; then
     arch_mode="serial"
   fi
 

@@ -33,3 +33,8 @@ Mark independent phases `(parallel)`. Set `**Architecture:**` and
 `**Autonomy:**` fields. For tasks that depend on earlier tasks, add
 `(depends: N)` or `(depends: N,M)` — the build system validates these
 before running parallel phases.
+
+Architecture options:
+- `serial` — one agent at a time (default, safest)
+- `parallel` — plan-driven parallelism (phases marked `(parallel)` run concurrently in worktrees)
+- `orchestrated` — AI orchestrator decides dispatch strategy at each phase boundary (can batch, adapt plan, split tasks)

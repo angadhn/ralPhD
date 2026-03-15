@@ -1467,6 +1467,19 @@ else
   fail "12c: Architecture field: got '$PARSED', expected 'auto'"
 fi
 
+# Test: orchestrated field
+cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
+# Plan
+**Architecture:** orchestrated
+ARCHEOF
+
+PARSED=$(resolve_arch_mode_from_plan "" "$ARCH_TEST_DIR/plan.md")
+if [ "$PARSED" = "orchestrated" ]; then
+  pass "12d: Architecture field parsed: orchestrated"
+else
+  fail "12d: Architecture field: got '$PARSED', expected 'orchestrated'"
+fi
+
 # Test: missing field defaults to serial
 cat > "$ARCH_TEST_DIR/plan.md" << 'ARCHEOF'
 # Plan
