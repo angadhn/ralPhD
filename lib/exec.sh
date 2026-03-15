@@ -439,7 +439,7 @@ Your ONLY job is to decide what agents to run and output JSON.
 
 See your full instructions in your agent prompt (.claude/agents/orchestrator.md)."
 
-  echo "  🎯 Running orchestrator..."
+  echo "  🎯 Running orchestrator..." >&2
 
   local use_claude_fallback=false
   if is_anthropic_model "$orch_model" && ! has_anthropic_api_key; then
@@ -468,7 +468,7 @@ See your full instructions in your agent prompt (.claude/agents/orchestrator.md)
   fi
 
   if [ ! -f "$output_file" ] || [ ! -s "$output_file" ]; then
-    echo "  ⚠  Orchestrator produced no output"
+    echo "  ⚠  Orchestrator produced no output" >&2
     echo ""
     return 1
   fi
