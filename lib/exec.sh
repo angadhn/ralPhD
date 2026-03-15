@@ -233,6 +233,15 @@ merge_worktree() {
   # Check if there are any commits to merge
   local main_branch
   main_branch=$(git rev-parse --abbrev-ref HEAD)
+  # Auto-commit any uncommitted work the agent left behind
+  local uncommitted
+  uncommitted=$(git -C "$wt_dir" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$uncommitted" -gt 0 ]; then
+    echo "  📦 Auto-committing $uncommitted uncommitted files from $agent_name"
+    git -C "$wt_dir" add -A 2>/dev/null
+    git -C "$wt_dir" commit -m "auto-commit: uncommitted work from parallel agent $agent_name" --quiet 2>/dev/null || true
+  fi
+
   if git merge-base --is-ancestor "$branch_name" "$main_branch" 2>/dev/null; then
     # No new commits on the branch — nothing to merge
     return 0
