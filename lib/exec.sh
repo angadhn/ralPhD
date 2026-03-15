@@ -446,11 +446,11 @@ run_parallel_phase() {
     local agent_model
     agent_model=$(resolve_model "$agent_name")
 
-    # Auth-detection: Anthropic model but no API key → use claude -p fallback (OAuth/Max plan)
+    # Auth-detection: Anthropic model but no API key → use MCP via claude CLI
     local use_claude_fallback=false
     if is_anthropic_model "$agent_model" && ! has_anthropic_api_key; then
       use_claude_fallback=true
-      echo "  Spawning parallel agent: $agent_name (task $task_idx, model $agent_model, claude -p fallback)"
+      echo "  Spawning parallel agent: $agent_name (task $task_idx, model $agent_model, MCP mode)"
     else
       echo "  Spawning parallel agent: $agent_name (task $task_idx, model $agent_model)"
     fi
@@ -489,6 +489,9 @@ $(cat "$PROMPT_FILE")"
     pids+=($!)
     agents+=("$agent_name")
     worktrees+=("$wt_dir")
+
+    # Stagger spawns to avoid rate limiting when hitting OAuth simultaneously
+    sleep 2
   done < <(collect_phase_tasks "implementation-plan.md" "$phase_line")
 
   if [ ${#pids[@]} -eq 0 ]; then
@@ -501,16 +504,18 @@ $(cat "$PROMPT_FILE")"
   local failed=0
   for i in "${!pids[@]}"; do
     if wait "${pids[$i]}" 2>/dev/null; then
-      echo "  ✓ ${agents[$i]} completed"
+      echo "  ✓ ${agents[$i]} completed (task $((i + 1)))"
     else
-      echo "  ✗ ${agents[$i]} failed (exit $?)"
+      echo "  ✗ ${agents[$i]} failed (task $((i + 1)), exit $?)"
       failed=$((failed + 1))
     fi
   done
 
   echo "  Parallel phase complete: $((${#pids[@]} - failed))/${#pids[@]} succeeded"
 
-  # --- Phase 3: Validate and merge worktrees ---
+  # --- Phase 3: Collect paths from ALL worktrees, then validate and merge ---
+  # IMPORTANT: Collect paths BEFORE validation. Even if a worktree's merge is
+  # skipped, its implementation-plan.md may have checkboxes we need.
   local wt_checkpoints=()
   local wt_plans=()
   local merge_failures=0
@@ -521,38 +526,42 @@ $(cat "$PROMPT_FILE")"
       continue
     fi
 
-    # Pre-merge validation (use base_commit to avoid HEAD-advance false rejections)
+    # Always collect paths for reconciliation (regardless of validation outcome)
+    [ -f "$wt/checkpoint.md" ] && wt_checkpoints+=("$wt/checkpoint.md")
+    [ -f "$wt/implementation-plan.md" ] && wt_plans+=("$wt/implementation-plan.md")
+
+    # Validate: did the agent produce work?
     if ! validate_worktree_output "$wt" "${agents[$i]}" "$base_commit"; then
-      echo "  ⚠  Skipping merge for ${agents[$i]} (validation failed)"
+      echo "  ⚠  Skipping git merge for ${agents[$i]} (no commits)"
       merge_failures=$((merge_failures + 1))
       continue
     fi
 
-    # Collect checkpoint and plan paths for post-merge reconciliation
-    [ -f "$wt/checkpoint.md" ] && wt_checkpoints+=("$wt/checkpoint.md")
-    [ -f "$wt/implementation-plan.md" ] && wt_plans+=("$wt/implementation-plan.md")
-
     # Merge worktree branch into main
     if merge_worktree "$wt" "${agents[$i]}"; then
-      echo "  🔀 Merged ${agents[$i]}"
+      echo "  🔀 Merged ${agents[$i]} (task $((i + 1)))"
     else
-      echo "  ⚠  Merge conflict from ${agents[$i]} — branch preserved for manual review"
+      echo "  ⚠  Merge failed for ${agents[$i]} — branch preserved"
       merge_failures=$((merge_failures + 1))
     fi
   done
 
   # --- Phase 4: Reconcile shared files ---
+  echo "  Reconciling shared files..."
+
+  if [ ${#wt_plans[@]} -gt 0 ]; then
+    merge_plan_checkboxes "implementation-plan.md" "${wt_plans[@]}"
+    local checked_after
+    checked_after=$(grep -c '^\- \[x\]' implementation-plan.md 2>/dev/null || echo 0)
+    echo "  ☑  Plan checkboxes merged from ${#wt_plans[@]} worktrees ($checked_after tasks now checked)"
+  fi
+
   if [ ${#wt_checkpoints[@]} -gt 0 ]; then
     merge_checkpoints "checkpoint.md" "${wt_checkpoints[@]}"
     echo "  📋 Checkpoint merged from ${#wt_checkpoints[@]} worktrees"
   fi
 
-  if [ ${#wt_plans[@]} -gt 0 ]; then
-    merge_plan_checkboxes "implementation-plan.md" "${wt_plans[@]}"
-    echo "  ☑  Plan checkboxes merged from ${#wt_plans[@]} worktrees"
-  fi
-
-  # Commit the merged state
+  # Commit the reconciled state
   git add checkpoint.md implementation-plan.md 2>/dev/null
   git commit -m "merge: reconcile parallel phase — ${#pids[@]} agents" --quiet 2>/dev/null || true
 
@@ -562,16 +571,6 @@ $(cat "$PROMPT_FILE")"
       echo "  ✓ Post-merge: LaTeX compiles"
     else
       echo "  ⚠  Post-merge: LaTeX compilation failed — check main.tex"
-    fi
-  fi
-  if [ -f "tools/citations.py" ] || [ -f "${RALPH_HOME}/tools/citations.py" ]; then
-    local cite_script="${RALPH_HOME}/tools/cli.py"
-    if [ -f "$cite_script" ] && [ -d "references" ]; then
-      local cite_result
-      cite_result=$(python3 "$cite_script" citation_verify_all '{}' 2>/dev/null) || true
-      if echo "$cite_result" | grep -qi "error\|invalid\|missing"; then
-        echo "  ⚠  Post-merge: citation issues detected"
-      fi
     fi
   fi
 
@@ -593,7 +592,7 @@ $(cat "$PROMPT_FILE")"
   echo "  🧹 Worktrees cleaned up"
 
   if [ "$merge_failures" -gt 0 ]; then
-    echo "  ⚠  $merge_failures merge failure(s) — check logs"
+    echo "  ⚠  $merge_failures merge issue(s) — check logs above"
   fi
 
   return 0
