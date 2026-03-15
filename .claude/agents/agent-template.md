@@ -10,6 +10,14 @@
 - `<input-file-1>` — <why this agent needs it>
 - `<input-file-2>` — <why this agent needs it>
 
+## Tools
+
+<!-- List tools this agent needs BEYOND the essentials (read_file, write_file, bash, git_commit, etc.).
+     ralph_agent.py reads this section to build the agent's tool registry.
+     Only list tools from the Ralph tool set (run: python3 tools/cli.py --list-tools).
+     If this agent needs web access, add: `web_search` -->
+- `<tool_name>` — <when/why to use it>
+
 ## Operational Guardrails
 
 <!-- Constraints that keep this agent efficient and predictable. -->

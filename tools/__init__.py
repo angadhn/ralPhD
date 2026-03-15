@@ -4,6 +4,10 @@ Collects tool definitions from submodules and provides per-agent registries.
 Adding a tool = adding it to the right submodule's TOOLS dict + AGENT_TOOLS here.
 """
 
+import os
+import re
+from pathlib import Path
+
 from tools.core import TOOLS as _core_tools
 from tools.checks import TOOLS as _checks_tools
 from tools.pdf import TOOLS as _pdf_tools
@@ -57,6 +61,9 @@ AGENT_TOOLS = {
 
 DEFAULT_TOOLS = _ESSENTIALS
 
+# All known tool names (for validating agent file declarations)
+ALL_TOOL_NAMES = set(TOOLS.keys()) | set(SERVER_TOOLS.keys())
+
 
 # ── Tool dispatch ─────────────────────────────────────────────
 
@@ -73,17 +80,77 @@ def execute_tool(name: str, tool_input: dict):
     return tool["function"](tool_input)
 
 
+def parse_tools_from_agent_file(agent_name: str):
+    """Parse tool names from an agent's .md file ## Tools section.
+
+    Returns a list of tool names if the agent file declares tools,
+    or None if no ## Tools section is found (fall back to DEFAULT_TOOLS).
+
+    Agent .md files list tools as backtick-quoted names:
+        ## Tools
+        - `web_search` — search the web
+        - `check_language` — style check
+    """
+    # Resolve agent file: workspace-first, then RALPH_HOME
+    ralph_home = Path(os.environ.get("RALPH_HOME", "."))
+    workspace_path = Path.cwd() / ".claude" / "agents" / f"{agent_name}.md"
+    framework_path = ralph_home / ".claude" / "agents" / f"{agent_name}.md"
+
+    agent_path = workspace_path if workspace_path.exists() else framework_path
+    if not agent_path.exists():
+        return None
+
+    text = agent_path.read_text()
+
+    # Find ## Tools section
+    in_tools = False
+    declared = []
+    for line in text.splitlines():
+        if re.match(r'^## Tools\b', line):
+            in_tools = True
+            continue
+        if in_tools and re.match(r'^## ', line):
+            break  # next section
+        if in_tools:
+            # Extract backtick-quoted tool names: `tool_name`
+            matches = re.findall(r'`(\w[\w-]*)`', line)
+            for m in matches:
+                if m in ALL_TOOL_NAMES:
+                    declared.append(m)
+
+    if not declared:
+        return None
+
+    return declared
+
+
 def get_tools_for_agent(agent_name: str) -> tuple[list[str], list[dict]]:
     """Return (tool_names, api_schemas) for an agent.
+
+    Resolution order:
+    1. Hardcoded AGENT_TOOLS registry (framework agents)
+    2. Parsed from agent .md file ## Tools section (custom agents)
+    3. DEFAULT_TOOLS (essentials only)
 
     Server-side tools (e.g. web_search) use their raw definition directly.
     Client-side tools use api_schema() to strip the handler function.
     """
-    tool_names = AGENT_TOOLS.get(agent_name, DEFAULT_TOOLS)
+    # 1. Check hardcoded registry
+    tool_names = AGENT_TOOLS.get(agent_name)
+
+    # 2. Parse from agent .md file
+    if tool_names is None:
+        declared = parse_tools_from_agent_file(agent_name)
+        if declared:
+            tool_names = list(_ESSENTIALS) + declared
+        else:
+            tool_names = list(DEFAULT_TOOLS)
+
     schemas = []
     for t in tool_names:
         if t in SERVER_TOOLS:
             schemas.append(SERVER_TOOLS[t])
-        else:
+        elif t in TOOLS:
             schemas.append(api_schema(TOOLS[t]))
+        # Skip unknown tools silently (may be documentation-only)
     return tool_names, schemas
