@@ -105,13 +105,30 @@ while true; do
   elif [ -n "$CURRENT_AGENT" ] && [ "$CURRENT_AGENT" != "" ]; then
     AGENT_PATH=$(resolve_agent_path "$CURRENT_AGENT")
     if [ -z "$AGENT_PATH" ]; then
-      RAW_LINE=$(grep -i '^\*\*Next Task\|^Next Task\|^## Next' checkpoint.md 2>/dev/null | head -1)
-      echo "  ⚠  Agent file not found in workspace (.claude/agents/${CURRENT_AGENT}.md)"
-      echo "     or framework (${RALPH_HOME}/.claude/agents/${CURRENT_AGENT}.md)"
-      echo "     Raw Next Task line: $RAW_LINE"
-      echo "     Skipping iteration (fix checkpoint.md or agent name)."
-      sleep 5
-      continue
+      # Checkpoint has a bad Next Task (agent wrote prose instead of a task line).
+      # Fall back to the implementation plan's first unchecked task.
+      echo "  ⚠  Agent '$CURRENT_AGENT' not found — falling back to implementation plan"
+      CURRENT_AGENT=$(detect_agent_from_checkpoint /dev/null "implementation-plan.md")
+      if [ -n "$CURRENT_AGENT" ]; then
+        AGENT_PATH=$(resolve_agent_path "$CURRENT_AGENT")
+      fi
+      if [ -z "$AGENT_PATH" ]; then
+        echo "     Could not resolve agent from plan either. Skipping."
+        sleep 5
+        continue
+      fi
+      # Fix the checkpoint so this doesn't repeat
+      plan_next=$(grep '^\- \[ \]' implementation-plan.md 2>/dev/null \
+        | grep -v '<task description>\|<agent>' \
+        | head -1 | sed 's/^- \[ \] //')
+      if [ -n "$plan_next" ]; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          sed -i '' '/^## Next Task/,$ { /^## Next Task/!{ /^$/!s|.*|'"$plan_next"'|; }; }' checkpoint.md 2>/dev/null || true
+        else
+          sed -i '/^## Next Task/,$ { /^## Next Task/!{ /^$/!s|.*|'"$plan_next"'|; }; }' checkpoint.md 2>/dev/null || true
+        fi
+        echo "  Fixed checkpoint Next Task → $CURRENT_AGENT"
+      fi
     fi
     echo "  Agent detected: $CURRENT_AGENT (${AGENT_PATH})"
   else
