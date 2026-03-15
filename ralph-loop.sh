@@ -174,8 +174,8 @@ while true; do
 
   # --- Orchestrated mode: AI-driven dispatch ---
   if [ "$ARCH_MODE" = "orchestrated" ] && [ "$LOOP_MODE" = "build" ]; then
-    run_orchestrated_phase
-    ORCH_RC=$?
+    ORCH_RC=0
+    run_orchestrated_phase || ORCH_RC=$?
     if [ "$ORCH_RC" -eq 2 ]; then
       # Orchestrator says all tasks complete
       echo ""

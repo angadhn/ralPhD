@@ -457,11 +457,11 @@ $(cat "$PROMPT_FILE")"
       --mcp-config "$mcp_config" \
       --append-system-prompt "$agent_system_prompt" \
       --output-format json \
-      --dangerously-skip-permissions > "$output_file" 2>/dev/null
+      --dangerously-skip-permissions > "$output_file" 2>/dev/null || true
   else
     echo "$orch_prompt" | python3 "${RALPH_HOME}/ralph_agent.py" \
       --agent "orchestrator" --task - --model "$orch_model" \
-      --output-json "$output_file" 2>/dev/null
+      --output-json "$output_file" 2>/dev/null || true
   fi
 
   if [ ! -f "$output_file" ] || [ ! -s "$output_file" ]; then
@@ -526,56 +526,66 @@ except Exception as e:
 
 run_orchestrated_phase() {
   # Orchestrator-driven execution: ask the orchestrator what to do, then do it.
-  # This replaces the deterministic parallel detection with AI-driven dispatch.
+  # All python3 extractions are guarded with || to prevent set -e crashes.
 
-  local orch_output
-  orch_output=$(run_orchestrator)
-  local orch_rc=$?
+  local orch_output=""
+  orch_output=$(run_orchestrator) || true
 
-  if [ $orch_rc -ne 0 ] || [ -z "$orch_output" ]; then
+  if [ -z "$orch_output" ] || [ ! -f "$orch_output" ]; then
     echo "  ⚠  Orchestrator failed — falling back to plan-driven execution"
-    return 1  # Caller falls through to plan-driven logic
+    return 1
   fi
 
-  local dispatch_json
-  dispatch_json=$(parse_orchestrator_dispatch "$orch_output")
+  local dispatch_json=""
+  dispatch_json=$(parse_orchestrator_dispatch "$orch_output") || true
 
-  local action
-  action=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('action',''))" 2>/dev/null)
+  if [ -z "$dispatch_json" ] || [ "$dispatch_json" = "{}" ]; then
+    echo "  ⚠  Orchestrator produced unparseable output — falling back"
+    return 1
+  fi
+
+  local action=""
+  action=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('action',''))" 2>/dev/null) || true
+
+  echo "  🎯 Orchestrator action: $action"
 
   case "$action" in
     done)
       echo "  ✓ Orchestrator says: all tasks complete"
-      return 2  # Signal to the loop that we're done
+      return 2
       ;;
     dispatch)
-      local is_parallel
-      is_parallel=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print('true' if d.get('parallel') else 'false')" 2>/dev/null)
-      local reasoning
-      reasoning=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('reasoning',''))" 2>/dev/null)
-      local batch_size
-      batch_size=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('batch_size', 6))" 2>/dev/null)
+      local is_parallel="false"
+      is_parallel=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print('true' if d.get('parallel') else 'false')" 2>/dev/null) || true
+      local reasoning=""
+      reasoning=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('reasoning',''))" 2>/dev/null) || true
 
       echo "  🎯 Orchestrator: $reasoning"
 
       if [ "$is_parallel" = "true" ]; then
-        # Extract phase name for run_parallel_phase
-        local phase_name
-        phase_name=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('phase',''))" 2>/dev/null)
+        local phase_name=""
+        phase_name=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('phase',''))" 2>/dev/null) || true
         if [ -n "$phase_name" ]; then
-          # Run the parallel phase with the orchestrator's guidance
-          CURRENT_PHASE="## $phase_name"
-          run_parallel_phase "$CURRENT_PHASE"
-          return $?
+          # Detect the actual phase heading from the plan (orchestrator gives display name)
+          local detected_phase=""
+          detected_phase=$(detect_current_phase "implementation-plan.md") || true
+          if [ -n "$detected_phase" ] && is_parallel_phase "$detected_phase"; then
+            run_parallel_phase "$detected_phase"
+            return 0
+          else
+            # Try matching the orchestrator's phase name
+            CURRENT_PHASE="## $phase_name"
+            run_parallel_phase "$CURRENT_PHASE"
+            return 0
+          fi
         fi
       fi
 
       # Serial dispatch — extract the single task's agent
-      local agent_name
-      agent_name=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); tasks=d.get('tasks',[]); print(tasks[0]['agent'] if tasks else '')" 2>/dev/null)
+      local agent_name=""
+      agent_name=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); tasks=d.get('tasks',[]); print(tasks[0]['agent'] if tasks else '')" 2>/dev/null) || true
       if [ -n "$agent_name" ]; then
         echo "  Orchestrator dispatching serial agent: $agent_name"
-        # Set CURRENT_AGENT for the main loop to pick up
         CURRENT_AGENT="$agent_name"
         return 0
       fi
@@ -584,57 +594,43 @@ run_orchestrated_phase() {
       return 1
       ;;
     adapt)
-      local reasoning
-      reasoning=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('reasoning',''))" 2>/dev/null)
+      local reasoning=""
+      reasoning=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('reasoning',''))" 2>/dev/null) || true
       echo "  🔄 Orchestrator adapting plan: $reasoning"
 
       # Apply adaptations to implementation-plan.md
       echo "$dispatch_json" | python3 -c "
 import json, sys
+try:
+    dispatch = json.load(sys.stdin)
+    changes = dispatch.get('changes', [])
+    with open('implementation-plan.md') as f:
+        plan = f.read()
+    import re
+    for change in changes:
+        task_num = change.get('task_num')
+        action = change.get('change')
+        if action == 'skip':
+            plan = re.sub(
+                rf'^- \[ \] {task_num}\.',
+                f'- [x] {task_num}. [SKIPPED: {change.get(\"reason\",\"\")}]',
+                plan, flags=re.MULTILINE)
+        elif action == 'split':
+            subtasks = change.get('subtasks', [])
+            if subtasks:
+                parent_match = re.search(rf'^(- \[ \] {task_num}\..*)$', plan, re.MULTILINE)
+                if parent_match:
+                    insert_pos = parent_match.end()
+                    subtask_lines = '\n'.join(f'- [ ] {st}' for st in subtasks)
+                    plan = plan[:insert_pos] + '\n' + subtask_lines + plan[insert_pos:]
+                    plan = plan.replace(parent_match.group(), parent_match.group() + ' [SPLIT]')
+    with open('implementation-plan.md', 'w') as f:
+        f.write(plan)
+except Exception as e:
+    print(f'Adaptation error: {e}', file=sys.stderr)
+" 2>/dev/null || true
 
-dispatch = json.load(sys.stdin)
-changes = dispatch.get('changes', [])
-
-with open('implementation-plan.md') as f:
-    plan = f.read()
-
-for change in changes:
-    task_num = change.get('task_num')
-    action = change.get('change')
-    if action == 'skip':
-        # Mark as skipped (checked with note)
-        import re
-        plan = re.sub(
-            rf'^- \[ \] {task_num}\.',
-            f'- [x] {task_num}. [SKIPPED: {change.get(\"reason\",\"\")}]',
-            plan, flags=re.MULTILINE)
-    elif action == 'split':
-        # Insert subtasks after the parent task
-        subtasks = change.get('subtasks', [])
-        if subtasks:
-            import re
-            parent_match = re.search(rf'^(- \[ \] {task_num}\..*)$', plan, re.MULTILINE)
-            if parent_match:
-                insert_pos = parent_match.end()
-                subtask_lines = '\n'.join(f'- [ ] {st}' for st in subtasks)
-                plan = plan[:insert_pos] + '\n' + subtask_lines + plan[insert_pos:]
-                # Mark parent as split
-                plan = plan.replace(parent_match.group(), parent_match.group() + ' [SPLIT]')
-
-with open('implementation-plan.md', 'w') as f:
-    f.write(plan)
-" 2>/dev/null
-
-      # After adapting, check if there's a then_dispatch
-      local then_action
-      then_action=$(echo "$dispatch_json" | python3 -c "import json,sys; d=json.load(sys.stdin); td=d.get('then_dispatch',{}); print('dispatch' if td.get('tasks') else '')" 2>/dev/null)
-      if [ "$then_action" = "dispatch" ]; then
-        echo "  Orchestrator dispatching after adaptation..."
-        # Re-run orchestrated phase to handle the then_dispatch
-        return 0
-      fi
-
-      git add implementation-plan.md 2>/dev/null
+      git add implementation-plan.md 2>/dev/null || true
       git commit -m "orchestrator: adapt plan — $reasoning" --quiet 2>/dev/null || true
       return 0
       ;;
