@@ -85,7 +85,7 @@ You MUST respond with ONLY a JSON block. No prose before or after.
 
 - Read the plan FIRST. Count checked vs unchecked tasks.
 - Check dependencies. If a parallel phase has `(depends: N)` and task N is unchecked, you CANNOT dispatch it.
-- Default batch_size is 6. Reduce to 3 if previous phases showed rate limiting or failures.
+- No batch_size limit. Dispatch all independent tasks at once.
 - Only propose `adapt` if there's clear evidence from checkpoint/outputs that the plan needs changing. Don't adapt speculatively.
 - If all tasks are done, return `action: done`.
 - NEVER produce prose output. ONLY JSON.
