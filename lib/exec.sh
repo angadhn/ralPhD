@@ -181,6 +181,15 @@ create_worktree() {
   local wt_dir=".worktrees/${wt_name}"
   local branch_name="parallel/${wt_name}"
 
+  # Clean up stale worktree/branch from a previous run
+  if git branch --list "$branch_name" | grep -q "$branch_name" 2>/dev/null; then
+    git worktree remove "$wt_dir" --force 2>/dev/null || true
+    rm -rf "$wt_dir" 2>/dev/null || true
+    git branch -D "$branch_name" 2>/dev/null || true
+    git worktree prune 2>/dev/null || true
+  fi
+
+  mkdir -p .worktrees
   git worktree add "$wt_dir" -b "$branch_name" HEAD --quiet 2>/dev/null
   if [ $? -ne 0 ]; then
     echo ""
