@@ -88,6 +88,61 @@ collect_phase_tasks() {
   done < "$plan_path"
 }
 
+validate_phase_dependencies() {
+  # Checks if all (depends: N) dependencies in a parallel phase are satisfied ([x]).
+  # Returns 0 if safe to parallelize, 1 if any dependency is unsatisfied.
+  local plan_path=$1
+  local target_phase=$2
+  local violations=0
+
+  while IFS= read -r line; do
+    if ! echo "$line" | grep -q '^\- \[ \]'; then
+      continue
+    fi
+    # Extract depends annotation: (depends: 1,2,3)
+    local deps
+    deps=$(echo "$line" | grep -o '(depends: [0-9,]*)')
+    if [ -z "$deps" ]; then
+      continue
+    fi
+    # Extract the task number
+    local task_num
+    task_num=$(echo "$line" | sed 's/^- \[ \] \([0-9]*\)\..*/\1/')
+    # Parse dependency numbers
+    local dep_nums
+    dep_nums=$(echo "$deps" | sed 's/(depends: //; s/)//' | tr ',' ' ')
+    for dep in $dep_nums; do
+      # Check if dependency task is completed ([x])
+      if ! grep -q "^\- \[x\] ${dep}\." "$plan_path" 2>/dev/null; then
+        echo "  ⚠  Task $task_num depends on uncompleted task $dep"
+        violations=$((violations + 1))
+      fi
+    done
+  done < <(collect_phase_tasks_raw "$plan_path" "$target_phase")
+
+  return $((violations > 0 ? 1 : 0))
+}
+
+collect_phase_tasks_raw() {
+  # Like collect_phase_tasks but returns raw lines (not agent|desc format)
+  local plan_path=$1
+  local target_phase=$2
+  local in_target=false
+
+  while IFS= read -r line; do
+    if echo "$line" | grep -q '^## Phase'; then
+      if [ "$line" = "$target_phase" ]; then
+        in_target=true
+      elif $in_target; then
+        break
+      fi
+    fi
+    if $in_target && echo "$line" | grep -q '^\- \[ \]'; then
+      echo "$line"
+    fi
+  done < "$plan_path"
+}
+
 resolve_agent_path() {
   local agent_name=$1
   if [ -f ".claude/agents/${agent_name}.md" ]; then

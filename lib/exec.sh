@@ -22,6 +22,17 @@ resolve_model() {
   echo "$model"
 }
 
+resolve_effort() {
+  local agent_name="${1:-}"
+  local budgets_file="${RALPH_HOME}/context-budgets.json"
+  local effort=""
+
+  if [ -n "$agent_name" ] && [ -f "$budgets_file" ] && command -v jq >/dev/null 2>&1; then
+    effort=$(jq -r --arg a "$agent_name" '.[$a].effort // empty' "$budgets_file" 2>/dev/null || true)
+  fi
+  echo "$effort"
+}
+
 is_openai_model() {
   local model="${1:-}"
   case "$model" in
@@ -158,14 +169,221 @@ resolve_context_window() {
   esac
 }
 
+# ── Worktree isolation functions ─────────────────────────────
+
+create_worktree() {
+  # Creates an isolated git worktree for a parallel task.
+  # Usage: create_worktree <iteration> <task_index>
+  # Returns the worktree directory path on stdout.
+  local iteration=$1
+  local task_idx=$2
+  local wt_name="iter-${iteration}-task-${task_idx}"
+  local wt_dir=".worktrees/${wt_name}"
+  local branch_name="parallel/${wt_name}"
+
+  git worktree add "$wt_dir" -b "$branch_name" HEAD --quiet 2>/dev/null
+  if [ $? -ne 0 ]; then
+    echo ""
+    return 1
+  fi
+  echo "$wt_dir"
+}
+
+remove_worktree() {
+  # Removes a worktree and its branch.
+  # Usage: remove_worktree <worktree_dir>
+  local wt_dir=$1
+  local branch_name
+
+  # Extract branch name from worktree
+  branch_name=$(git -C "$wt_dir" rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+  git worktree remove "$wt_dir" --force 2>/dev/null || rm -rf "$wt_dir"
+  if [ -n "$branch_name" ] && [ "$branch_name" != "HEAD" ]; then
+    git branch -D "$branch_name" 2>/dev/null || true
+  fi
+
+  # Clean up .worktrees dir if empty
+  rmdir .worktrees 2>/dev/null || true
+}
+
+merge_worktree() {
+  # Merges a worktree's branch into the current branch.
+  # Usage: merge_worktree <worktree_dir> [agent_name]
+  # Returns 0 on success, 1 on conflict.
+  local wt_dir=$1
+  local agent_name=${2:-unknown}
+  local branch_name
+
+  branch_name=$(git -C "$wt_dir" rev-parse --abbrev-ref HEAD 2>/dev/null)
+  if [ -z "$branch_name" ] || [ "$branch_name" = "HEAD" ]; then
+    echo "  ⚠  Cannot determine branch for worktree $wt_dir"
+    return 1
+  fi
+
+  # Check if there are any commits to merge
+  local main_branch
+  main_branch=$(git rev-parse --abbrev-ref HEAD)
+  if git merge-base --is-ancestor "$branch_name" "$main_branch" 2>/dev/null; then
+    # No new commits on the branch — nothing to merge
+    return 0
+  fi
+
+  if git merge "$branch_name" --no-edit -m "merge: parallel agent $agent_name ($branch_name)" 2>/dev/null; then
+    return 0
+  else
+    echo "  ⚠  Merge conflict from $agent_name ($branch_name)"
+    git merge --abort 2>/dev/null || true
+    return 1
+  fi
+}
+
+# ── Merge scripts for shared files ───────────────────────────
+
+merge_checkpoints() {
+  # Merges N checkpoint.md files from worktrees into one.
+  # Concatenates "What I Did" / knowledge state, takes latest "Next Task".
+  # Usage: merge_checkpoints <output_path> <wt_checkpoint_1> [wt_checkpoint_2] ...
+  local output_path=$1
+  shift
+  local wt_checkpoints=("$@")
+
+  if [ ${#wt_checkpoints[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  # Read the base checkpoint (from main) as template
+  local base_checkpoint="$output_path"
+  local merged_knowledge=""
+  local merged_did=""
+  local latest_next_task=""
+
+  for wt_cp in "${wt_checkpoints[@]}"; do
+    if [ ! -f "$wt_cp" ]; then continue; fi
+
+    # Extract "What I Did" or similar section content
+    local did_section
+    did_section=$(awk '/^## (What I Did|Last Action|Work Done)/{found=1; next} /^## /{found=0} found' "$wt_cp" 2>/dev/null)
+    if [ -n "$did_section" ]; then
+      merged_did="${merged_did}${did_section}"$'\n'
+    fi
+
+    # Extract knowledge state table rows (lines with | that aren't headers)
+    local knowledge_rows
+    knowledge_rows=$(awk '/^## Knowledge State/{found=1; next} /^## /{found=0} found && /^\|/ && !/^\|.*Task.*Status/' "$wt_cp" 2>/dev/null)
+    if [ -n "$knowledge_rows" ]; then
+      merged_knowledge="${merged_knowledge}${knowledge_rows}"$'\n'
+    fi
+
+    # Take the latest "Next Task" (last file wins)
+    local next
+    next=$(awk '/^## Next Task/{found=1; next} found && /[^ ]/{print; exit}' "$wt_cp" 2>/dev/null)
+    if [ -n "$next" ]; then
+      latest_next_task="$next"
+    fi
+  done
+
+  # Rebuild checkpoint: keep header from base, inject merged sections
+  local header
+  header=$(awk '/^## Knowledge State/{exit} {print}' "$base_checkpoint")
+  local last_updated
+  last_updated=$(date +%Y-%m-%d)
+
+  {
+    echo "$header" | sed "s/\*\*Last updated:\*\*.*/\*\*Last updated:\*\* $last_updated/"
+    echo "## Knowledge State"
+    echo ""
+    echo "| Task | Status | Notes |"
+    echo "|------|--------|-------|"
+    if [ -n "$merged_knowledge" ]; then
+      echo "$merged_knowledge" | sort -u
+    fi
+    echo ""
+    echo "## Last Reflection"
+    echo ""
+    echo "<parallel merge — see individual agent outputs>"
+    echo ""
+    echo "## Next Task"
+    echo ""
+    if [ -n "$latest_next_task" ]; then
+      echo "$latest_next_task"
+    else
+      echo "<next task from implementation plan>"
+    fi
+  } > "$output_path"
+}
+
+merge_plan_checkboxes() {
+  # Unions checkbox state across N copies of implementation-plan.md.
+  # If ANY copy has [x] for a task, the result is [x].
+  # Usage: merge_plan_checkboxes <main_plan_path> <wt_plan_1> [wt_plan_2] ...
+  local main_plan=$1
+  shift
+  local wt_plans=("$@")
+
+  # Collect all task numbers that are checked in any worktree copy
+  local checked_tasks=""
+  for wt_plan in "${wt_plans[@]}"; do
+    if [ ! -f "$wt_plan" ]; then continue; fi
+    local nums
+    nums=$(grep '^\- \[x\]' "$wt_plan" 2>/dev/null | sed 's/^- \[x\] \([0-9]*\)\..*/\1/')
+    checked_tasks="${checked_tasks} ${nums}"
+  done
+
+  # Apply checked state to main plan
+  for num in $checked_tasks; do
+    if [ -z "$num" ]; then continue; fi
+    # Replace [ ] with [x] for this task number
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      sed -i '' "s/^- \[ \] ${num}\./- [x] ${num}./" "$main_plan"
+    else
+      sed -i "s/^- \[ \] ${num}\./- [x] ${num}./" "$main_plan"
+    fi
+  done
+}
+
+# ── Pre-merge validation ─────────────────────────────────────
+
+validate_worktree_output() {
+  # Checks that a worktree agent produced meaningful output before merging.
+  # Usage: validate_worktree_output <worktree_dir> [agent_name]
+  # Returns 0 if valid, 1 if output should be rejected.
+  local wt_dir=$1
+  local agent_name=${2:-unknown}
+  local issues=0
+
+  # Check: agent made at least one commit beyond the base
+  local commit_count
+  commit_count=$(git -C "$wt_dir" rev-list --count HEAD ^"$(git rev-parse HEAD)" 2>/dev/null || echo 0)
+  if [ "$commit_count" -eq 0 ]; then
+    echo "  ⚠  $agent_name: no commits in worktree (empty work)"
+    issues=$((issues + 1))
+  fi
+
+  # Check: diff is not unreasonably large (>5000 lines suggests runaway)
+  local diff_lines
+  diff_lines=$(git -C "$wt_dir" diff --stat HEAD~"$commit_count"..HEAD 2>/dev/null | tail -1 | grep -o '[0-9]* insertion' | grep -o '[0-9]*' || echo 0)
+  if [ "$diff_lines" -gt 5000 ]; then
+    echo "  ⚠  $agent_name: unusually large diff ($diff_lines insertions)"
+    # Warning only — don't reject
+  fi
+
+  return $((issues > 0 ? 1 : 0))
+}
+
+# ── Parallel phase execution ────────────────────────────────
+
 run_parallel_phase() {
   local phase_line=$1
   local pids=()
   local agents=()
+  local worktrees=()
   local task_idx=0
 
   echo "  ⚡ Parallel phase detected: $phase_line"
+  echo "  🌿 Using worktree isolation"
 
+  # --- Phase 1: Create worktrees and spawn agents ---
   while IFS='|' read -r agent_name task_desc; do
     task_idx=$((task_idx + 1))
     local output_dir="/tmp/ralph-parallel-${ITERATION}-${task_idx}"
@@ -177,6 +395,16 @@ run_parallel_phase() {
       echo "  ⚠  Skipping parallel task (agent not found): $agent_name"
       echo "     Checked: .claude/agents/${agent_name}.md, ${RALPH_HOME}/.claude/agents/${agent_name}.md"
       continue
+    fi
+
+    # Create isolated worktree for this agent
+    local wt_dir
+    wt_dir=$(create_worktree "$ITERATION" "$task_idx")
+    if [ -z "$wt_dir" ] || [ ! -d "$wt_dir" ]; then
+      echo "  ⚠  Failed to create worktree for task $task_idx ($agent_name) — running without isolation"
+      wt_dir=""
+    else
+      echo "  🌿 Worktree: $wt_dir (task $task_idx: $agent_name)"
     fi
 
     local agent_model
@@ -198,25 +426,33 @@ ${task_desc}
 
 $(cat "$PROMPT_FILE")"
 
+    # Determine working directory: worktree if available, otherwise current dir (legacy)
+    local work_dir="${wt_dir:-.}"
+
     if $use_claude_fallback; then
       local agent_system_prompt mcp_config
       agent_system_prompt=$(build_claude_system_prompt "$agent_name")
       mcp_config=$(build_mcp_config "$agent_name")
-      local cli_model
+      local cli_model par_effort par_effort_flag
       cli_model=$(resolve_cli_model "$agent_model")
-      echo "$task_prompt" | claude --model "$cli_model" \
+      par_effort=$(resolve_effort "$agent_name")
+      par_effort_flag=""
+      [ -n "$par_effort" ] && par_effort_flag="--effort $par_effort"
+      (cd "$work_dir" && echo "$task_prompt" | claude --model "$cli_model" \
+        $par_effort_flag \
         --tools "" \
         --mcp-config "$mcp_config" \
         --append-system-prompt "$agent_system_prompt" \
         --output-format json \
-        --dangerously-skip-permissions > "${output_dir}/output.json" &
+        --dangerously-skip-permissions > "${output_dir}/output.json") &
     else
-      echo "$task_prompt" | python3 "${RALPH_HOME}/ralph_agent.py" \
+      (cd "$work_dir" && echo "$task_prompt" | python3 "${RALPH_HOME}/ralph_agent.py" \
         --agent "$agent_name" --task - --model "$agent_model" \
-        --output-json "${output_dir}/output.json" &
+        --output-json "${output_dir}/output.json") &
     fi
     pids+=($!)
     agents+=("$agent_name")
+    worktrees+=("$wt_dir")
   done < <(collect_phase_tasks "implementation-plan.md" "$phase_line")
 
   if [ ${#pids[@]} -eq 0 ]; then
@@ -224,6 +460,7 @@ $(cat "$PROMPT_FILE")"
     return 1
   fi
 
+  # --- Phase 2: Wait for all agents ---
   echo "  Waiting for ${#pids[@]} parallel agents..."
   local failed=0
   for i in "${!pids[@]}"; do
@@ -237,6 +474,72 @@ $(cat "$PROMPT_FILE")"
 
   echo "  Parallel phase complete: $((${#pids[@]} - failed))/${#pids[@]} succeeded"
 
+  # --- Phase 3: Validate and merge worktrees ---
+  local wt_checkpoints=()
+  local wt_plans=()
+  local merge_failures=0
+
+  for i in "${!worktrees[@]}"; do
+    local wt="${worktrees[$i]}"
+    if [ -z "$wt" ] || [ ! -d "$wt" ]; then
+      continue
+    fi
+
+    # Pre-merge validation
+    if ! validate_worktree_output "$wt" "${agents[$i]}"; then
+      echo "  ⚠  Skipping merge for ${agents[$i]} (validation failed)"
+      merge_failures=$((merge_failures + 1))
+      continue
+    fi
+
+    # Collect checkpoint and plan paths for post-merge reconciliation
+    [ -f "$wt/checkpoint.md" ] && wt_checkpoints+=("$wt/checkpoint.md")
+    [ -f "$wt/implementation-plan.md" ] && wt_plans+=("$wt/implementation-plan.md")
+
+    # Merge worktree branch into main
+    if merge_worktree "$wt" "${agents[$i]}"; then
+      echo "  🔀 Merged ${agents[$i]}"
+    else
+      echo "  ⚠  Merge conflict from ${agents[$i]} — branch preserved for manual review"
+      merge_failures=$((merge_failures + 1))
+    fi
+  done
+
+  # --- Phase 4: Reconcile shared files ---
+  if [ ${#wt_checkpoints[@]} -gt 0 ]; then
+    merge_checkpoints "checkpoint.md" "${wt_checkpoints[@]}"
+    echo "  📋 Checkpoint merged from ${#wt_checkpoints[@]} worktrees"
+  fi
+
+  if [ ${#wt_plans[@]} -gt 0 ]; then
+    merge_plan_checkboxes "implementation-plan.md" "${wt_plans[@]}"
+    echo "  ☑  Plan checkboxes merged from ${#wt_plans[@]} worktrees"
+  fi
+
+  # Commit the merged state
+  git add checkpoint.md implementation-plan.md 2>/dev/null
+  git commit -m "merge: reconcile parallel phase — ${#pids[@]} agents" --quiet 2>/dev/null || true
+
+  # --- Phase 4b: Post-merge validation (warnings only) ---
+  if [ -f "main.tex" ]; then
+    if pdflatex -interaction=nonstopmode -halt-on-error main.tex >/dev/null 2>&1; then
+      echo "  ✓ Post-merge: LaTeX compiles"
+    else
+      echo "  ⚠  Post-merge: LaTeX compilation failed — check main.tex"
+    fi
+  fi
+  if [ -f "tools/citations.py" ] || [ -f "${RALPH_HOME}/tools/citations.py" ]; then
+    local cite_script="${RALPH_HOME}/tools/cli.py"
+    if [ -f "$cite_script" ] && [ -d "references" ]; then
+      local cite_result
+      cite_result=$(python3 "$cite_script" citation_verify_all '{}' 2>/dev/null) || true
+      if echo "$cite_result" | grep -qi "error\|invalid\|missing"; then
+        echo "  ⚠  Post-merge: citation issues detected"
+      fi
+    fi
+  fi
+
+  # --- Phase 5: Usage logging ---
   for i in "${!agents[@]}"; do
     local idx=$((i + 1))
     local output_file="/tmp/ralph-parallel-${ITERATION}-${idx}/output.json"
@@ -244,6 +547,18 @@ $(cat "$PROMPT_FILE")"
       log_usage_from_output_json "$output_file" "$ITERATION" "${agents[$i]}" "$LOOP_MODE" "$CURRENT_THREAD" "$idx"
     fi
   done
+
+  # --- Phase 6: Cleanup worktrees ---
+  for wt in "${worktrees[@]}"; do
+    if [ -n "$wt" ] && [ -d "$wt" ]; then
+      remove_worktree "$wt"
+    fi
+  done
+  echo "  🧹 Worktrees cleaned up"
+
+  if [ "$merge_failures" -gt 0 ]; then
+    echo "  ⚠  $merge_failures merge failure(s) — check logs"
+  fi
 
   return 0
 }

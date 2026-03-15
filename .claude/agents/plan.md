@@ -40,6 +40,11 @@ on independent problems, multiple deep-readers on different papers.
 Serial-required: writer → editor → reviewer, scout → deep-reader, anything
 reading checkpoint.md to determine what to do next.
 
+If tasks have explicit dependencies, annotate them: `(depends: N)` or
+`(depends: N,M)`. The build system validates these before running parallel
+phases — if a dependency is unsatisfied, execution falls back to serial.
+Example: `- [ ] 7. Write resume (depends: 1,2,3) — **resume-writer**`
+
 ## Outputs
 
 - `implementation-plan.md` — prioritized task checklist

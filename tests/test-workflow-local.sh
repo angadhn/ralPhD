@@ -26,6 +26,7 @@ RALPH_HOME="$(cd "$(dirname "$0")/.." && pwd)"
 REDACTOR="$RALPH_HOME/scripts/redact_secrets.py"
 source "$RALPH_HOME/lib/detect.sh"
 source "$RALPH_HOME/lib/config.sh"
+source "$RALPH_HOME/lib/exec.sh"
 PARSER_FIXTURE_DIR="$RALPH_HOME/tests/fixtures/parser"
 WORKSPACE=$(mktemp -d)
 PASS=0
@@ -2151,6 +2152,573 @@ fi
 
 rm -rf "$QS_C_PROJECT"
 
+echo ""
+
+# ── Test 18: Serial mode regression (worktree-isolation safety net) ──
+echo "--- 18. Serial Mode Regression ---"
+
+# These tests establish a baseline for serial execution behavior.
+# The parallel worktree isolation fix (steps 2-8) must NEVER change
+# the behavior verified here.
+
+SERIAL_TEST_DIR=$(mktemp -d)
+
+# 18a. Serial plan: agent detection picks first unchecked task
+cat > "$SERIAL_TEST_DIR/plan.md" << 'SERIALEOF'
+# Implementation Plan — serial-test
+
+**Thread:** serial-test
+**Architecture:** serial
+**Autonomy:** autopilot
+
+## Phase 1 — Setup
+
+- [x] 1. Create scaffold — **coder**
+
+## Phase 2 — Build
+
+- [ ] 2. Write module A — **coder**
+- [ ] 3. Write module B — **editor**
+SERIALEOF
+
+cat > "$SERIAL_TEST_DIR/checkpoint.md" << 'SERIALEOF'
+# Checkpoint — serial-test
+
+**Thread:** serial-test
+**Last agent:** coder
+**Status:** ready
+
+## Next Task
+
+2. Write module A — **coder**
+SERIALEOF
+
+DETECTED=$(detect_agent_from_checkpoint "$SERIAL_TEST_DIR/checkpoint.md" "$SERIAL_TEST_DIR/plan.md")
+if [ "$DETECTED" = "coder" ]; then
+  pass "18a: serial plan agent detection: '$DETECTED'"
+else
+  fail "18a: serial plan agent detection: got '$DETECTED', expected 'coder'"
+fi
+
+# 18b. Serial plan: phase is NOT detected as parallel
+DETECTED_PHASE=$(detect_current_phase "$SERIAL_TEST_DIR/plan.md")
+if ! is_parallel_phase "$DETECTED_PHASE"; then
+  pass "18b: serial phase not detected as parallel: '$DETECTED_PHASE'"
+else
+  fail "18b: serial phase incorrectly detected as parallel"
+fi
+
+# 18c. Parallel plan run WITHOUT --parallel flag: parallel block is skipped
+# Verify the gate: ARCH_MODE must equal "parallel" for run_parallel_phase to be called
+ARCH_MODE_DEFAULT=$(resolve_arch_mode_from_plan "" "$SERIAL_TEST_DIR/plan.md")
+if [ "$ARCH_MODE_DEFAULT" = "serial" ]; then
+  pass "18c: serial plan resolves to ARCH_MODE=serial (parallel block skipped)"
+else
+  fail "18c: serial plan ARCH_MODE: got '$ARCH_MODE_DEFAULT', expected 'serial'"
+fi
+
+# 18d. Parallel plan with --serial flag override: parallel block is skipped
+ARCH_MODE_OVERRIDE=$(resolve_arch_mode_from_plan "serial" "$PARSER_FIXTURE_DIR/implementation-plan.md")
+if [ "$ARCH_MODE_OVERRIDE" = "serial" ]; then
+  pass "18d: --serial flag overrides parallel plan to serial"
+else
+  fail "18d: --serial override: got '$ARCH_MODE_OVERRIDE', expected 'serial'"
+fi
+
+# 18e. Plan with no Architecture field: defaults to serial
+cat > "$SERIAL_TEST_DIR/plan_no_arch.md" << 'SERIALEOF'
+# Implementation Plan
+
+## Phase 1 — Work
+
+- [ ] 1. Do stuff — **coder**
+SERIALEOF
+
+ARCH_MODE_NONE=$(resolve_arch_mode_from_plan "" "$SERIAL_TEST_DIR/plan_no_arch.md")
+if [ "$ARCH_MODE_NONE" = "serial" ]; then
+  pass "18e: missing Architecture field defaults to serial"
+else
+  fail "18e: missing Architecture: got '$ARCH_MODE_NONE', expected 'serial'"
+fi
+
+# 18f. Plan with (parallel) phases but Architecture: serial → parallel block skipped
+cat > "$SERIAL_TEST_DIR/plan_mixed.md" << 'SERIALEOF'
+# Implementation Plan
+
+**Architecture:** serial
+
+## Phase 1 — Build (parallel)
+
+- [ ] 1. Module A — **coder**
+- [ ] 2. Module B — **coder**
+SERIALEOF
+
+ARCH_MODE_MIXED=$(resolve_arch_mode_from_plan "" "$SERIAL_TEST_DIR/plan_mixed.md")
+if [ "$ARCH_MODE_MIXED" = "serial" ]; then
+  pass "18f: Architecture:serial overrides (parallel) annotation"
+else
+  fail "18f: Architecture:serial with (parallel) phases: got '$ARCH_MODE_MIXED', expected 'serial'"
+fi
+
+# 18g. Parallel plan: ARCH_MODE=parallel AND (parallel) phase → parallel path taken
+ARCH_MODE_PAR=$(resolve_arch_mode_from_plan "" "$PARSER_FIXTURE_DIR/implementation-plan.md")
+DETECTED_PAR_PHASE=$(detect_current_phase "$PARSER_FIXTURE_DIR/implementation-plan.md")
+if [ "$ARCH_MODE_PAR" = "parallel" ] && is_parallel_phase "$DETECTED_PAR_PHASE"; then
+  pass "18g: parallel plan + (parallel) phase → parallel path taken"
+else
+  fail "18g: expected ARCH_MODE=parallel + (parallel) phase. ARCH_MODE='$ARCH_MODE_PAR', phase='$DETECTED_PAR_PHASE'"
+fi
+
+# 18h. Plan with dependencies: (depends: N) annotation is preserved in task text
+cat > "$SERIAL_TEST_DIR/plan_deps.md" << 'SERIALEOF'
+# Implementation Plan
+
+**Architecture:** parallel
+
+## Phase 1 — Scrape (parallel)
+
+- [x] 1. Scrape job A — **job-scraper**
+- [x] 2. Scrape job B — **job-scraper**
+
+## Phase 2 — Write
+
+- [ ] 3. Write generic resume (depends: 1,2) — **resume-writer**
+
+## Phase 3 — Tailor (parallel)
+
+- [ ] 4. Tailor for job A (depends: 3) — **resume-tailor**
+- [ ] 5. Tailor for job B (depends: 3) — **resume-tailor**
+SERIALEOF
+
+# Current phase should be Phase 2 (first phase with unchecked tasks)
+DETECTED_DEP_PHASE=$(detect_current_phase "$SERIAL_TEST_DIR/plan_deps.md")
+if echo "$DETECTED_DEP_PHASE" | grep -q "Phase 2"; then
+  pass "18h: dependency plan: current phase is Phase 2"
+else
+  fail "18h: dependency plan: got '$DETECTED_DEP_PHASE', expected Phase 2"
+fi
+
+# Phase 2 is NOT parallel
+if ! is_parallel_phase "$DETECTED_DEP_PHASE"; then
+  pass "18i: dependency plan: Phase 2 is not parallel"
+else
+  fail "18i: dependency plan: Phase 2 incorrectly detected as parallel"
+fi
+
+# Task text includes the (depends: N) annotation
+TASKS_DEP=$(collect_phase_tasks "$SERIAL_TEST_DIR/plan_deps.md" "## Phase 3 — Tailor (parallel)")
+if echo "$TASKS_DEP" | grep -q "depends: 3"; then
+  pass "18j: (depends: N) annotation preserved in collected task text"
+else
+  fail "18j: (depends: N) annotation not found in task text: '$TASKS_DEP'"
+fi
+
+# 18k. Dependency validation: no deps → safe to parallelize
+cat > "$SERIAL_TEST_DIR/plan_nodeps.md" << 'SERIALEOF'
+# Implementation Plan
+
+**Architecture:** parallel
+
+## Phase 1 — Build (parallel)
+
+- [ ] 1. Module A — **coder**
+- [ ] 2. Module B — **coder**
+- [ ] 3. Module C — **coder**
+SERIALEOF
+
+if validate_phase_dependencies "$SERIAL_TEST_DIR/plan_nodeps.md" "## Phase 1 — Build (parallel)" 2>/dev/null; then
+  pass "18k: no dependencies → validate_phase_dependencies returns 0"
+else
+  fail "18k: no dependencies should return 0 (safe)"
+fi
+
+# 18l. Dependency validation: all deps satisfied → safe
+cat > "$SERIAL_TEST_DIR/plan_deps_ok.md" << 'SERIALEOF'
+# Implementation Plan
+
+**Architecture:** parallel
+
+## Phase 1 — Scrape (parallel)
+
+- [x] 1. Scrape A — **job-scraper**
+- [x] 2. Scrape B — **job-scraper**
+
+## Phase 2 — Tailor (parallel)
+
+- [ ] 3. Tailor A (depends: 1) — **resume-tailor**
+- [ ] 4. Tailor B (depends: 2) — **resume-tailor**
+SERIALEOF
+
+if validate_phase_dependencies "$SERIAL_TEST_DIR/plan_deps_ok.md" "## Phase 2 — Tailor (parallel)" 2>/dev/null; then
+  pass "18l: all deps satisfied → validate_phase_dependencies returns 0"
+else
+  fail "18l: all deps satisfied should return 0 (safe)"
+fi
+
+# 18m. Dependency validation: unsatisfied deps → unsafe
+cat > "$SERIAL_TEST_DIR/plan_deps_bad.md" << 'SERIALEOF'
+# Implementation Plan
+
+**Architecture:** parallel
+
+## Phase 1 — Scrape (parallel)
+
+- [ ] 1. Scrape A — **job-scraper**
+- [x] 2. Scrape B — **job-scraper**
+
+## Phase 2 — Tailor (parallel)
+
+- [ ] 3. Tailor A (depends: 1) — **resume-tailor**
+- [ ] 4. Tailor B (depends: 2) — **resume-tailor**
+SERIALEOF
+
+if ! validate_phase_dependencies "$SERIAL_TEST_DIR/plan_deps_bad.md" "## Phase 2 — Tailor (parallel)" 2>/dev/null; then
+  pass "18m: unsatisfied dep (task 1 unchecked) → returns 1 (unsafe)"
+else
+  fail "18m: unsatisfied dep should return 1 (unsafe)"
+fi
+
+# 18n. Dependency validation: multi-deps, one unsatisfied
+cat > "$SERIAL_TEST_DIR/plan_deps_multi.md" << 'SERIALEOF'
+# Implementation Plan
+
+## Phase 1 — Scrape (parallel)
+
+- [x] 1. Scrape A — **job-scraper**
+- [ ] 2. Scrape B — **job-scraper**
+- [x] 3. Scrape C — **job-scraper**
+
+## Phase 2 — Write
+
+- [ ] 4. Write resume (depends: 1,2,3) — **resume-writer**
+SERIALEOF
+
+if ! validate_phase_dependencies "$SERIAL_TEST_DIR/plan_deps_multi.md" "## Phase 2 — Write" 2>/dev/null; then
+  pass "18n: multi-dep with one unsatisfied (task 2) → returns 1"
+else
+  fail "18n: multi-dep with unsatisfied task 2 should return 1"
+fi
+
+# 18o. Verify the critical code paths exist in ralph-loop.sh
+# The parallel gate: ARCH_MODE == "parallel" && is_parallel_phase
+check "18o: ralph-loop.sh has ARCH_MODE parallel gate" grep -q 'ARCH_MODE.*=.*"parallel"' "$RALPH_HOME/ralph-loop.sh"
+check "18p: ralph-loop.sh has is_parallel_phase check" grep -q 'is_parallel_phase' "$RALPH_HOME/ralph-loop.sh"
+check "18q: ralph-loop.sh has serial fallthrough message" grep -q 'running serially' "$RALPH_HOME/ralph-loop.sh"
+
+rm -rf "$SERIAL_TEST_DIR"
+echo ""
+
+# ── Test 19: Worktree isolation functions ─────────────────────
+echo "--- 19. Worktree Isolation Functions ---"
+
+WT_TEST_DIR=$(mktemp -d)
+(
+  cd "$WT_TEST_DIR"
+  git init --quiet
+  echo "initial" > file.txt
+  echo "# Checkpoint" > checkpoint.md
+  git add -A && git commit -m "init" --quiet
+)
+
+# 19a. create_worktree produces a valid directory
+WT_PATH=$(cd "$WT_TEST_DIR" && create_worktree 1 1)
+if [ -n "$WT_PATH" ] && [ -d "$WT_TEST_DIR/$WT_PATH" ]; then
+  pass "19a: create_worktree produces valid directory: $WT_PATH"
+else
+  fail "19a: create_worktree failed, got: '$WT_PATH'"
+fi
+
+# 19b. Worktree has its own copy of files
+if [ -f "$WT_TEST_DIR/$WT_PATH/checkpoint.md" ]; then
+  pass "19b: worktree has its own checkpoint.md"
+else
+  fail "19b: worktree missing checkpoint.md"
+fi
+
+# 19c. Worktree is on its own branch
+WT_BRANCH=$(git -C "$WT_TEST_DIR/$WT_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null)
+if echo "$WT_BRANCH" | grep -q "parallel/iter-1-task-1"; then
+  pass "19c: worktree on correct branch: $WT_BRANCH"
+else
+  fail "19c: worktree branch: got '$WT_BRANCH', expected parallel/iter-1-task-1"
+fi
+
+# 19d. Changes in worktree don't affect main
+echo "worktree change" > "$WT_TEST_DIR/$WT_PATH/new-file.txt"
+(cd "$WT_TEST_DIR/$WT_PATH" && git add -A && git commit -m "worktree work" --quiet)
+if [ ! -f "$WT_TEST_DIR/new-file.txt" ]; then
+  pass "19d: worktree changes don't leak to main"
+else
+  fail "19d: worktree change leaked to main directory"
+fi
+
+# 19e. merge_worktree on non-conflicting branch succeeds
+if (cd "$WT_TEST_DIR" && merge_worktree "$WT_PATH" "test-agent") 2>/dev/null; then
+  pass "19e: merge_worktree succeeds (non-conflicting)"
+else
+  fail "19e: merge_worktree failed on non-conflicting branch"
+fi
+
+# 19f. After merge, file from worktree exists in main
+if [ -f "$WT_TEST_DIR/new-file.txt" ]; then
+  pass "19f: merged file exists in main after merge"
+else
+  fail "19f: merged file not found in main"
+fi
+
+# 19g. remove_worktree cleans up
+(cd "$WT_TEST_DIR" && remove_worktree "$WT_PATH")
+if [ ! -d "$WT_TEST_DIR/$WT_PATH" ]; then
+  pass "19g: remove_worktree cleans up directory"
+else
+  fail "19g: worktree directory still exists after removal"
+fi
+
+# 19h. Branch is deleted after removal
+if ! git -C "$WT_TEST_DIR" branch --list "parallel/iter-1-task-1" | grep -q "parallel"; then
+  pass "19h: branch deleted after worktree removal"
+else
+  fail "19h: branch still exists after removal"
+fi
+
+# 19i. merge_worktree detects conflict
+(
+  cd "$WT_TEST_DIR"
+  # Create worktree 2
+  WT2_PATH=$(create_worktree 1 2)
+  # Modify same file in both main and worktree
+  echo "main change" > file.txt
+  git add file.txt && git commit -m "main edit" --quiet
+  echo "worktree conflict" > "$WT2_PATH/file.txt"
+  (cd "$WT2_PATH" && git add file.txt && git commit -m "conflicting edit" --quiet)
+  if ! merge_worktree "$WT2_PATH" "conflict-agent" 2>/dev/null; then
+    pass "19i: merge_worktree detects conflict and returns 1"
+  else
+    fail "19i: merge_worktree should have returned 1 on conflict"
+  fi
+  remove_worktree "$WT2_PATH" 2>/dev/null
+) 2>/dev/null
+
+# 19j. Create multiple worktrees simultaneously
+(
+  cd "$WT_TEST_DIR"
+  WT_A=$(create_worktree 2 1)
+  WT_B=$(create_worktree 2 2)
+  WT_C=$(create_worktree 2 3)
+  if [ -d "$WT_A" ] && [ -d "$WT_B" ] && [ -d "$WT_C" ]; then
+    pass "19j: 3 worktrees created simultaneously"
+  else
+    fail "19j: failed to create 3 worktrees: A=$WT_A B=$WT_B C=$WT_C"
+  fi
+  remove_worktree "$WT_A" 2>/dev/null
+  remove_worktree "$WT_B" 2>/dev/null
+  remove_worktree "$WT_C" 2>/dev/null
+) 2>/dev/null
+
+rm -rf "$WT_TEST_DIR"
+echo ""
+
+# ── Test 20: Merge scripts for shared files ───────────────────
+echo "--- 20. Merge Scripts ---"
+
+MERGE_TEST_DIR=$(mktemp -d)
+
+# 20a. merge_plan_checkboxes: unions checkbox state
+cat > "$MERGE_TEST_DIR/main-plan.md" << 'MERGEEOF'
+# Implementation Plan
+
+## Phase 1 — Scrape (parallel)
+
+- [ ] 1. Scrape A — **job-scraper**
+- [ ] 2. Scrape B — **job-scraper**
+- [ ] 3. Scrape C — **job-scraper**
+
+## Phase 2 — Write
+
+- [ ] 4. Write resume — **resume-writer**
+MERGEEOF
+
+# Worktree 1 checked off task 1
+cat > "$MERGE_TEST_DIR/wt1-plan.md" << 'MERGEEOF'
+# Implementation Plan
+
+## Phase 1 — Scrape (parallel)
+
+- [x] 1. Scrape A — **job-scraper**
+- [ ] 2. Scrape B — **job-scraper**
+- [ ] 3. Scrape C — **job-scraper**
+
+## Phase 2 — Write
+
+- [ ] 4. Write resume — **resume-writer**
+MERGEEOF
+
+# Worktree 2 checked off task 2
+cat > "$MERGE_TEST_DIR/wt2-plan.md" << 'MERGEEOF'
+# Implementation Plan
+
+## Phase 1 — Scrape (parallel)
+
+- [ ] 1. Scrape A — **job-scraper**
+- [x] 2. Scrape B — **job-scraper**
+- [ ] 3. Scrape C — **job-scraper**
+
+## Phase 2 — Write
+
+- [ ] 4. Write resume — **resume-writer**
+MERGEEOF
+
+# Worktree 3 checked off task 3
+cat > "$MERGE_TEST_DIR/wt3-plan.md" << 'MERGEEOF'
+# Implementation Plan
+
+## Phase 1 — Scrape (parallel)
+
+- [ ] 1. Scrape A — **job-scraper**
+- [ ] 2. Scrape B — **job-scraper**
+- [x] 3. Scrape C — **job-scraper**
+
+## Phase 2 — Write
+
+- [ ] 4. Write resume — **resume-writer**
+MERGEEOF
+
+merge_plan_checkboxes "$MERGE_TEST_DIR/main-plan.md" \
+  "$MERGE_TEST_DIR/wt1-plan.md" "$MERGE_TEST_DIR/wt2-plan.md" "$MERGE_TEST_DIR/wt3-plan.md"
+
+CHECKED_COUNT=$(grep -c '^\- \[x\]' "$MERGE_TEST_DIR/main-plan.md")
+if [ "$CHECKED_COUNT" = "3" ]; then
+  pass "20a: merge_plan_checkboxes unions 3 checkboxes from 3 worktrees"
+else
+  fail "20a: expected 3 checked tasks, got $CHECKED_COUNT"
+fi
+
+# Task 4 should still be unchecked
+if grep -q '^\- \[ \] 4\.' "$MERGE_TEST_DIR/main-plan.md"; then
+  pass "20b: unrelated task 4 remains unchecked after merge"
+else
+  fail "20b: task 4 was incorrectly modified"
+fi
+
+# 20c. merge_checkpoints: combines knowledge state
+cat > "$MERGE_TEST_DIR/base-checkpoint.md" << 'MERGEEOF'
+# Checkpoint — test
+
+**Thread:** test
+**Last updated:** 2026-03-14
+**Last agent:** plan
+**Status:** building
+
+## Knowledge State
+
+| Task | Status | Notes |
+|------|--------|-------|
+
+## Last Reflection
+
+<none yet>
+
+## Next Task
+
+1. Scrape A — **job-scraper**
+MERGEEOF
+
+cat > "$MERGE_TEST_DIR/wt1-checkpoint.md" << 'MERGEEOF'
+# Checkpoint — test
+
+**Thread:** test
+**Last updated:** 2026-03-15
+**Last agent:** job-scraper
+**Status:** building
+
+## Knowledge State
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Scrape A | done | Found 5 requirements |
+
+## Next Task
+
+2. Scrape B — **job-scraper**
+MERGEEOF
+
+cat > "$MERGE_TEST_DIR/wt2-checkpoint.md" << 'MERGEEOF'
+# Checkpoint — test
+
+**Thread:** test
+**Last updated:** 2026-03-15
+**Last agent:** job-scraper
+**Status:** building
+
+## Knowledge State
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Scrape B | done | Found 3 requirements |
+
+## Next Task
+
+3. Scrape C — **job-scraper**
+MERGEEOF
+
+merge_checkpoints "$MERGE_TEST_DIR/base-checkpoint.md" \
+  "$MERGE_TEST_DIR/wt1-checkpoint.md" "$MERGE_TEST_DIR/wt2-checkpoint.md"
+
+if grep -q "Scrape A" "$MERGE_TEST_DIR/base-checkpoint.md" && \
+   grep -q "Scrape B" "$MERGE_TEST_DIR/base-checkpoint.md"; then
+  pass "20c: merge_checkpoints combines knowledge state from both worktrees"
+else
+  fail "20c: merged checkpoint missing knowledge state entries"
+fi
+
+# 20d. merge_checkpoints preserves header
+if grep -q 'Thread.*test' "$MERGE_TEST_DIR/base-checkpoint.md"; then
+  pass "20d: merged checkpoint preserves thread header"
+else
+  fail "20d: merged checkpoint missing thread header"
+fi
+
+rm -rf "$MERGE_TEST_DIR"
+echo ""
+
+# ── Test 21: Pre-merge validation gates ───────────────────────
+echo "--- 21. Pre-merge Validation ---"
+
+VAL_TEST_DIR=$(mktemp -d)
+(
+  cd "$VAL_TEST_DIR"
+  git init --quiet
+  echo "base" > file.txt
+  git add -A && git commit -m "init" --quiet
+)
+
+# 21a. Worktree with commits → valid
+(
+  cd "$VAL_TEST_DIR"
+  WT_VAL=$(create_worktree 3 1)
+  echo "work done" > "$WT_VAL/output.txt"
+  (cd "$WT_VAL" && git add -A && git commit -m "agent work" --quiet)
+  if validate_worktree_output "$WT_VAL" "good-agent" 2>/dev/null; then
+    pass "21a: worktree with commits → valid"
+  else
+    fail "21a: worktree with commits should be valid"
+  fi
+  remove_worktree "$WT_VAL" 2>/dev/null
+) 2>/dev/null
+
+# 21b. Worktree with no commits → rejected
+(
+  cd "$VAL_TEST_DIR"
+  WT_EMPTY=$(create_worktree 3 2)
+  if ! validate_worktree_output "$WT_EMPTY" "empty-agent" 2>/dev/null; then
+    pass "21b: worktree with no commits → rejected"
+  else
+    fail "21b: empty worktree should be rejected"
+  fi
+  remove_worktree "$WT_EMPTY" 2>/dev/null
+) 2>/dev/null
+
+rm -rf "$VAL_TEST_DIR"
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────

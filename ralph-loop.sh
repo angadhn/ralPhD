@@ -159,20 +159,25 @@ while true; do
   if [ "$ARCH_MODE" = "parallel" ] && [ "$LOOP_MODE" = "build" ]; then
     CURRENT_PHASE=$(detect_current_phase "implementation-plan.md")
     if [ -n "$CURRENT_PHASE" ] && is_parallel_phase "$CURRENT_PHASE"; then
-      run_parallel_phase "$CURRENT_PHASE"
-      PARALLEL_RC=$?
+      # Validate dependencies before running in parallel
+      if ! validate_phase_dependencies "implementation-plan.md" "$CURRENT_PHASE"; then
+        echo "  ⚠  Dependency check failed — falling back to serial execution"
+      else
+        run_parallel_phase "$CURRENT_PHASE"
+        PARALLEL_RC=$?
 
-      capture_eval_metrics || true
+        capture_eval_metrics || true
 
-      echo ""
-      echo "=== Iteration $ITERATION complete (parallel phase). Fresh context in 3s... ==="
-      sleep 3
+        echo ""
+        echo "=== Iteration $ITERATION complete (parallel phase). Fresh context in 3s... ==="
+        sleep 3
 
-      if [ -n "${MAX_ITERATIONS:-}" ] && [ "$ITERATION" -ge "$MAX_ITERATIONS" ]; then
-        echo "=== Max iterations ($MAX_ITERATIONS) reached. Exiting. ==="
-        break
+        if [ -n "${MAX_ITERATIONS:-}" ] && [ "$ITERATION" -ge "$MAX_ITERATIONS" ]; then
+          echo "=== Max iterations ($MAX_ITERATIONS) reached. Exiting. ==="
+          break
+        fi
+        continue
       fi
-      continue
     fi
     # Not a parallel phase — fall through to serial execution
     echo "  Phase not marked (parallel) — running serially"
@@ -234,7 +239,11 @@ while true; do
       if $USE_CLAUDE_FALLBACK; then
         MCP_CONFIG=$(build_mcp_config "$CURRENT_AGENT")
         BUILD_CLI_MODEL=$(resolve_cli_model "$CLAUDE_MODEL")
+        FALLBACK_EFFORT=$(resolve_effort "$CURRENT_AGENT")
+        FALLBACK_EFFORT_FLAG=""
+        [ -n "$FALLBACK_EFFORT" ] && FALLBACK_EFFORT_FLAG="--effort $FALLBACK_EFFORT"
         echo "$PROMPT" | claude --model "$BUILD_CLI_MODEL" \
+          $FALLBACK_EFFORT_FLAG \
           --tools "" \
           --mcp-config "$MCP_CONFIG" \
           --append-system-prompt "$AGENT_SYSTEM_PROMPT" \
@@ -343,8 +352,16 @@ while true; do
       PLAN_SYSTEM="$(cat "${RALPH_HOME}/.claude/agents/plan.md")"
       SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
       PLAN_CLI_MODEL=$(resolve_cli_model "$CLAUDE_MODEL")
-      echo "  Model: $PLAN_CLI_MODEL (plan mode — claude CLI)"
+      PLAN_EFFORT=$(resolve_effort "plan")
+      PLAN_EFFORT_FLAG=""
+      if [ -n "$PLAN_EFFORT" ]; then
+        PLAN_EFFORT_FLAG="--effort $PLAN_EFFORT"
+        echo "  Model: $PLAN_CLI_MODEL (plan mode — claude CLI, effort: $PLAN_EFFORT)"
+      else
+        echo "  Model: $PLAN_CLI_MODEL (plan mode — claude CLI)"
+      fi
       echo "$PROMPT" | claude --model "$PLAN_CLI_MODEL" \
+        $PLAN_EFFORT_FLAG \
         --append-system-prompt "$PLAN_SYSTEM" \
         --session-id "$SESSION_ID" \
         --dangerously-skip-permissions
@@ -405,8 +422,15 @@ while true; do
       # Anthropic models: use claude CLI for interactive TUI
       SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
       INTERACTIVE_CLI_MODEL=$(resolve_cli_model "$CLAUDE_MODEL")
-      echo "  Model: $INTERACTIVE_CLI_MODEL (interactive build — claude CLI)"
-      echo "$PROMPT" | claude --model "$INTERACTIVE_CLI_MODEL" --session-id "$SESSION_ID" --dangerously-skip-permissions
+      AGENT_EFFORT=$(resolve_effort "$CURRENT_AGENT")
+      EFFORT_FLAG=""
+      if [ -n "$AGENT_EFFORT" ]; then
+        EFFORT_FLAG="--effort $AGENT_EFFORT"
+        echo "  Model: $INTERACTIVE_CLI_MODEL (interactive build — claude CLI, effort: $AGENT_EFFORT)"
+      else
+        echo "  Model: $INTERACTIVE_CLI_MODEL (interactive build — claude CLI)"
+      fi
+      echo "$PROMPT" | claude --model "$INTERACTIVE_CLI_MODEL" $EFFORT_FLAG --session-id "$SESSION_ID" --dangerously-skip-permissions
       EXIT_CODE=$?
 
       kill "$MONITOR_PID" 2>/dev/null || true

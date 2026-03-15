@@ -30,4 +30,6 @@ ask questions, refine. Each task names an agent as its last word. Seed
 `checkpoint.md` with thread name and first task.
 
 Mark independent phases `(parallel)`. Set `**Architecture:**` and
-`**Autonomy:**` fields.
+`**Autonomy:**` fields. For tasks that depend on earlier tasks, add
+`(depends: N)` or `(depends: N,M)` — the build system validates these
+before running parallel phases.
