@@ -432,9 +432,12 @@ run_orchestrator() {
   local orch_model
   orch_model=$(resolve_model "orchestrator")
   local orch_prompt
-  orch_prompt="Read implementation-plan.md and checkpoint.md. Decide what to execute next.
+  orch_prompt="You are the orchestrator. Read implementation-plan.md and checkpoint.md.
+Determine which tasks to dispatch next and output ONLY a JSON dispatch instruction.
+Do NOT do any work yourself. Do NOT scrape, write, or edit files.
+Your ONLY job is to decide what agents to run and output JSON.
 
-$(cat "$PROMPT_FILE")"
+See your full instructions in your agent prompt (.claude/agents/orchestrator.md)."
 
   echo "  🎯 Running orchestrator..."
 
