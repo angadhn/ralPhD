@@ -268,18 +268,11 @@ merge_checkpoints() {
       merged_did="${merged_did}${did_section}"$'\n'
     fi
 
-    # Extract knowledge state table rows (lines with | that aren't headers)
+    # Extract knowledge state table rows — only "done" entries to avoid stale "pending" duplicates
     local knowledge_rows
-    knowledge_rows=$(awk '/^## Knowledge State/{found=1; next} /^## /{found=0} found && /^\|/ && !/^\|.*Task.*Status/' "$wt_cp" 2>/dev/null)
+    knowledge_rows=$(awk '/^## Knowledge State/{found=1; next} /^## /{found=0} found && /^\|/ && !/^\|.*Task.*Status/ && /done/' "$wt_cp" 2>/dev/null)
     if [ -n "$knowledge_rows" ]; then
       merged_knowledge="${merged_knowledge}${knowledge_rows}"$'\n'
-    fi
-
-    # Take the latest "Next Task" (last file wins)
-    local next
-    next=$(awk '/^## Next Task/{found=1; next} found && /[^ ]/{print; exit}' "$wt_cp" 2>/dev/null)
-    if [ -n "$next" ]; then
-      latest_next_task="$next"
     fi
   done
 
@@ -305,10 +298,15 @@ merge_checkpoints() {
     echo ""
     echo "## Next Task"
     echo ""
-    if [ -n "$latest_next_task" ]; then
-      echo "$latest_next_task"
+    # Read next unchecked task directly from the plan (don't trust agent-written text)
+    local plan_next
+    plan_next=$(grep '^\- \[ \]' "implementation-plan.md" 2>/dev/null \
+      | grep -v '<task description>\|<agent>' \
+      | head -1 | sed 's/^- \[ \] //' | sed 's/\*//g')
+    if [ -n "$plan_next" ]; then
+      echo "$plan_next"
     else
-      echo "<next task from implementation plan>"
+      echo "<all tasks complete>"
     fi
   } > "$output_path"
 }

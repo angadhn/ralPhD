@@ -2661,8 +2661,16 @@ cat > "$MERGE_TEST_DIR/wt2-checkpoint.md" << 'MERGEEOF'
 3. Scrape C — **job-scraper**
 MERGEEOF
 
-merge_checkpoints "$MERGE_TEST_DIR/base-checkpoint.md" \
-  "$MERGE_TEST_DIR/wt1-checkpoint.md" "$MERGE_TEST_DIR/wt2-checkpoint.md"
+# merge_checkpoints reads implementation-plan.md from cwd for Next Task
+cat > "$MERGE_TEST_DIR/implementation-plan.md" << 'MERGEEOF'
+# Plan
+- [x] 1. Scrape A — **job-scraper**
+- [x] 2. Scrape B — **job-scraper**
+- [ ] 3. Write resume — **resume-writer**
+MERGEEOF
+
+(cd "$MERGE_TEST_DIR" && merge_checkpoints "base-checkpoint.md" \
+  "wt1-checkpoint.md" "wt2-checkpoint.md")
 
 if grep -q "Scrape A" "$MERGE_TEST_DIR/base-checkpoint.md" && \
    grep -q "Scrape B" "$MERGE_TEST_DIR/base-checkpoint.md"; then
@@ -2671,11 +2679,18 @@ else
   fail "20c: merged checkpoint missing knowledge state entries"
 fi
 
-# 20d. merge_checkpoints preserves header
-if grep -q 'Thread.*test' "$MERGE_TEST_DIR/base-checkpoint.md"; then
-  pass "20d: merged checkpoint preserves thread header"
+# 20d. merge_checkpoints: Next Task points to next unchecked plan task (not agent text)
+if grep -q "Write resume" "$MERGE_TEST_DIR/base-checkpoint.md"; then
+  pass "20d: merged Next Task reads from plan (task 3: Write resume)"
 else
-  fail "20d: merged checkpoint missing thread header"
+  fail "20d: merged Next Task should reference next unchecked plan task"
+fi
+
+# 20e. merge_checkpoints preserves header
+if grep -q 'Thread.*test' "$MERGE_TEST_DIR/base-checkpoint.md"; then
+  pass "20e: merged checkpoint preserves thread header"
+else
+  fail "20e: merged checkpoint missing thread header"
 fi
 
 rm -rf "$MERGE_TEST_DIR"
