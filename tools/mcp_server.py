@@ -22,7 +22,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-from tools import TOOLS, AGENT_TOOLS, DEFAULT_TOOLS, SERVER_TOOLS, execute_tool
+from tools import TOOLS, AGENT_TOOLS, DEFAULT_TOOLS, SERVER_TOOLS, execute_tool, get_tools_for_agent
 
 _LOG_FILE = os.environ.get("RALPH_MCP_LOG", "")
 
@@ -35,7 +35,9 @@ def _log(msg: str):
 
 def build_server(agent_name: str) -> Server:
     """Create an MCP server with tools scoped to the given agent."""
-    tool_names = AGENT_TOOLS.get(agent_name, DEFAULT_TOOLS)
+    # Use get_tools_for_agent which checks hardcoded registry first,
+    # then parses ## Tools from the agent's .md file for custom agents.
+    tool_names, _ = get_tools_for_agent(agent_name)
 
     # Filter to client-side tools that exist in the registry
     active_tools = [n for n in tool_names if n in TOOLS and n not in SERVER_TOOLS]
@@ -67,10 +69,20 @@ def build_server(agent_name: str) -> Server:
 
 async def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 tools/mcp_server.py <agent_name>", file=sys.stderr)
+        print("Usage: python3 tools/mcp_server.py <agent_name> [--cwd <dir>]", file=sys.stderr)
         sys.exit(1)
 
     agent_name = sys.argv[1]
+
+    # Optional --cwd flag: change working directory so file tools
+    # resolve paths relative to a worktree, not the main project.
+    if "--cwd" in sys.argv:
+        cwd_idx = sys.argv.index("--cwd")
+        if cwd_idx + 1 < len(sys.argv):
+            target_cwd = sys.argv[cwd_idx + 1]
+            os.chdir(target_cwd)
+            _log(f"cwd changed to {target_cwd}")
+
     server = build_server(agent_name)
 
     async with stdio_server() as (read_stream, write_stream):

@@ -114,6 +114,7 @@ PREAMBLE_EOF
 # Outputs the path to the config file.
 build_mcp_config() {
   local agent_name="${1:-}"
+  local work_dir="${2:-}"
   local config_file="/tmp/ralph-mcp-${agent_name}.json"
 
   # mcp requires Python ≥3.10; find the best available interpreter
@@ -125,12 +126,24 @@ build_mcp_config() {
     fi
   done
 
+  # If a work_dir is specified (worktree), set cwd so the MCP server
+  # resolves file paths relative to the worktree, not the main project.
+  local abs_work_dir=""
+  local cwd_line=""
+  local extra_args=""
+  if [ -n "$work_dir" ] && [ "$work_dir" != "." ]; then
+    abs_work_dir=$(cd "$work_dir" && pwd)
+    cwd_line="\"cwd\": \"${abs_work_dir}\","
+    extra_args=", \"--cwd\", \"${abs_work_dir}\""
+  fi
+
   cat > "$config_file" <<EOF
 {
   "mcpServers": {
     "ralph-tools": {
+      ${cwd_line}
       "command": "${py}",
-      "args": ["${RALPH_HOME}/tools/mcp_server.py", "${agent_name}"]
+      "args": ["${RALPH_HOME}/tools/mcp_server.py", "${agent_name}"${extra_args}]
     }
   }
 }
@@ -719,7 +732,7 @@ $(cat "$PROMPT_FILE")"
     if $use_claude_fallback; then
       local agent_system_prompt mcp_config
       agent_system_prompt=$(build_claude_system_prompt "$agent_name")
-      mcp_config=$(build_mcp_config "$agent_name")
+      mcp_config=$(build_mcp_config "$agent_name" "$work_dir")
       local cli_model par_effort par_effort_flag
       cli_model=$(resolve_cli_model "$agent_model")
       par_effort=$(resolve_effort "$agent_name")
