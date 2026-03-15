@@ -232,9 +232,36 @@ merge_worktree() {
   if git merge "$branch_name" --no-edit -m "merge: parallel agent $agent_name ($branch_name)" 2>/dev/null; then
     return 0
   else
-    echo "  ⚠  Merge conflict from $agent_name ($branch_name)"
-    git merge --abort 2>/dev/null || true
-    return 1
+    # Conflict detected — resolve shared files by keeping ours (we reconcile them separately)
+    # but preserve the agent's new files (the actual work product)
+    local conflict_files
+    conflict_files=$(git diff --name-only --diff-filter=U 2>/dev/null)
+    local has_content_conflict=false
+
+    for cf in $conflict_files; do
+      case "$cf" in
+        checkpoint.md|implementation-plan.md)
+          # Expected conflict on shared files — resolve by keeping ours
+          git checkout --ours "$cf" 2>/dev/null
+          git add "$cf" 2>/dev/null
+          ;;
+        *)
+          # Real content conflict — flag it
+          has_content_conflict=true
+          echo "  ⚠  Content conflict in $cf from $agent_name"
+          ;;
+      esac
+    done
+
+    if $has_content_conflict; then
+      echo "  ⚠  Merge conflict from $agent_name ($branch_name) — non-trivial conflicts"
+      git merge --abort 2>/dev/null || true
+      return 1
+    else
+      # All conflicts were on shared files (resolved) — complete the merge
+      git commit --no-edit -m "merge: parallel agent $agent_name ($branch_name)" 2>/dev/null
+      return 0
+    fi
   fi
 }
 
