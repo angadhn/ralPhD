@@ -202,6 +202,12 @@ create_worktree() {
     git worktree prune 2>/dev/null || true
   fi
 
+  # Ensure HEAD exists (worktree requires at least one commit)
+  if ! git rev-parse HEAD >/dev/null 2>&1; then
+    git add -A 2>/dev/null || true
+    git commit -m "chore: auto-commit for worktree support" --quiet 2>/dev/null || true
+  fi
+
   mkdir -p .worktrees
   git worktree add "$wt_dir" -b "$branch_name" HEAD --quiet 2>/dev/null
   if [ $? -ne 0 ]; then

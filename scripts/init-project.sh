@@ -245,6 +245,9 @@ LAUNCHER
   if [ ! -d "$WORKSPACE/.git" ]; then
     echo "  Initializing git repository"
     git init "$WORKSPACE"
+    # Create initial commit so HEAD is valid (required for git worktree)
+    git -C "$WORKSPACE" add -A
+    git -C "$WORKSPACE" commit -m "chore: initialize ralph workspace" --allow-empty-message --quiet
   fi
 
   # Brownfield: add workspace to parent's .gitignore
