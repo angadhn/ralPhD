@@ -344,23 +344,30 @@ merge_plan_checkboxes() {
 
 validate_worktree_output() {
   # Checks that a worktree agent produced meaningful output before merging.
-  # Usage: validate_worktree_output <worktree_dir> [agent_name]
+  # Usage: validate_worktree_output <worktree_dir> [agent_name] [base_commit]
   # Returns 0 if valid, 1 if output should be rejected.
   local wt_dir=$1
   local agent_name=${2:-unknown}
+  local base_commit=${3:-}
   local issues=0
 
   # Check: agent made at least one commit beyond the base
+  # Use the base_commit captured BEFORE any merges (avoids HEAD-advance bug)
   local commit_count
-  commit_count=$(git -C "$wt_dir" rev-list --count HEAD ^"$(git rev-parse HEAD)" 2>/dev/null || echo 0)
+  if [ -n "$base_commit" ]; then
+    commit_count=$(git -C "$wt_dir" rev-list --count HEAD ^"$base_commit" 2>/dev/null || echo 0)
+  else
+    commit_count=$(git -C "$wt_dir" rev-list --count HEAD ^"$(git rev-parse HEAD)" 2>/dev/null || echo 0)
+  fi
   if [ "$commit_count" -eq 0 ]; then
     echo "  ⚠  $agent_name: no commits in worktree (empty work)"
     issues=$((issues + 1))
   fi
 
   # Check: diff is not unreasonably large (>5000 lines suggests runaway)
+  local ref="${base_commit:-HEAD~${commit_count}}"
   local diff_lines
-  diff_lines=$(git -C "$wt_dir" diff --stat HEAD~"$commit_count"..HEAD 2>/dev/null | tail -1 | grep -o '[0-9]* insertion' | grep -o '[0-9]*' || echo 0)
+  diff_lines=$(git -C "$wt_dir" diff --stat "$ref"..HEAD 2>/dev/null | tail -1 | grep -o '[0-9]* insertion' | grep -o '[0-9]*' || echo 0)
   if [ "$diff_lines" -gt 5000 ]; then
     echo "  ⚠  $agent_name: unusually large diff ($diff_lines insertions)"
     # Warning only — don't reject
@@ -380,6 +387,10 @@ run_parallel_phase() {
 
   echo "  ⚡ Parallel phase detected: $phase_line"
   echo "  🌿 Using worktree isolation"
+
+  # Capture base commit BEFORE any work — used for validation after merges
+  local base_commit
+  base_commit=$(git rev-parse HEAD)
 
   # --- Phase 1: Create worktrees and spawn agents ---
   while IFS='|' read -r agent_name task_desc; do
@@ -483,8 +494,8 @@ $(cat "$PROMPT_FILE")"
       continue
     fi
 
-    # Pre-merge validation
-    if ! validate_worktree_output "$wt" "${agents[$i]}"; then
+    # Pre-merge validation (use base_commit to avoid HEAD-advance false rejections)
+    if ! validate_worktree_output "$wt" "${agents[$i]}" "$base_commit"; then
       echo "  ⚠  Skipping merge for ${agents[$i]} (validation failed)"
       merge_failures=$((merge_failures + 1))
       continue
