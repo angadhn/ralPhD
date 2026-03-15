@@ -485,33 +485,43 @@ parse_orchestrator_dispatch() {
   # Try to extract the assistant's text content which should contain the JSON
   local json_text
   json_text=$(python3 -c "
-import json, sys
-try:
-    data = json.load(open('$output_file'))
-    # claude --output-format json wraps content in a result array
-    if isinstance(data, dict) and 'result' in data:
-        for block in data['result']:
+import json, sys, re
+
+data = json.load(open('$output_file'))
+
+# Extract text containing the dispatch JSON
+text = ''
+if isinstance(data, dict):
+    result = data.get('result', '')
+    # result can be a string (claude CLI) or array of blocks (API)
+    if isinstance(result, str):
+        text = result
+    elif isinstance(result, list):
+        for block in result:
             if isinstance(block, dict) and block.get('type') == 'text':
                 text = block['text']
-                # Extract JSON from text (may have markdown fences)
-                text = text.strip()
-                if text.startswith('\`\`\`'):
-                    lines = text.split('\n')
-                    text = '\n'.join(lines[1:-1])
-                print(text)
-                sys.exit(0)
-    # Maybe it's already the raw JSON
-    if isinstance(data, dict) and 'action' in data:
+                break
+    # Maybe the top-level dict IS the dispatch
+    if not text and 'action' in data:
         print(json.dumps(data))
         sys.exit(0)
-    # Try the full text as JSON
-    print(json.dumps(data))
-except Exception as e:
-    # Try reading as plain text and extracting JSON
-    with open('$output_file') as f:
-        text = f.read()
-    import re
-    match = re.search(r'\{[^{}]*\"action\"[^{}]*\}', text, re.DOTALL)
+
+# Strip markdown code fences
+text = text.strip()
+if text.startswith('\`\`\`'):
+    lines = text.split('\n')
+    # Remove first line (fence + language) and last line (fence)
+    text = '\n'.join(lines[1:])
+    if text.rstrip().endswith('\`\`\`'):
+        text = text.rstrip()[:-3].rstrip()
+
+# Try parsing as JSON
+try:
+    d = json.loads(text)
+    print(json.dumps(d))
+except:
+    # Last resort: regex extract
+    match = re.search(r'\{.*\"action\".*\}', text, re.DOTALL)
     if match:
         print(match.group())
     else:
