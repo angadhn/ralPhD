@@ -1,80 +1,50 @@
 {
   "scout": {
     "model": "claude-opus-4-6",
-    "effort": "max",
-    "max_step": 5,
-    "max_tokens": 8096,
-    "steps": {"search_score": 3, "verify": 5, "download": 3, "summary": 5}
+    "effort": "max"
   },
   "triage": {
     "model": "claude-opus-4-6",
-    "effort": "max",
-    "max_step": 5,
-    "max_tokens": 8096
+    "effort": "max"
   },
   "deep-reader": {
     "model": "claude-opus-4-6",
-    "effort": "max",
-    "max_step": 10,
-    "max_tokens": 12288,
-    "steps": {"read_chunk": 6, "notes_synthesis": 10, "report": 5}
+    "effort": "max"
   },
   "critic": {
     "model": "claude-opus-4-6",
-    "effort": "max",
-    "max_step": 15,
-    "max_tokens": 8096,
-    "steps": {"skim": 10, "deep_read": 15, "style_check": 10, "compliance": 10}
+    "effort": "max"
   },
   "provocateur": {
     "model": "claude-opus-4-6",
-    "effort": "max",
-    "max_step": 10,
-    "max_tokens": 8096
+    "effort": "max"
   },
   "synthesizer": {
     "model": "claude-opus-4-6",
-    "effort": "max",
-    "max_step": 10,
-    "max_tokens": 12288
+    "effort": "max"
   },
   "paper-writer": {
     "model": "claude-opus-4-6",
-    "effort": "max",
-    "max_step": 5,
-    "max_tokens": 16384,
-    "steps": {"read_inputs": 5, "write_subsection": 5, "commit_gates": 5}
+    "effort": "max"
   },
   "editor": {
     "model": "claude-opus-4-6",
-    "effort": "max",
-    "max_step": 10,
-    "max_tokens": 12288
+    "effort": "max"
   },
   "coherence-reviewer": {
     "model": "claude-opus-4-6",
-    "effort": "max",
-    "max_step": 10,
-    "max_tokens": 8096
+    "effort": "max"
   },
   "research-coder": {
-    "model": "claude-sonnet-4-6",
-    "effort": "high",
-    "max_step": 15,
-    "max_tokens": 16384,
-    "steps": {"read_inputs": 5, "write_script": 10, "run_script": 10, "summary": 15}
+    "model": "claude-opus-4-6",
+    "effort": "max"
   },
   "figure-stylist": {
-    "model": "claude-sonnet-4-6",
-    "effort": "high",
-    "max_step": 5,
-    "max_tokens": 8096,
-    "steps": {"read_figure": 3, "write_feedback": 5, "checkpoint_update": 2}
+    "model": "claude-opus-4-6",
+    "effort": "max"
   },
   "coder": {
-    "model": "claude-sonnet-4-6",
-    "effort": "high",
-    "max_step": 15,
-    "max_tokens": 16384
+    "model": "claude-opus-4-6",
+    "effort": "max"
   }
 }

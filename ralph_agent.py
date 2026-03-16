@@ -283,18 +283,18 @@ def main():
 
     # Resolve max_tokens + effort: CLI flag > context-budgets.json > defaults
     effort = None
+    agent_budget = {}
+    budgets_path = ralph_home / "context-budgets.json"
+    if budgets_path.exists():
+        try:
+            budgets = json.loads(budgets_path.read_text())
+            agent_budget = budgets.get(args.agent, {})
+            effort = agent_budget.get("effort")
+        except (json.JSONDecodeError, KeyError):
+            pass
+
     if args.max_tokens is None:
-        budgets_path = ralph_home / "context-budgets.json"
-        if budgets_path.exists():
-            try:
-                budgets = json.loads(budgets_path.read_text())
-                agent_budget = budgets.get(args.agent, {})
-                args.max_tokens = agent_budget.get("max_tokens", 8096)
-                effort = agent_budget.get("effort")
-            except (json.JSONDecodeError, KeyError):
-                args.max_tokens = 8096
-        else:
-            args.max_tokens = 8096
+        args.max_tokens = agent_budget.get("max_tokens", 32768) if agent_budget else 32768
 
     # Load agent prompt (workspace-first resolution)
     if args.system_prompt_file:
