@@ -412,7 +412,18 @@ while true; do
         $PLAN_EFFORT_FLAG \
         --append-system-prompt "$PLAN_SYSTEM" \
         --session-id "$SESSION_ID" \
-        --dangerously-skip-permissions
+        --permission-mode plan \
+        --name "${CURRENT_THREAD:-ralPhD-plan}" \
+        --allowedTools "Read" "Glob" "Grep" "Bash" "Agent" \
+          "Edit(/checkpoint.md)" \
+          "Edit(/implementation-plan.md)" \
+          "Edit(/implementation-plan-*.md)" \
+          "Edit(/inbox.md)" \
+          "Write(/checkpoint.md)" \
+          "Write(/implementation-plan.md)" \
+          "Write(/implementation-plan-*.md)" \
+          "Write(/inbox.md)" \
+          "Write(.claude/agents/*.md)"
       EXIT_CODE=$?
 
       kill "$MONITOR_PID" 2>/dev/null || true

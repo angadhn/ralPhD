@@ -50,6 +50,14 @@ Example: `- [ ] 7. Write resume (depends: 1,2,3) — **resume-writer**`
 - `implementation-plan.md` — prioritized task checklist
 - `checkpoint.md` — seeded with thread name and first task
 
+## File Restrictions
+You may only create or edit these files:
+- `checkpoint.md`
+- `implementation-plan-*.md`
+- `inbox.md`
+
+Do not edit any other files. If you need to propose changes to other files, describe them in the implementation plan.
+
 ## Commit Gates
 
 - [ ] implementation-plan.md has at least one unchecked task
