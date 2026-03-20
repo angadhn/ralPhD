@@ -250,6 +250,9 @@ LAUNCHER
     git -C "$WORKSPACE" commit -m "chore: initialize ralph workspace" --allow-empty-message --quiet
   fi
 
+  # Ensure run/ is gitignored in the workspace (runtime state)
+  grep -qxF 'run/' "$WORKSPACE/.gitignore" 2>/dev/null || echo 'run/' >> "$WORKSPACE/.gitignore"
+
   # Brownfield: add workspace to parent's .gitignore
   if [ "$WORKSPACE" != "$RALPH_HOME" ]; then
     PARENT_GIT=$(git -C "$WORKSPACE/.." rev-parse --git-dir 2>/dev/null || true)
