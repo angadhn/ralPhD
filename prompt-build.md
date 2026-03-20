@@ -28,9 +28,13 @@ Read the `**Autonomy:**` field in `implementation-plan.md`.
 - **autopilot** — proceed to the next task without pausing.
 - **stage-gates** — after completing a task, check if the next task
   crosses a phase boundary (marked with `## Phase` headings or
-  `<!-- gate -->` comments in the plan). If it does, create
-  `HUMAN_REVIEW_NEEDED.md` with a summary of what was completed and
-  what the next phase will do. The loop will pause for user review.
+  `<!-- gate -->` comments in the plan). If it does:
+  1. Write the **next task line** from the implementation plan into
+     checkpoint.md's `## Next Task` (not a stage gate description).
+  2. Create `HUMAN_REVIEW_NEEDED.md` with a summary of what was
+     completed and what the next phase will do.
+  The loop will pause for user review. When the human approves, the
+  loop will pick up the correct next task automatically.
 - **step-by-step** — after every task, create `HUMAN_REVIEW_NEEDED.md`.
 
 If the field is missing, default to **stage-gates**.

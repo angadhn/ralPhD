@@ -89,6 +89,23 @@ while true; do
   sleep 3  # let any dying statusline process finish writing, then clear again
   rm -f "$CTX_FILE"
 
+  # --- Pre-iteration gate check ---
+  if [ -f "HUMAN_REVIEW_NEEDED.md" ]; then
+    _gate_template="${RALPH_HOME}/templates/HUMAN_REVIEW_NEEDED.md"
+    if ! diff -q "HUMAN_REVIEW_NEEDED.md" "$_gate_template" >/dev/null 2>&1; then
+      echo ""
+      echo "╔══════════════════════════════════════════════════════════╗"
+      echo "║  HUMAN REVIEW STILL PENDING                            ║"
+      echo "╚══════════════════════════════════════════════════════════╝"
+      echo ""
+      cat HUMAN_REVIEW_NEEDED.md
+      echo ""
+      echo "To continue: review above, then:"
+      echo "  rm HUMAN_REVIEW_NEEDED.md && ./ralph-loop.sh -p"
+      break
+    fi
+  fi
+
   ITER_START=$(date +%s)
   IGNORE_UNTIL=$(( ITER_START + 15 ))  # ignore context readings for first 15s (stale cache)
 
@@ -191,11 +208,11 @@ while true; do
         | grep -v '<task description>\|<agent>' \
         | head -1 | sed 's/^- \[ \] //')
       if [ -n "$plan_next" ]; then
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-          sed -i '' '/^## Next Task/,$ { /^## Next Task/!{ /^$/!s|.*|'"$plan_next"'|; }; }' checkpoint.md 2>/dev/null || true
-        else
-          sed -i '/^## Next Task/,$ { /^## Next Task/!{ /^$/!s|.*|'"$plan_next"'|; }; }' checkpoint.md 2>/dev/null || true
-        fi
+        awk -v task="$plan_next" '
+          /^## Next Task/ { print; print ""; print task; skip=1; next }
+          skip && /^## / { skip=0 }
+          !skip { print }
+        ' checkpoint.md > checkpoint.md.tmp && mv checkpoint.md.tmp checkpoint.md
         echo "  Fixed checkpoint Next Task → $CURRENT_AGENT"
       fi
     fi

@@ -209,6 +209,61 @@ else
   fail "no-task detection: got '$DETECTED', expected empty"
 fi
 
+# Test stage gate text falls through to plan
+cat > "$WORKSPACE/checkpoint.md" << 'EOF'
+# Checkpoint
+
+## Next Task
+
+STAGE GATE: P1 Review — Phase 2 complete. All research tasks done.
+EOF
+
+cat > "$WORKSPACE/plan.md" << 'EOF'
+- [ ] 5. Build API endpoints — **coder**
+- [ ] 6. Write tests — **coder**
+EOF
+
+DETECTED=$(detect_agent_from_checkpoint "$WORKSPACE/checkpoint.md" "$WORKSPACE/plan.md")
+if [ "$DETECTED" = "coder" ]; then
+  pass "stage gate fallthrough: '$DETECTED'"
+else
+  fail "stage gate fallthrough: got '$DETECTED', expected 'coder'"
+fi
+
+# Test multi-line stage gate text
+cat > "$WORKSPACE/checkpoint.md" << 'EOF'
+# Checkpoint
+
+## Next Task
+
+Stage Gate: Phase 1 complete
+All research and literature review tasks finished.
+Ready for human review before proceeding to writing phase.
+EOF
+
+DETECTED=$(detect_agent_from_checkpoint "$WORKSPACE/checkpoint.md" "$WORKSPACE/plan.md")
+if [ "$DETECTED" = "coder" ]; then
+  pass "multi-line stage gate fallthrough: '$DETECTED'"
+else
+  fail "multi-line stage gate fallthrough: got '$DETECTED', expected 'coder'"
+fi
+
+# Test case-insensitive stage gate
+cat > "$WORKSPACE/checkpoint.md" << 'EOF'
+# Checkpoint
+
+## Next Task
+
+stage gate: review needed
+EOF
+
+DETECTED=$(detect_agent_from_checkpoint "$WORKSPACE/checkpoint.md" "$WORKSPACE/plan.md")
+if [ "$DETECTED" = "coder" ]; then
+  pass "case-insensitive stage gate: '$DETECTED'"
+else
+  fail "case-insensitive stage gate: got '$DETECTED', expected 'coder'"
+fi
+
 # Verify agent files exist
 for agent in coder scout critic paper-writer; do
   check "agent file exists: $agent.md" test -f "$RALPH_HOME/.claude/agents/$agent.md"
