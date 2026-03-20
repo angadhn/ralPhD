@@ -31,14 +31,48 @@ fi
 
 CI_MODE=false
 STANDALONE=false
+SHOW_HELP=false
 WORKSPACE=""
 for arg in "$@"; do
   case "$arg" in
     --ci) CI_MODE=true ;;
     --standalone) STANDALONE=true ;;
+    --help|-h) SHOW_HELP=true ;;
     *) WORKSPACE="$arg" ;;
   esac
 done
+
+if $SHOW_HELP; then
+  cat <<'HELP'
+Usage: ralphd-init [workspace] [--standalone|--ci]
+
+Initialize a workspace for ralPhD.
+
+Modes:
+  (default)       Symlinks specs/, templates/, .claude/agents/ to RALPH_HOME.
+                  Content dirs live in parent (split layout) or workspace (all-in-one).
+  --standalone    Copy the full engine into the workspace. Zero symlinks, no
+                  RALPH_HOME dependency at runtime. Content dirs inside workspace.
+                  Add project-specific agents directly to .claude/agents/.
+  --ci            Copy specs/templates/agents only (no engine, no launcher).
+                  For GitHub Actions where the workflow calls ralph-loop.sh via RALPH_HOME.
+
+Layout:
+  .ralph          Split layout — content dirs in parent, symlinked into workspace.
+  <other name>    All-in-one — everything in one directory.
+  --standalone/--ci always use all-in-one regardless of directory name.
+
+Examples:
+  ralphd-init ~/research/solar-review/.ralph                 # Split layout, symlinked
+  ralphd-init ~/research/solar-review/.ralph --standalone    # Standalone, no symlinks
+  ralphd-init ~/my-workspace                                 # All-in-one, symlinked
+  ralphd-init ~/ci-workspace --ci                            # CI mode
+
+After init:
+  cd <workspace> && ./ralphd plan
+HELP
+  exit 0
+fi
 WORKSPACE="${WORKSPACE:-.ralph}"
 
 mkdir -p "$WORKSPACE"
