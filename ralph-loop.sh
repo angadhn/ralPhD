@@ -137,17 +137,10 @@ while true; do
     # Run plan agent via claude CLI
     PLAN_SYSTEM="$(cat "${RALPH_HOME}/.claude/agents/plan.md")"
     SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-    PLAN_CLI_MODEL=$(resolve_cli_model "$CLAUDE_MODEL")
-    PLAN_EFFORT=$(resolve_effort "plan")
-    PLAN_EFFORT_FLAG=""
-    if [ -n "$PLAN_EFFORT" ]; then
-      PLAN_EFFORT_FLAG="--effort $PLAN_EFFORT"
-      echo "  Model: $PLAN_CLI_MODEL (plan mode — claude CLI, effort: $PLAN_EFFORT)"
-    else
-      echo "  Model: $PLAN_CLI_MODEL (plan mode — claude CLI)"
-    fi
-    echo "$PROMPT" | claude --model "$PLAN_CLI_MODEL" \
-      $PLAN_EFFORT_FLAG \
+    resolve_model_and_effort "$CLAUDE_MODEL" "plan"
+    echo "  Model: $CLI_MODEL (plan mode — claude CLI${EFFORT_FLAG:+, effort: ${EFFORT_FLAG#--effort }})"
+    echo "$PROMPT" | claude --model "$CLI_MODEL" \
+      $EFFORT_FLAG \
       --append-system-prompt "$PLAN_SYSTEM" \
       --session-id "$SESSION_ID" \
       --permission-mode plan \
@@ -362,12 +355,9 @@ while true; do
 
       if $USE_CLAUDE_FALLBACK; then
         MCP_CONFIG=$(build_mcp_config "$CURRENT_AGENT")
-        BUILD_CLI_MODEL=$(resolve_cli_model "$CLAUDE_MODEL")
-        FALLBACK_EFFORT=$(resolve_effort "$CURRENT_AGENT")
-        FALLBACK_EFFORT_FLAG=""
-        [ -n "$FALLBACK_EFFORT" ] && FALLBACK_EFFORT_FLAG="--effort $FALLBACK_EFFORT"
-        echo "$PROMPT" | claude --model "$BUILD_CLI_MODEL" \
-          $FALLBACK_EFFORT_FLAG \
+        resolve_model_and_effort "$CLAUDE_MODEL" "$CURRENT_AGENT"
+        echo "$PROMPT" | claude --model "$CLI_MODEL" \
+          $EFFORT_FLAG \
           --tools "" \
           --mcp-config "$MCP_CONFIG" \
           --append-system-prompt "$AGENT_SYSTEM_PROMPT" \
@@ -479,16 +469,9 @@ while true; do
     else
       # Anthropic models: use claude CLI for interactive TUI
       SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-      INTERACTIVE_CLI_MODEL=$(resolve_cli_model "$CLAUDE_MODEL")
-      AGENT_EFFORT=$(resolve_effort "$CURRENT_AGENT")
-      EFFORT_FLAG=""
-      if [ -n "$AGENT_EFFORT" ]; then
-        EFFORT_FLAG="--effort $AGENT_EFFORT"
-        echo "  Model: $INTERACTIVE_CLI_MODEL (interactive build — claude CLI, effort: $AGENT_EFFORT)"
-      else
-        echo "  Model: $INTERACTIVE_CLI_MODEL (interactive build — claude CLI)"
-      fi
-      echo "$PROMPT" | claude --model "$INTERACTIVE_CLI_MODEL" $EFFORT_FLAG --session-id "$SESSION_ID" --dangerously-skip-permissions
+      resolve_model_and_effort "$CLAUDE_MODEL" "$CURRENT_AGENT"
+      echo "  Model: $CLI_MODEL (interactive build — claude CLI${EFFORT_FLAG:+, effort: ${EFFORT_FLAG#--effort }})"
+      echo "$PROMPT" | claude --model "$CLI_MODEL" $EFFORT_FLAG --session-id "$SESSION_ID" --dangerously-skip-permissions
       EXIT_CODE=$?
 
       cleanup_pid "$MONITOR_PID"; MONITOR_PID=""

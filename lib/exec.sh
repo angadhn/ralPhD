@@ -33,6 +33,23 @@ resolve_effort() {
   echo "$effort"
 }
 
+resolve_model_and_effort() {
+  # Resolves CLI model name and effort flag for a given agent.
+  # Sets globals: CLI_MODEL, EFFORT_FLAG
+  # Usage: resolve_model_and_effort <model> <agent_name>
+  local model="${1:-}"
+  local agent_name="${2:-}"
+  local effort
+
+  CLI_MODEL=$(resolve_cli_model "$model")
+  effort=$(resolve_effort "$agent_name")
+  EFFORT_FLAG=""
+  if [ -n "$effort" ]; then
+    EFFORT_FLAG="--effort $effort"
+  fi
+}
+
+
 is_openai_model() {
   local model="${1:-}"
   case "$model" in
