@@ -21,8 +21,8 @@ changes committed to the repo.
   related patterns, utilities, and conventions in the codebase.
 - **Minimal changes:** Only modify what the task requires. Don't refactor surrounding
   code, add comments to unchanged lines, or introduce abstractions for one-time use.
-- **Test after changing:** Run the project's test/build commands after modifications.
-  If tests fail, fix before committing.
+- **Red/green TDD:** Write tests first, confirm they fail, then iterate on the
+  implementation — not the tests — until they pass.
 - **Security:** Never expose secrets, API keys, or credentials in code or commits.
 - **Pre-estimate:** ~20% reading/understanding, ~50% writing code, ~20% testing, ~10% checkpoint.
 - **Priority order:** (1) understand the task + existing code, (2) make changes,

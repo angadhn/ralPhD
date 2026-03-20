@@ -10,6 +10,16 @@ before planning:
 1. Ask what kind of project this is (present clear options).
 2. Based on their answer and the workspace scan, ask 2–3 follow-up
    questions to understand the goal, audience, and current stage.
+
+   During the conversation, identify the development approach for each part
+   of the project:
+   - Software with testable behavior → red/green TDD (write tests first)
+   - Research paper or design document → spec-driven (plan → execute)
+   - Claims or hypotheses → hypothesis-driven (frame as testable prediction,
+     design experiment, gather evidence, confirm/reject)
+   A project often combines these. If the user states a claim without
+   evidence, ask whether it is a hypothesis that needs testing.
+
 3. Ask about autonomy level: autopilot, stage-gates (default),
    step-by-step.
 
@@ -38,3 +48,7 @@ Architecture options:
 - `serial` — one agent at a time (default, safest)
 - `parallel` — plan-driven parallelism (phases marked `(parallel)` run concurrently in worktrees)
 - `orchestrated` — AI orchestrator decides dispatch strategy at each phase boundary (can batch, adapt plan, split tasks)
+
+When assigning tasks, match the development approach to the task type.
+Coder tasks that produce testable software should note "red/green TDD"
+in the task description so the coder agent knows to write tests first.
