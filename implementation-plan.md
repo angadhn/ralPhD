@@ -7,7 +7,7 @@
 
 ## Tasks
 
-- [ ] 1. Extract helper functions from ralph-loop.sh into lib/post-run.sh — **refactorer**
+- [x] 1. Extract helper functions from ralph-loop.sh into lib/post-run.sh — **refactorer**
       - `cleanup_pid()` — kill/wait/reset pattern (currently repeated 4x in ralph-loop.sh)
       - `log_interactive_session()` — build SESSION_FILE path + call log_interactive_session_usage (duplicated for plan and build interactive modes)
       - `post_iteration()` — capture_eval_metrics + handle_human_review_gate (duplicated for pipe and interactive modes)
