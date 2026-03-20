@@ -334,9 +334,7 @@ while true; do
       EXIT_CODE=$?
       CLAUDE_PID=""
 
-      kill "$MONITOR_PID" 2>/dev/null || true
-      wait "$MONITOR_PID" 2>/dev/null || true
-      MONITOR_PID=""
+      cleanup_pid "$MONITOR_PID"; MONITOR_PID=""
 
       # Success — break out of retry loop
       if [ "$EXIT_CODE" -eq 0 ]; then
@@ -356,11 +354,7 @@ while true; do
     done
 
     # Stop JSONL monitor if running
-    if [ -n "$JSONL_MONITOR_PID" ]; then
-      kill "$JSONL_MONITOR_PID" 2>/dev/null || true
-      wait "$JSONL_MONITOR_PID" 2>/dev/null || true
-      JSONL_MONITOR_PID=""
-    fi
+    cleanup_pid "$JSONL_MONITOR_PID"; JSONL_MONITOR_PID=""
 
     # Log post-run usage summary from --output-format json
     if [ -f $RALPH_RUN/output.json ]; then
@@ -376,10 +370,7 @@ while true; do
 
 
     # --- Eval capture ---
-    capture_eval_metrics || echo "  (eval capture skipped)"
-    if handle_human_review_gate; then
-      exit 0
-    fi
+    post_iteration
   else
     # Interactive: monitor runs in background, agent gets the terminal
     monitor_context "$$" "$ITER_START" "$IGNORE_UNTIL" "$CURRENT_AGENT" &
@@ -430,21 +421,10 @@ while true; do
           "Write(.claude/agents/*.md)"
       EXIT_CODE=$?
 
-      kill "$MONITOR_PID" 2>/dev/null || true
-      wait "$MONITOR_PID" 2>/dev/null || true
-      MONITOR_PID=""
+      cleanup_pid "$MONITOR_PID"; MONITOR_PID=""
 
       # Log interactive session usage (same pattern as interactive build mode)
-      AGENT_NAME="plan"
-      PROJECT_DIR=$(echo "$PWD" | tr '/' '-' | sed 's/^-//')
-      SESSION_FILE="$HOME/.claude/projects/${PROJECT_DIR}/${SESSION_ID}.jsonl"
-      if [ -f "$SESSION_FILE" ]; then
-        log_interactive_session_usage "$SESSION_FILE" "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
-          && echo "  Usage logged to $USAGE_LOG" \
-          || echo "  (could not log usage data)"
-      else
-        echo "  (session file not found — usage not logged)"
-      fi
+      log_interactive_session "$SESSION_ID" "plan"
 
       # Plan mode is one-shot — exit after this session
       if [ "$EXIT_CODE" -eq 0 ]; then
@@ -467,9 +447,7 @@ while true; do
         EXIT_CODE=$?
       fi
 
-      kill "$MONITOR_PID" 2>/dev/null || true
-      wait "$MONITOR_PID" 2>/dev/null || true
-      MONITOR_PID=""
+      cleanup_pid "$MONITOR_PID"; MONITOR_PID=""
 
       # Log usage
       AGENT_NAME=$(extract_agent_name)
@@ -496,29 +474,15 @@ while true; do
       echo "$PROMPT" | claude --model "$INTERACTIVE_CLI_MODEL" $EFFORT_FLAG --session-id "$SESSION_ID" --dangerously-skip-permissions
       EXIT_CODE=$?
 
-      kill "$MONITOR_PID" 2>/dev/null || true
-      wait "$MONITOR_PID" 2>/dev/null || true
-      MONITOR_PID=""
+      cleanup_pid "$MONITOR_PID"; MONITOR_PID=""
 
       # Log interactive session usage
-      AGENT_NAME=$(extract_agent_name)
-      PROJECT_DIR=$(echo "$PWD" | tr '/' '-' | sed 's/^-//')
-      SESSION_FILE="$HOME/.claude/projects/${PROJECT_DIR}/${SESSION_ID}.jsonl"
-      if [ -f "$SESSION_FILE" ]; then
-        log_interactive_session_usage "$SESSION_FILE" "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
-          && echo "  Usage logged to $USAGE_LOG" \
-          || echo "  (could not log usage data)"
-      else
-        echo "  (session file not found — usage not logged)"
-      fi
+      log_interactive_session "$SESSION_ID" "$(extract_agent_name)"
     fi
 
 
     # --- Eval capture ---
-    capture_eval_metrics || echo "  (eval capture skipped)"
-    if handle_human_review_gate; then
-      exit 0
-    fi
+    post_iteration
   fi
 
   # --- Error recovery with exponential backoff ---
