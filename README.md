@@ -75,12 +75,12 @@ Creates an isolated `.ralph/` workspace inside your existing project, with its o
 ### D. Standalone (fully self-contained, no framework dependency)
 
 ```bash
-~/ralPhD/scripts/init-project.sh ~/research/solar-review --standalone
+~/ralPhD/scripts/init-project.sh ~/research/solar-review/.ralph --standalone
 cd ~/research/solar-review/.ralph
 ./ralphd plan
 ```
 
-Copies the entire engine into the workspace. No symlinks, no RALPH_HOME needed at runtime. Add project-specific agents directly to `.claude/agents/`. Useful when you want a portable, versionable workspace that doesn't depend on the original ralPhD checkout.
+Copies the entire engine into the workspace — zero symlinks, no RALPH_HOME needed at runtime. Content directories (`papers/`, `ai-generated-outputs/`, etc.) are created directly inside the workspace. Add project-specific agents to `.claude/agents/`. Useful when you want a portable, versionable workspace that doesn't depend on the original ralPhD checkout.
 
 Plan mode produces `implementation-plan.md`. Build mode executes it.
 
@@ -105,7 +105,7 @@ See [Initialization modes](#initialization-modes) for details on what `init-proj
 | **Split** | Workspace directory is named `.ralph` | Content directories (`papers/`, `corpus/`, `sections/`, etc.) live in the parent directory. Symlinks inside `.ralph/` point up to them (`../papers/`, etc.) so agents see everything via relative paths. |
 | **All-in-one** | Any other directory name | Everything lives in one directory. No content symlinks needed. |
 
-Layout is determined by the directory name you pass — there is no flag. If `basename` is `.ralph`, you get split layout; otherwise, all-in-one.
+Layout is determined by the directory name you pass — there is no flag. If `basename` is `.ralph`, you get split layout; otherwise, all-in-one. Exception: `--standalone` and `--ci` always use all-in-one (content dirs inside the workspace) regardless of directory name.
 
 ```bash
 # Split layout (workspace = .ralph subdirectory)
