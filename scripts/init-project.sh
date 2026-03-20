@@ -53,8 +53,8 @@ else
   PROJECT_ROOT="$WORKSPACE"
 fi
 
-# CI mode: all content in WORKSPACE (same-dir semantics — CI always runs from workspace)
-if $CI_MODE; then
+# CI/standalone: all content in WORKSPACE (no symlinks to parent)
+if $CI_MODE || $STANDALONE; then
   PROJECT_ROOT="$WORKSPACE"
 fi
 
@@ -98,9 +98,11 @@ if [ "$WORKSPACE" != "$PROJECT_ROOT" ]; then
   fi
 else
   # Same-dir mode (ralphd-init . or CI): inputs → human-inputs for backward compat
-  link="$WORKSPACE/inputs"
-  if [ ! -e "$link" ]; then
-    ln -s "human-inputs" "$link"
+  if ! $STANDALONE; then
+    link="$WORKSPACE/inputs"
+    if [ ! -e "$link" ]; then
+      ln -s "human-inputs" "$link"
+    fi
   fi
 fi
 
