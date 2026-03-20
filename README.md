@@ -326,56 +326,17 @@ steps:
   - run: RALPH_HOME=$GITHUB_WORKSPACE/.ralph-engine ./ralphd -p build 5
 ```
 
-### GitHub Actions (ralph-as-engine)
+### GitHub Actions
 
-ralPhD can run as a reusable engine via GitHub Actions. External systems (Howler, API, `gh` CLI) trigger a `workflow_dispatch` event, and ralPhD runs `ralph-loop.sh` against a target project repo.
+The CI workflow (`ralph-run.yml`) has been removed. ralPhD now runs locally only via `./ralph-loop.sh` or `./ralphd`. For CI use, check out ralPhD as an engine and invoke it directly:
 
-#### Quick trigger
-
-```bash
-gh workflow run ralph-run.yml \
-  -f thread="my-thread" \
-  -f prompt="Write the introduction section" \
-  -f autonomy="stage-gates" \
-  -f target_repo="myorg/my-paper" \
-  -f max_iterations="5"
+```yaml
+steps:
+  - uses: actions/checkout@v4                         # workspace repo
+  - uses: actions/checkout@v4
+    with: { repository: you/ralPhD, path: .ralph-engine }
+  - run: RALPH_HOME=$GITHUB_WORKSPACE/.ralph-engine ./ralphd -p build 5
 ```
-
-#### Inputs
-
-| Input | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `thread` | yes | — | Thread name (checkpoint ID, output dir, branch name) |
-| `prompt` | yes | — | Task prompt — written to `inbox.md` |
-| `autonomy` | no | `stage-gates` | `autopilot`, `stage-gates`, `step-by-step` |
-| `target_repo` | no | `""` | Target repo (`owner/name`). Empty = run against self |
-| `target_ref` | no | `main` | Branch to check out |
-| `max_iterations` | no | `5` | Safety cap on loop iterations |
-| `loop_mode` | no | `build` | `build` or `plan` |
-| `commit_mode` | no | `branch` | `branch` (ralph/\<thread\>), `direct`, `none` |
-| `callback_url` | no | `""` | Webhook URL for JSON result summary |
-
-#### How it works
-
-1. Checks out ralPhD as `ralph-home/` (the engine)
-2. Checks out target repo as `workspace/` (or symlinks ralph-home if no target)
-3. Runs `init-project.sh --ci` on first run (copies templates, agents, specs)
-4. Injects thread/prompt/autonomy into workspace files
-5. Runs `ralph-loop.sh -p <mode> <max_iterations>`
-6. Commits results to `ralph/<thread>` branch (or direct, or artifact-only)
-7. POSTs webhook callback with run summary (if `callback_url` set)
-8. Uploads outputs as GitHub Actions artifact
-
-#### Secrets
-
-| Secret | Required | Description |
-|--------|----------|-------------|
-| `ANTHROPIC_API_KEY` | yes (Anthropic models) | API key for Claude |
-| `OPENAI_API_KEY` | yes (OpenAI models) | API key for GPT-4o, o3, o4-mini (or use Codex CLI auth locally) |
-| `TARGET_REPO_TOKEN` | conditional | PAT with `contents:write` on target repo |
-| `CALLBACK_SECRET` | no | HMAC-SHA256 key for signing webhook payloads |
-
-See `specs/api-contract.md` for the full API contract, webhook payload schema, and code examples.
 
 ### Benchmarking
 

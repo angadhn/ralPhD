@@ -97,11 +97,9 @@ if [ -f CHANGELOG.md ]; then
   echo "Archived and reset CHANGELOG.md"
 fi
 
-# Clean /tmp/ralph-* state files from this thread
-rm -f /tmp/ralph-context-pct /tmp/ralph-yield /tmp/ralph-budget-info \
-      /tmp/ralph-output.json /tmp/ralph-statusline-log /tmp/ralph-monitor-start \
-      /tmp/ralph-reflect /tmp/ralph-test-output.json
-echo "Cleaned /tmp/ralph-* state files"
+# Clean project-local runtime state
+rm -rf run/
+echo "Cleaned run/ state directory"
 
 echo "Archived to $ARCHIVE_DIR/"
 

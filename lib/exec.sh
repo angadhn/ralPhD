@@ -115,7 +115,7 @@ PREAMBLE_EOF
 build_mcp_config() {
   local agent_name="${1:-}"
   local work_dir="${2:-}"
-  local config_file="/tmp/ralph-mcp-${agent_name}.json"
+  local config_file="${RALPH_RUN}/mcp-${agent_name}.json"
 
   # mcp requires Python ≥3.10; find the best available interpreter
   local py="python3"
@@ -445,7 +445,7 @@ validate_worktree_output() {
 run_orchestrator() {
   # Runs the orchestrator agent to get a dispatch decision.
   # Returns the JSON output path on stdout.
-  local output_file="/tmp/ralph-orchestrator-${ITERATION}.json"
+  local output_file="${RALPH_RUN}/orchestrator-${ITERATION}.json"
   rm -f "$output_file"
 
   local orch_model
@@ -692,7 +692,7 @@ run_parallel_phase() {
   # --- Phase 1: Create worktrees and spawn agents ---
   while IFS='|' read -r agent_name task_desc; do
     task_idx=$((task_idx + 1))
-    local output_dir="/tmp/ralph-parallel-${ITERATION}-${task_idx}"
+    local output_dir="${RALPH_RUN}/parallel-${ITERATION}-${task_idx}"
     mkdir -p "$output_dir"
 
     local agent_path
@@ -847,7 +847,7 @@ $(cat "$PROMPT_FILE")"
   # --- Phase 5: Usage logging ---
   for i in "${!agents[@]}"; do
     local idx=$((i + 1))
-    local output_file="/tmp/ralph-parallel-${ITERATION}-${idx}/output.json"
+    local output_file="${RALPH_RUN}/parallel-${ITERATION}-${idx}/output.json"
     if [ -f "$output_file" ]; then
       log_usage_from_output_json "$output_file" "$ITERATION" "${agents[$i]}" "$LOOP_MODE" "$CURRENT_THREAD" "$idx"
     fi

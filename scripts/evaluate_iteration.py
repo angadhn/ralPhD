@@ -10,8 +10,8 @@ Data sources:
   - git diff           — files changed, lines added/removed
   - check_language.py  — language quality gate (if available)
   - check_journal_compliance.py — journal compliance gate (if available)
-  - /tmp/ralph-context-pct — peak context window utilization
-  - /tmp/ralph-yield       — whether context yield was triggered
+  - $RALPH_RUN/context-pct  — peak context window utilization
+  - $RALPH_RUN/yield        — whether context yield was triggered
   - checkpoint.md / implementation-plan.md — task completion
 
 Usage:
@@ -34,8 +34,10 @@ USAGE_LOG = PROJECT_ROOT / "logs" / "usage.jsonl"
 EVAL_LOG = PROJECT_ROOT / "logs" / "eval.jsonl"
 CHECKPOINT = PROJECT_ROOT / "checkpoint.md"
 PLAN = PROJECT_ROOT / "implementation-plan.md"
-CTX_FILE = Path("/tmp/ralph-context-pct")
-YIELD_FILE = Path("/tmp/ralph-yield")
+import os
+_ralph_run = os.environ.get("RALPH_RUN", "./run")
+CTX_FILE = Path(_ralph_run) / "context-pct"
+YIELD_FILE = Path(_ralph_run) / "yield"
 
 # Files to exclude from productivity metrics (infra/meta files)
 EXCLUDE_PATTERNS = {

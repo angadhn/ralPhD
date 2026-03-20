@@ -8,6 +8,10 @@ source "${SCRIPT_DIR}/lib/monitor.sh"
 source "${SCRIPT_DIR}/lib/post-run.sh"
 source "${SCRIPT_DIR}/lib/exec.sh"
 
+RALPH_RUN="./run"
+mkdir -p "$RALPH_RUN"
+export RALPH_RUN
+
 parse_loop_args "$@"
 
 if $SHOW_HELP; then
@@ -36,15 +40,15 @@ if [ ! -f "$PROMPT_FILE" ]; then
 fi
 
 CONTEXT_THRESHOLD=50  # default for ≤200k; overridden to 65 for 1M windows below
-CTX_FILE="/tmp/ralph-context-pct"
-YIELD_FILE="/tmp/ralph-yield"
-BUDGET_FILE="/tmp/ralph-budget-info"
+CTX_FILE="$RALPH_RUN/context-pct"
+YIELD_FILE="$RALPH_RUN/yield"
+BUDGET_FILE="$RALPH_RUN/budget-info"
 POLL_INTERVAL=5
 BACKOFF=60
 USAGE_LOG="logs/usage.jsonl"
 AGENT_MAX_RETRIES=3
 AGENT_RETRY_DELAYS=(5 15 45)
-CB_FILE="/tmp/ralph-circuit-breaker"
+CB_FILE="$RALPH_RUN/circuit-breaker"
 CB_THRESHOLD=5
 CB_CONSECUTIVE_FAILURES=0
 COUNTER_FILE="iteration_count"
@@ -89,9 +93,9 @@ while true; do
   IGNORE_UNTIL=$(( ITER_START + 15 ))  # ignore context readings for first 15s (stale cache)
 
   # --- Reflection trigger (every 5th iteration) ---
-  rm -f /tmp/ralph-reflect
+  rm -f "$RALPH_RUN/reflect"
   if [ "$ITERATION" -gt 0 ] && [ $(( ITERATION % 5 )) -eq 0 ]; then
-    touch /tmp/ralph-reflect
+    touch "$RALPH_RUN/reflect"
     echo "  Reflection iteration (mod 5)"
   fi
 
@@ -247,7 +251,7 @@ while true; do
     echo "  Model: $(resolve_cli_model "$CLAUDE_MODEL")"
 
     # Create start marker for JSONL monitor (before launching claude)
-    touch /tmp/ralph-monitor-start
+    touch "$RALPH_RUN/monitor-start"
 
     # Launch JSONL context monitor in background
     # Search: RALPH_HOME first (framework), then GITHUB_WORKSPACE, then CWD
@@ -282,7 +286,7 @@ while true; do
     # Launch agent runner with bash-level retries for transient failures
     AGENT_ATTEMPT=0
     while true; do
-      rm -f /tmp/ralph-output.json
+      rm -f $RALPH_RUN/output.json
 
       if $USE_CLAUDE_FALLBACK; then
         MCP_CONFIG=$(build_mcp_config "$CURRENT_AGENT")
@@ -296,10 +300,10 @@ while true; do
           --mcp-config "$MCP_CONFIG" \
           --append-system-prompt "$AGENT_SYSTEM_PROMPT" \
           --output-format json \
-          --dangerously-skip-permissions > /tmp/ralph-output.json &
+          --dangerously-skip-permissions > $RALPH_RUN/output.json &
         CLAUDE_PID=$!
       else
-        echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json &
+        echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json $RALPH_RUN/output.json &
         CLAUDE_PID=$!
       fi
 
@@ -359,13 +363,13 @@ while true; do
     fi
 
     # Log post-run usage summary from --output-format json
-    if [ -f /tmp/ralph-output.json ]; then
-      print_output_json_summary /tmp/ralph-output.json
+    if [ -f $RALPH_RUN/output.json ]; then
+      print_output_json_summary $RALPH_RUN/output.json
 
       # Persist usage data to logs/usage.jsonl
       # Extract agent name from checkpoint.md "**Last agent:**" field
       AGENT_NAME=$(extract_agent_name)
-      log_usage_from_output_json /tmp/ralph-output.json "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
+      log_usage_from_output_json $RALPH_RUN/output.json "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
         && echo "  Usage logged to $USAGE_LOG" \
         || echo "  (could not log usage data)"
     fi
@@ -452,14 +456,14 @@ while true; do
     elif is_openai_model "$CLAUDE_MODEL"; then
       # OpenAI models: use codex CLI for interactive TUI (uses codex's own tools),
       # fall back to ralph_agent.py (uses Ralph's per-agent tool registry)
-      rm -f /tmp/ralph-output.json
+      rm -f $RALPH_RUN/output.json
       if command -v codex >/dev/null 2>&1; then
         echo "  Model: $CLAUDE_MODEL (OpenAI — using codex CLI)"
         codex --model "$CLAUDE_MODEL" --full-auto "$PROMPT"
         EXIT_CODE=$?
       else
         echo "  Model: $CLAUDE_MODEL (OpenAI — codex CLI not found, using ralph_agent.py)"
-        echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json /tmp/ralph-output.json
+        echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json $RALPH_RUN/output.json
         EXIT_CODE=$?
       fi
 
@@ -469,9 +473,9 @@ while true; do
 
       # Log usage
       AGENT_NAME=$(extract_agent_name)
-      if [ -f /tmp/ralph-output.json ]; then
-        print_output_json_summary /tmp/ralph-output.json
-        log_usage_from_output_json /tmp/ralph-output.json "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
+      if [ -f $RALPH_RUN/output.json ]; then
+        print_output_json_summary $RALPH_RUN/output.json
+        log_usage_from_output_json $RALPH_RUN/output.json "$ITERATION" "$AGENT_NAME" "$LOOP_MODE" "$CURRENT_THREAD" \
           && echo "  Usage logged to $USAGE_LOG" \
           || echo "  (could not log usage data)"
       else
@@ -520,8 +524,8 @@ while true; do
   # --- Error recovery with exponential backoff ---
   if [ "$EXIT_CODE" -ne 0 ]; then
     RATE_LIMITED=false
-    if $PIPE_MODE && [ -f /tmp/ralph-output.json ]; then
-      if grep -q "You've hit your limit\|rate_limit\|overloaded" /tmp/ralph-output.json 2>/dev/null; then
+    if $PIPE_MODE && [ -f $RALPH_RUN/output.json ]; then
+      if grep -q "You've hit your limit\|rate_limit\|overloaded" $RALPH_RUN/output.json 2>/dev/null; then
         RATE_LIMITED=true
       fi
     fi

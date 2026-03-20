@@ -16,8 +16,8 @@ When no Path Context is present, RALPH_HOME equals the working directory — all
 
 ## Budget and Yield
 
-- Before each major step, read `/tmp/ralph-budget-info`. Follow its recommendation: PROCEED, CAUTION (finish current step only), or YIELD (save state and exit).
-- Before each major step, check `/tmp/ralph-yield`. If it exists, update `checkpoint.md` and exit immediately.
+- Before each major step, read `$RALPH_RUN/budget-info` (RALPH_RUN defaults to `./run`). Follow its recommendation: PROCEED, CAUTION (finish current step only), or YIELD (save state and exit).
+- Before each major step, check `$RALPH_RUN/yield`. If it exists, update `checkpoint.md` and exit immediately.
 
 ## Incremental Commit
 

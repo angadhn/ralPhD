@@ -26,7 +26,7 @@ Budget ~5-6% per 5-page chunk, ~10% notes synthesis, ~5% report.tex. Use `pdf_me
 | 30-40% | Caution — finish current paper ONLY, then yield |
 | >= 40% | STOP — write notes immediately, commit, yield |
 
-Check context before EVERY Read call: `cat /tmp/ralph-context-pct 2>/dev/null || echo 0`
+Check context before EVERY Read call: `cat "$RALPH_RUN/context-pct" 2>/dev/null || echo 0`
 
 ### Hard constraints
 

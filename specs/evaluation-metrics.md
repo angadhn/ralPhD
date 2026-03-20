@@ -134,7 +134,7 @@ context efficiency, and task completion.
 ### 4a. Peak Context Percentage (`peak_context_pct`)
 
 - **What:** Highest context window utilization observed during the iteration.
-- **How collected:** Read from `/tmp/ralph-context-pct` at iteration end,
+- **How collected:** Read from `$RALPH_RUN/context-pct` at iteration end,
   or from the budget info file's `context_pct` field. Falls back to
   estimating from `input_tokens / context_window * 100` (context window
   is model-aware: 1M for Claude Opus/Sonnet, 200k for Haiku/o3/o4-mini, 128k for GPT-4o; override via `RALPH_CONTEXT_WINDOW`).
@@ -144,7 +144,7 @@ context efficiency, and task completion.
 ### 4b. Context Yield Triggered (`context_yield`)
 
 - **What:** Whether the context yield mechanism fired during the iteration.
-- **How collected:** Check if `/tmp/ralph-yield` existed when the iteration
+- **How collected:** Check if `$RALPH_RUN/yield` existed when the iteration
   ended, or if `checkpoint.md` contains yield-related notes.
 - **Unit:** Boolean.
 - **Good:** `false`. Frequent yields indicate the agent is consuming too

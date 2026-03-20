@@ -12,9 +12,9 @@ GAP-FILL scout), the agent is still the last word.
 One iteration = one agent = one task.
 
 IMPORTANT:
-- if /tmp/ralph-reflect exists, read `specs/reflection-template.md` (framework file) and complete the reflection BEFORE starting the task
-- if /tmp/ralph-yield exists, save state to checkpoint.md and exit immediately
-- before each major step, check `/tmp/ralph-budget-info`. If recommendation is YIELD, update checkpoint.md and exit. If CAUTION, finish current step only.
+- if `$RALPH_RUN/reflect` exists (RALPH_RUN defaults to `./run`), read `specs/reflection-template.md` (framework file) and complete the reflection BEFORE starting the task
+- if `$RALPH_RUN/yield` exists, save state to checkpoint.md and exit immediately
+- before each major step, check `$RALPH_RUN/budget-info`. If recommendation is YIELD, update checkpoint.md and exit. If CAUTION, finish current step only.
 - after each major step, commit all modified files immediately. Do not wait until the end. If the process dies, only the current step's work is lost.
 - after the task, run the agent's commit gates
 - update implementation-plan.md when the task is done

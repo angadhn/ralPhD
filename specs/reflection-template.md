@@ -1,6 +1,6 @@
 # Reflection Template
 
-This file is read only on reflection iterations (when `/tmp/ralph-reflect` exists).
+This file is read only on reflection iterations (when `$RALPH_RUN/reflect` exists).
 Complete all steps below BEFORE dispatching to an agent.
 
 ## Step 1 — Gather context
@@ -57,4 +57,4 @@ If the reflection reveals the approach needs significant change, write a concret
 
 ## Step 6 — Clean up and proceed
 
-Delete `/tmp/ralph-reflect`, then proceed with normal agent dispatch.
+Delete `$RALPH_RUN/reflect`, then proceed with normal agent dispatch.

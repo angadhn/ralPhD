@@ -1,6 +1,6 @@
 # Agents — Planner's Menu
 
-Thirteen agents forming the Ralph loop. Each reads `checkpoint.md`, produces outputs, updates checkpoint, and yields.
+Fourteen agents forming the Ralph loop. Each reads `checkpoint.md`, produces outputs, updates checkpoint, and yields.
 All agents inherit shared protocol from `agent-base.md`.
 
 Custom workspace agents (in project `.claude/agents/`) override framework agents of the same name and declare their tools in a `## Tools` section.
@@ -21,6 +21,7 @@ Custom workspace agents (in project `.claude/agents/`) override framework agents
 | research-coder | Analysis scripts, simulations, figures from data | — | critic (FIGURE-PROPOSAL), planner | figure-stylist (figures), paper-writer (data) | When figures proposed or data analysis needed |
 | figure-stylist | Visual clarity + print readiness review | check_figure | research-coder | research-coder (revise) or next phase | After each figure is generated |
 | coder | Read, modify, and test application code | — | planner | planner (task complete) | When implementation tasks require source code changes |
+| refactorer | Restructure code to reduce duplication | — | planner | planner (task complete) | When task says "refactor" |
 | orchestrator | AI-driven dispatch at phase boundaries | read_file, list_files | planner | parallel/serial agents | When Architecture is `orchestrated` |
 
 ## Typical flow

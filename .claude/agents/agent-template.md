@@ -68,6 +68,6 @@ N. Commit all outputs: phase outputs, phase-summary.md, checkpoint.md
 
 ## Ralph Loop Yield Protocol
 
-- Check `/tmp/ralph-context-pct` before <when — e.g., every Read call, every major step>
-- If `[ -f /tmp/ralph-yield ]`: <what to save before exiting>
+- Check `$RALPH_RUN/context-pct` before <when — e.g., every Read call, every major step>
+- If `[ -f "$RALPH_RUN/yield" ]`: <what to save before exiting>
 - Before exiting: commit <critical files>, checkpoint.md
