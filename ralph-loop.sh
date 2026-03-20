@@ -102,11 +102,83 @@ while true; do
   # --- Detect thread and agent ---
   CURRENT_THREAD=$(extract_thread)
   CURRENT_AGENT=$(detect_agent_from_checkpoint "checkpoint.md" "implementation-plan.md")
+
+  # --- Plan mode: one-shot interactive session, early exit ---
   if [ "$LOOP_MODE" = "plan" ]; then
-    # Plan mode doesn't need an agent — it's an interactive session
     CURRENT_AGENT="${CURRENT_AGENT:-plan}"
-    echo "  Plan mode (agent detection skipped)"
-  elif [ -n "$CURRENT_AGENT" ] && [ "$CURRENT_AGENT" != "" ]; then
+    echo "  Plan mode"
+
+    # Build prompt
+    PROMPT=$(cat "$PROMPT_FILE")
+    if [ -s "inbox.md" ]; then
+      echo "  📬 Absorbing operator notes from inbox.md"
+      PROMPT="## Operator Notes (read and act on these first)"$'\n\n'"$(cat inbox.md)"$'\n\n'"$PROMPT"
+      : > inbox.md
+    fi
+
+    CLAUDE_MODEL=$(resolve_model "$CURRENT_AGENT")
+
+    # Start context monitor
+    monitor_context "$$" "$ITER_START" "$IGNORE_UNTIL" "$CURRENT_AGENT" &
+    MONITOR_PID=$!
+
+    # Archive check: if all tasks done, ask user before launching plan agent
+    CHECKED=$(grep -c '^\- \[x\]' implementation-plan.md 2>/dev/null) || CHECKED=0
+    UNCHECKED=$(grep -c '^\- \[ \]' implementation-plan.md 2>/dev/null) || UNCHECKED=0
+    if [ "$CHECKED" -gt 0 ] && [ "$UNCHECKED" -eq 0 ]; then
+      echo "  All tasks in implementation-plan.md are complete."
+      read -r -p "  Archive this thread and start fresh? (y/n): " answer < /dev/tty
+      if [[ "$answer" =~ ^[Yy] ]]; then
+        bash "${RALPH_HOME}/scripts/archive.sh"
+        echo "  Archived. Starting fresh."
+      fi
+    fi
+
+    # Run plan agent via claude CLI
+    PLAN_SYSTEM="$(cat "${RALPH_HOME}/.claude/agents/plan.md")"
+    SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+    PLAN_CLI_MODEL=$(resolve_cli_model "$CLAUDE_MODEL")
+    PLAN_EFFORT=$(resolve_effort "plan")
+    PLAN_EFFORT_FLAG=""
+    if [ -n "$PLAN_EFFORT" ]; then
+      PLAN_EFFORT_FLAG="--effort $PLAN_EFFORT"
+      echo "  Model: $PLAN_CLI_MODEL (plan mode — claude CLI, effort: $PLAN_EFFORT)"
+    else
+      echo "  Model: $PLAN_CLI_MODEL (plan mode — claude CLI)"
+    fi
+    echo "$PROMPT" | claude --model "$PLAN_CLI_MODEL" \
+      $PLAN_EFFORT_FLAG \
+      --append-system-prompt "$PLAN_SYSTEM" \
+      --session-id "$SESSION_ID" \
+      --permission-mode plan \
+      --name "${CURRENT_THREAD:-ralPhD-plan}" \
+      --allowedTools "Read" "Glob" "Grep" "Bash" "Agent" \
+        "Edit(/checkpoint.md)" \
+        "Edit(/implementation-plan.md)" \
+        "Edit(/implementation-plan-*.md)" \
+        "Edit(/inbox.md)" \
+        "Write(/checkpoint.md)" \
+        "Write(/implementation-plan.md)" \
+        "Write(/implementation-plan-*.md)" \
+        "Write(/inbox.md)" \
+        "Write(.claude/agents/*.md)"
+    EXIT_CODE=$?
+
+    cleanup_pid "$MONITOR_PID"; MONITOR_PID=""
+
+    # Log interactive session usage
+    log_interactive_session "$SESSION_ID" "plan"
+
+    # Plan mode is one-shot — exit after this session
+    if [ "$EXIT_CODE" -eq 0 ]; then
+      echo ""
+      echo "=== Planning session complete. Run 'build' to start executing. ==="
+    fi
+    break
+  fi
+
+  # --- Build mode: detect agent ---
+  if [ -n "$CURRENT_AGENT" ] && [ "$CURRENT_AGENT" != "" ]; then
     AGENT_PATH=$(resolve_agent_path "$CURRENT_AGENT")
     if [ -z "$AGENT_PATH" ]; then
       # Checkpoint has a bad Next Task (agent wrote prose instead of a task line).
@@ -177,7 +249,7 @@ while true; do
   fi
 
   # --- Orchestrated mode: AI-driven dispatch ---
-  if [ "$ARCH_MODE" = "orchestrated" ] && [ "$LOOP_MODE" = "build" ]; then
+  if [ "$ARCH_MODE" = "orchestrated" ]; then
     ORCH_RC=0
     run_orchestrated_phase || ORCH_RC=$?
     if [ "$ORCH_RC" -eq 2 ]; then
@@ -208,7 +280,7 @@ while true; do
   fi
 
   # --- Parallel mode: run all tasks in current phase concurrently ---
-  if [ "$ARCH_MODE" = "parallel" ] && [ "$LOOP_MODE" = "build" ]; then
+  if [ "$ARCH_MODE" = "parallel" ]; then
     CURRENT_PHASE=$(detect_current_phase "implementation-plan.md")
     if [ -n "$CURRENT_PHASE" ] && is_parallel_phase "$CURRENT_PHASE"; then
       # Validate dependencies before running in parallel
@@ -378,62 +450,7 @@ while true; do
 
     CLAUDE_MODEL=$(resolve_model "$CURRENT_AGENT")
 
-    if [ "$LOOP_MODE" = "plan" ]; then
-      # Archive check: if all tasks done, ask user before launching plan agent
-      CHECKED=$(grep -c '^\- \[x\]' implementation-plan.md 2>/dev/null) || CHECKED=0
-      UNCHECKED=$(grep -c '^\- \[ \]' implementation-plan.md 2>/dev/null) || UNCHECKED=0
-      if [ "$CHECKED" -gt 0 ] && [ "$UNCHECKED" -eq 0 ]; then
-        echo "  All tasks in implementation-plan.md are complete."
-        read -r -p "  Archive this thread and start fresh? (y/n): " answer < /dev/tty
-        if [[ "$answer" =~ ^[Yy] ]]; then
-          bash "${RALPH_HOME}/scripts/archive.sh"
-          echo "  Archived. Starting fresh."
-        fi
-      fi
-
-      # Plan mode: use claude CLI for interactive TUI
-      PLAN_SYSTEM="$(cat "${RALPH_HOME}/.claude/agents/plan.md")"
-      SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-      PLAN_CLI_MODEL=$(resolve_cli_model "$CLAUDE_MODEL")
-      PLAN_EFFORT=$(resolve_effort "plan")
-      PLAN_EFFORT_FLAG=""
-      if [ -n "$PLAN_EFFORT" ]; then
-        PLAN_EFFORT_FLAG="--effort $PLAN_EFFORT"
-        echo "  Model: $PLAN_CLI_MODEL (plan mode — claude CLI, effort: $PLAN_EFFORT)"
-      else
-        echo "  Model: $PLAN_CLI_MODEL (plan mode — claude CLI)"
-      fi
-      echo "$PROMPT" | claude --model "$PLAN_CLI_MODEL" \
-        $PLAN_EFFORT_FLAG \
-        --append-system-prompt "$PLAN_SYSTEM" \
-        --session-id "$SESSION_ID" \
-        --permission-mode plan \
-        --name "${CURRENT_THREAD:-ralPhD-plan}" \
-        --allowedTools "Read" "Glob" "Grep" "Bash" "Agent" \
-          "Edit(/checkpoint.md)" \
-          "Edit(/implementation-plan.md)" \
-          "Edit(/implementation-plan-*.md)" \
-          "Edit(/inbox.md)" \
-          "Write(/checkpoint.md)" \
-          "Write(/implementation-plan.md)" \
-          "Write(/implementation-plan-*.md)" \
-          "Write(/inbox.md)" \
-          "Write(.claude/agents/*.md)"
-      EXIT_CODE=$?
-
-      cleanup_pid "$MONITOR_PID"; MONITOR_PID=""
-
-      # Log interactive session usage (same pattern as interactive build mode)
-      log_interactive_session "$SESSION_ID" "plan"
-
-      # Plan mode is one-shot — exit after this session
-      if [ "$EXIT_CODE" -eq 0 ]; then
-        echo ""
-        echo "=== Planning session complete. Run 'build' to start executing. ==="
-      fi
-      break
-
-    elif is_openai_model "$CLAUDE_MODEL"; then
+    if is_openai_model "$CLAUDE_MODEL"; then
       # OpenAI models: use codex CLI for interactive TUI (uses codex's own tools),
       # fall back to ralph_agent.py (uses Ralph's per-agent tool registry)
       rm -f $RALPH_RUN/output.json
