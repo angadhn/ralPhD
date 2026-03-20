@@ -4,6 +4,19 @@ Autonomous loop for writing research papers. Claude reads papers, builds argumen
 
 Designed for PhD-level STEM work targeting peer-reviewed journals. All claims must be substantiated by peer-reviewed or conference papers.
 
+## How it works
+
+Each iteration of the loop:
+
+1. Shell reads `prompt-build.md` (the dispatcher)
+2. Claude studies `checkpoint.md` and `implementation-plan.md`, picks the highest-priority task
+3. The last word in the task name is the agent (e.g., `scout`, `STYLE-CHECK critic`)
+4. Claude reads that agent's file and follows its workflow
+5. Agent produces outputs, updates `implementation-plan.md` and `checkpoint.md`, commits, and exits
+6. Shell starts a fresh iteration with a new context window
+
+The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED.md`.
+
 ## Prerequisites
 
 - **Python ≥ 3.10** (3.13 recommended)
@@ -13,7 +26,7 @@ Designed for PhD-level STEM work targeting peer-reviewed journals. All claims mu
 
 The `mcp` package is required for headless mode without an API key (OAuth / Max plan). If you have `ANTHROPIC_API_KEY` set, `ralph_agent.py` handles everything and `mcp` is not needed.
 
-## Quick start
+## Getting started
 
 ```bash
 git clone https://github.com/angadhn/ralPhD.git
@@ -61,20 +74,56 @@ Creates an isolated `.ralph/` workspace inside your existing project, with its o
 
 Plan mode produces `implementation-plan.md`. Build mode executes it.
 
-## How it works
+See [Initialization modes](#initialization-modes) for details on what `init-project.sh` sets up.
 
-Each iteration of the loop:
+## Initialization modes
 
-1. Shell reads `prompt-build.md` (the dispatcher)
-2. Claude studies `checkpoint.md` and `implementation-plan.md`, picks the highest-priority task
-3. The last word in the task name is the agent (e.g., `scout`, `STYLE-CHECK critic`)
-4. Claude reads that agent's file and follows its workflow
-5. Agent produces outputs, updates `implementation-plan.md` and `checkpoint.md`, commits, and exits
-6. Shell starts a fresh iteration with a new context window
+`scripts/init-project.sh` has two orthogonal axes that control how a workspace is set up.
 
-The loop runs until you stop it (Ctrl+C twice) or it writes `HUMAN_REVIEW_NEEDED.md`.
+### Link strategy
 
-## Usage
+| Mode | Flag | What happens |
+|------|------|-------------|
+| **Local** (default) | — | Symlinks `.claude/agents/`, `specs/`, and `templates/` to RALPH_HOME. Changes to the framework are immediately visible in all workspaces. |
+| **CI** (Continuous Integration) | `--ci` | Copies those directories instead of symlinking. Symlinks don't survive `git checkout` on a different machine, so CI pipelines need real files. |
+
+### Layout
+
+| Mode | When | What happens |
+|------|------|-------------|
+| **Split** | Workspace directory is named `.ralph` | Content directories (`papers/`, `corpus/`, `sections/`, etc.) live in the parent directory. Symlinks inside `.ralph/` point up to them (`../papers/`, etc.) so agents see everything via relative paths. |
+| **All-in-one** | Any other directory name | Everything lives in one directory. No content symlinks needed. |
+
+Layout is determined by the directory name you pass — there is no flag. If `basename` is `.ralph`, you get split layout; otherwise, all-in-one.
+
+```bash
+# Split layout (workspace = .ralph subdirectory)
+~/ralPhD/scripts/init-project.sh ~/my-project/.ralph
+
+# All-in-one layout (workspace = the directory itself)
+~/ralPhD/scripts/init-project.sh ~/my-workspace
+```
+
+### What gets symlinked (local mode)
+
+| Symlink | Target | Purpose |
+|---------|--------|---------|
+| `.claude/agents/` | `RALPH_HOME/.claude/agents/` | Agent prompts (entire directory) |
+| `specs/` | `RALPH_HOME/specs/` | Quality standards and output format specs |
+| `templates/` | `RALPH_HOME/templates/` | Starter checkpoint and plan templates |
+| `papers/`, `corpus/`, etc. (split layout only) | `../papers/`, `../corpus/`, etc. | Content directories in parent |
+
+The `ralphd` launcher recreates broken symlinks on every run (self-healing).
+
+### Agent symlink implication
+
+Because `.claude/agents/` is symlinked as a whole directory, new agent files created during project runs land in RALPH_HOME, not in the project. This means:
+
+- Useful agents organically flow back to the framework — every workspace benefits.
+- Project-specific agents cannot be committed to the project's own git history.
+- To make an agent project-local, you would need to break the symlink and copy the agents directory.
+
+## Running the loop
 
 ```bash
 ./ralph-loop.sh              # interactive, build mode
@@ -113,6 +162,36 @@ By default each agent uses the model specified in `context-budgets.json` (Opus f
 **OpenAI auth:** Ralph auto-discovers credentials in this order: `OPENAI_API_KEY` env var → Codex CLI auth file (`~/.codex/auth.json`) → Codex CLI keychain entry. If you have Codex CLI installed, just run `codex login` and Ralph will pick up the token automatically — no env var needed.
 
 **Interactive mode:** With Anthropic models, interactive mode uses the `claude` CLI (full TUI) for both plan and build modes. With OpenAI models, interactive mode uses `codex` CLI when installed (full TUI), otherwise falls back to `ralph_agent.py`. Headless mode (`-p`) uses `ralph_agent.py` when `ANTHROPIC_API_KEY` is set. Without an API key (OAuth / Max plan users), it falls back to `claude -p` with ralph's tools exposed via MCP server — no API key needed, just `claude login`.
+
+## Steering the loop
+
+### checkpoint.md
+
+This is the shared state between iterations. Every agent reads it and writes it back. The key field is **Next Task** — it controls which agent runs next.
+
+### implementation-plan.md
+
+The task list. Generated by plan mode or written by hand. Build mode studies this alongside `checkpoint.md` to pick the highest-priority task each iteration.
+
+### inbox.md
+
+Drop operator notes here from another terminal while the loop is running. The shell prepends them to the next iteration's prompt and clears the file. Useful for mid-run course corrections without stopping the loop.
+
+### HUMAN_REVIEW_NEEDED.md
+
+When an agent encounters something that needs human judgment, it writes this file and exits. The loop pauses and prints the contents. To resume: review, edit `checkpoint.md` if needed, delete the file, and restart.
+
+### Reflections
+
+Every 5th iteration, the loop triggers a reflection. Claude reads its recent progress (CHANGELOG + git log), asks whether the research direction is working, and records the assessment.
+
+Full reflections go to `ai-generated-outputs/reflections/reflection-iter-N.md`. A summary line goes to `CHANGELOG.md` and `checkpoint.md`.
+
+### Usage tracking
+
+Every iteration logs token usage and cost to `logs/usage.jsonl`. In headless mode (`-p`), usage is written by `ralph_agent.py` to a machine-readable JSON file that `ralph-loop.sh` appends to the usage log. In interactive mode, usage is extracted from the Claude session JSONL file via `scripts/extract_session_usage.py`.
+
+Run `python3 scripts/usage_report.py` to see a summary of token usage and costs across all iterations.
 
 ## Agents
 
@@ -158,37 +237,7 @@ REVIEW-EDITS paper-writer → accept/revert editor changes
 
 The agent detects its mode from the prefix.
 
-## Steering the loop
-
-### checkpoint.md
-
-This is the shared state between iterations. Every agent reads it and writes it back. The key field is **Next Task** — it controls which agent runs next.
-
-### implementation-plan.md
-
-The task list. Generated by plan mode or written by hand. Build mode studies this alongside `checkpoint.md` to pick the highest-priority task each iteration.
-
-### inbox.md
-
-Drop operator notes here from another terminal while the loop is running. The shell prepends them to the next iteration's prompt and clears the file. Useful for mid-run course corrections without stopping the loop.
-
-### HUMAN_REVIEW_NEEDED.md
-
-When an agent encounters something that needs human judgment, it writes this file and exits. The loop pauses and prints the contents. To resume: review, edit `checkpoint.md` if needed, delete the file, and restart.
-
-## Reflections
-
-Every 5th iteration, the loop triggers a reflection. Claude reads its recent progress (CHANGELOG + git log), asks whether the research direction is working, and records the assessment.
-
-Full reflections go to `ai-generated-outputs/reflections/reflection-iter-N.md`. A summary line goes to `CHANGELOG.md` and `checkpoint.md`.
-
-## Usage tracking
-
-Every iteration logs token usage and cost to `logs/usage.jsonl`. In headless mode (`-p`), usage is written by `ralph_agent.py` to a machine-readable JSON file that `ralph-loop.sh` appends to the usage log. In interactive mode, usage is extracted from the Claude session JSONL file via `scripts/extract_session_usage.py`.
-
-Run `python3 scripts/usage_report.py` to see a summary of token usage and costs across all iterations.
-
-## Structure
+## Project structure
 
 **Framework** (`$RALPH_HOME` — the ralPhD repo):
 
@@ -259,7 +308,153 @@ my-paper/
 
 When running from the ralPhD repo directly, framework and workspace files coexist in the same directory (backward compatible).
 
-## Tool registry
+## Advanced usage
+
+### RALPH_HOME
+
+`RALPH_HOME` env var points to the ralPhD framework directory. All framework files (agents, tools, scripts, specs) are resolved relative to it. Project files (checkpoint, papers, outputs) stay in CWD.
+
+Resolution order: `RALPH_HOME` env var > `.ralphrc` file (read by `./ralphd` launcher) > script directory (default, backward compatible).
+
+**CI example** (GitHub Actions):
+
+```yaml
+steps:
+  - uses: actions/checkout@v4                         # workspace repo
+  - uses: actions/checkout@v4
+    with: { repository: you/ralPhD, path: .ralph-engine }
+  - run: RALPH_HOME=$GITHUB_WORKSPACE/.ralph-engine ./ralphd -p build 5
+```
+
+### GitHub Actions (ralph-as-engine)
+
+ralPhD can run as a reusable engine via GitHub Actions. External systems (Howler, API, `gh` CLI) trigger a `workflow_dispatch` event, and ralPhD runs `ralph-loop.sh` against a target project repo.
+
+#### Quick trigger
+
+```bash
+gh workflow run ralph-run.yml \
+  -f thread="my-thread" \
+  -f prompt="Write the introduction section" \
+  -f autonomy="stage-gates" \
+  -f target_repo="myorg/my-paper" \
+  -f max_iterations="5"
+```
+
+#### Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `thread` | yes | — | Thread name (checkpoint ID, output dir, branch name) |
+| `prompt` | yes | — | Task prompt — written to `inbox.md` |
+| `autonomy` | no | `stage-gates` | `autopilot`, `stage-gates`, `step-by-step` |
+| `target_repo` | no | `""` | Target repo (`owner/name`). Empty = run against self |
+| `target_ref` | no | `main` | Branch to check out |
+| `max_iterations` | no | `5` | Safety cap on loop iterations |
+| `loop_mode` | no | `build` | `build` or `plan` |
+| `commit_mode` | no | `branch` | `branch` (ralph/\<thread\>), `direct`, `none` |
+| `callback_url` | no | `""` | Webhook URL for JSON result summary |
+
+#### How it works
+
+1. Checks out ralPhD as `ralph-home/` (the engine)
+2. Checks out target repo as `workspace/` (or symlinks ralph-home if no target)
+3. Runs `init-project.sh --ci` on first run (copies templates, agents, specs)
+4. Injects thread/prompt/autonomy into workspace files
+5. Runs `ralph-loop.sh -p <mode> <max_iterations>`
+6. Commits results to `ralph/<thread>` branch (or direct, or artifact-only)
+7. POSTs webhook callback with run summary (if `callback_url` set)
+8. Uploads outputs as GitHub Actions artifact
+
+#### Secrets
+
+| Secret | Required | Description |
+|--------|----------|-------------|
+| `ANTHROPIC_API_KEY` | yes (Anthropic models) | API key for Claude |
+| `OPENAI_API_KEY` | yes (OpenAI models) | API key for GPT-4o, o3, o4-mini (or use Codex CLI auth locally) |
+| `TARGET_REPO_TOKEN` | conditional | PAT with `contents:write` on target repo |
+| `CALLBACK_SECRET` | no | HMAC-SHA256 key for signing webhook payloads |
+
+See `specs/api-contract.md` for the full API contract, webhook payload schema, and code examples.
+
+### Benchmarking
+
+Ralph supports two architecture modes for execution.
+
+#### Architecture modes
+
+| Mode | What happens |
+|------|-------------|
+| **serial** (default) | One agent per iteration, sequential relay |
+| **parallel** | Phases marked `(parallel)` in the plan run their tasks concurrently |
+
+Set the mode via CLI flag or the `**Architecture:**` field in `implementation-plan.md`. CLI flags override the plan field.
+
+```bash
+./ralph-loop.sh -p --serial build 10    # serial relay (default)
+./ralph-loop.sh -p --parallel build 10  # parallel fan-out on annotated phases
+```
+
+#### Plan annotations for parallelism
+
+Plan mode (`./ralph-loop.sh plan`) analyzes agent dependencies and marks independent phases with `(parallel)`:
+
+```markdown
+## Phase 2 — Literature review (parallel)
+
+- [ ] 3. Search ML databases — **scout**
+- [ ] 4. Search neuroscience databases — **scout**
+- [ ] 5. Search clinical databases — **scout**
+```
+
+The `**Architecture:**` field is set automatically:
+
+```markdown
+**Architecture:** parallel   # if any phases are annotatable
+**Architecture:** serial     # if all phases are strictly sequential
+```
+
+#### Evaluation metrics
+
+Each iteration appends metrics to `logs/eval.jsonl` via `scripts/evaluate_iteration.py`. Metrics cover five categories: cost (tokens, USD), productivity (files/lines changed), quality gates (language + journal checks), context efficiency (peak %, yield), and task completion.
+
+After a run, aggregate and compare:
+
+```bash
+# Summary of a single run
+python3 scripts/evaluate_run.py logs/eval.jsonl
+
+# Compare two architecture modes
+python3 scripts/evaluate_run.py --compare \
+  logs/eval-serial.jsonl \
+  logs/eval-parallel.jsonl
+```
+
+#### Running a benchmark comparison
+
+```bash
+# 1. Plan the task (sets Architecture field automatically)
+./ralph-loop.sh plan
+
+# 2. Run both modes on the same plan
+cp logs/eval.jsonl logs/eval.jsonl.bak  # preserve any prior data
+
+./ralph-loop.sh -p --serial build 20
+cp logs/eval.jsonl logs/eval-serial.jsonl
+
+git checkout -- checkpoint.md           # reset state
+./ralph-loop.sh -p --parallel build 20
+cp logs/eval.jsonl logs/eval-parallel.jsonl
+
+# 3. Compare results
+python3 scripts/evaluate_run.py --compare \
+  logs/eval-serial.jsonl \
+  logs/eval-parallel.jsonl
+```
+
+The comparison table shows total cost, iterations, wall-clock time, quality gate pass rate, cost per completed task, and context utilization for each mode.
+
+### Tool registry
 
 `ralph_agent.py` is a thin Python runner that replaces `claude -p` inside `ralph-loop.sh`. It gives each agent a curated tool set instead of Claude Code's full ~20+ built-in tools.
 
@@ -283,150 +478,6 @@ Tools are defined in `tools/` and registered per-agent in `tools/__init__.py`:
 Every agent gets 6 essentials: `read_file`, `write_file`, `git_commit`, `git_push`, `list_files`, `code_search`. 20 tools total, with `tools/checks.py` kept as a compatibility shim over the split check modules.
 
 Based on [ghuntley's agent architecture](https://ghuntley.com/agent): the agent = the loop + tool registry, the prompt = behavioral guidance.
-
-## RALPH_HOME
-
-`RALPH_HOME` env var points to the ralPhD framework directory. All framework files (agents, tools, scripts, specs) are resolved relative to it. Project files (checkpoint, papers, outputs) stay in CWD.
-
-Resolution order: `RALPH_HOME` env var > `.ralphrc` file (read by `./ralphd` launcher) > script directory (default, backward compatible).
-
-**CI example** (GitHub Actions):
-
-```yaml
-steps:
-  - uses: actions/checkout@v4                         # workspace repo
-  - uses: actions/checkout@v4
-    with: { repository: you/ralPhD, path: .ralph-engine }
-  - run: RALPH_HOME=$GITHUB_WORKSPACE/.ralph-engine ./ralphd -p build 5
-```
-
-## GitHub Actions (ralph-as-engine)
-
-ralPhD can run as a reusable engine via GitHub Actions. External systems (Howler, API, `gh` CLI) trigger a `workflow_dispatch` event, and ralPhD runs `ralph-loop.sh` against a target project repo.
-
-### Quick trigger
-
-```bash
-gh workflow run ralph-run.yml \
-  -f thread="my-thread" \
-  -f prompt="Write the introduction section" \
-  -f autonomy="stage-gates" \
-  -f target_repo="myorg/my-paper" \
-  -f max_iterations="5"
-```
-
-### Inputs
-
-| Input | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `thread` | yes | — | Thread name (checkpoint ID, output dir, branch name) |
-| `prompt` | yes | — | Task prompt — written to `inbox.md` |
-| `autonomy` | no | `stage-gates` | `autopilot`, `stage-gates`, `step-by-step` |
-| `target_repo` | no | `""` | Target repo (`owner/name`). Empty = run against self |
-| `target_ref` | no | `main` | Branch to check out |
-| `max_iterations` | no | `5` | Safety cap on loop iterations |
-| `loop_mode` | no | `build` | `build` or `plan` |
-| `commit_mode` | no | `branch` | `branch` (ralph/\<thread\>), `direct`, `none` |
-| `callback_url` | no | `""` | Webhook URL for JSON result summary |
-
-### How it works
-
-1. Checks out ralPhD as `ralph-home/` (the engine)
-2. Checks out target repo as `workspace/` (or symlinks ralph-home if no target)
-3. Runs `init-project.sh --ci` on first run (copies templates, agents, specs)
-4. Injects thread/prompt/autonomy into workspace files
-5. Runs `ralph-loop.sh -p <mode> <max_iterations>`
-6. Commits results to `ralph/<thread>` branch (or direct, or artifact-only)
-7. POSTs webhook callback with run summary (if `callback_url` set)
-8. Uploads outputs as GitHub Actions artifact
-
-### Secrets
-
-| Secret | Required | Description |
-|--------|----------|-------------|
-| `ANTHROPIC_API_KEY` | yes (Anthropic models) | API key for Claude |
-| `OPENAI_API_KEY` | yes (OpenAI models) | API key for GPT-4o, o3, o4-mini (or use Codex CLI auth locally) |
-| `TARGET_REPO_TOKEN` | conditional | PAT with `contents:write` on target repo |
-| `CALLBACK_SECRET` | no | HMAC-SHA256 key for signing webhook payloads |
-
-See `specs/api-contract.md` for the full API contract, webhook payload schema, and code examples.
-
-## Benchmarking
-
-Ralph supports two architecture modes for execution.
-
-### Architecture modes
-
-| Mode | What happens |
-|------|-------------|
-| **serial** (default) | One agent per iteration, sequential relay |
-| **parallel** | Phases marked `(parallel)` in the plan run their tasks concurrently |
-
-Set the mode via CLI flag or the `**Architecture:**` field in `implementation-plan.md`. CLI flags override the plan field.
-
-```bash
-./ralph-loop.sh -p --serial build 10    # serial relay (default)
-./ralph-loop.sh -p --parallel build 10  # parallel fan-out on annotated phases
-```
-
-### Plan annotations for parallelism
-
-Plan mode (`./ralph-loop.sh plan`) analyzes agent dependencies and marks independent phases with `(parallel)`:
-
-```markdown
-## Phase 2 — Literature review (parallel)
-
-- [ ] 3. Search ML databases — **scout**
-- [ ] 4. Search neuroscience databases — **scout**
-- [ ] 5. Search clinical databases — **scout**
-```
-
-The `**Architecture:**` field is set automatically:
-
-```markdown
-**Architecture:** parallel   # if any phases are annotatable
-**Architecture:** serial     # if all phases are strictly sequential
-```
-
-### Evaluation metrics
-
-Each iteration appends metrics to `logs/eval.jsonl` via `scripts/evaluate_iteration.py`. Metrics cover five categories: cost (tokens, USD), productivity (files/lines changed), quality gates (language + journal checks), context efficiency (peak %, yield), and task completion.
-
-After a run, aggregate and compare:
-
-```bash
-# Summary of a single run
-python3 scripts/evaluate_run.py logs/eval.jsonl
-
-# Compare two architecture modes
-python3 scripts/evaluate_run.py --compare \
-  logs/eval-serial.jsonl \
-  logs/eval-parallel.jsonl
-```
-
-### Running a benchmark comparison
-
-```bash
-# 1. Plan the task (sets Architecture field automatically)
-./ralph-loop.sh plan
-
-# 2. Run both modes on the same plan
-cp logs/eval.jsonl logs/eval.jsonl.bak  # preserve any prior data
-
-./ralph-loop.sh -p --serial build 20
-cp logs/eval.jsonl logs/eval-serial.jsonl
-
-git checkout -- checkpoint.md           # reset state
-./ralph-loop.sh -p --parallel build 20
-cp logs/eval.jsonl logs/eval-parallel.jsonl
-
-# 3. Compare results
-python3 scripts/evaluate_run.py --compare \
-  logs/eval-serial.jsonl \
-  logs/eval-parallel.jsonl
-```
-
-The comparison table shows total cost, iterations, wall-clock time, quality gate pass rate, cost per completed task, and context utilization for each mode.
 
 ## Design decisions
 
