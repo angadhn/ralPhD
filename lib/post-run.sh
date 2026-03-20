@@ -37,6 +37,42 @@ cleanup_loop_processes() {
   rm -f "$YIELD_FILE" "$CTX_FILE" "$BUDGET_FILE" "$CB_FILE"
 }
 
+# Kill and wait for a background process by PID.
+# Caller is responsible for resetting the PID variable afterward.
+cleanup_pid() {
+  local pid=$1
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  fi
+}
+
+# Build session file path from SESSION_ID, log usage via log_interactive_session_usage.
+# Uses globals: ITERATION, LOOP_MODE, CURRENT_THREAD, USAGE_LOG
+log_interactive_session() {
+  local session_id=$1
+  local agent_name=$2
+  local project_dir
+  project_dir=$(echo "$PWD" | tr '/' '-' | sed 's/^-//')
+  local session_file="$HOME/.claude/projects/${project_dir}/${session_id}.jsonl"
+  if [ -f "$session_file" ]; then
+    log_interactive_session_usage "$session_file" "$ITERATION" "$agent_name" "$LOOP_MODE" "$CURRENT_THREAD" \
+      && echo "  Usage logged to $USAGE_LOG" \
+      || echo "  (could not log usage data)"
+  else
+    echo "  (session file not found — usage not logged)"
+  fi
+}
+
+# Capture eval metrics and check for human review gate.
+# Exits the loop (exit 0) if human review is requested.
+post_iteration() {
+  capture_eval_metrics || echo "  (eval capture skipped)"
+  if handle_human_review_gate; then
+    exit 0
+  fi
+}
+
 handle_interrupt_signal() {
   local now
   now=$(date +%s)
