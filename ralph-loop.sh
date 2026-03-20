@@ -468,10 +468,13 @@ while true; do
       fi
     else
       # Anthropic models: use claude CLI for interactive TUI
+      AGENT_SYSTEM_PROMPT=$(build_claude_system_prompt "$CURRENT_AGENT")
       SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
       resolve_model_and_effort "$CLAUDE_MODEL" "$CURRENT_AGENT"
       echo "  Model: $CLI_MODEL (interactive build — claude CLI${EFFORT_FLAG:+, effort: ${EFFORT_FLAG#--effort }})"
-      echo "$PROMPT" | claude --model "$CLI_MODEL" $EFFORT_FLAG --session-id "$SESSION_ID" --dangerously-skip-permissions
+      echo "$PROMPT" | claude --model "$CLI_MODEL" $EFFORT_FLAG \
+        --append-system-prompt "$AGENT_SYSTEM_PROMPT" \
+        --session-id "$SESSION_ID" --dangerously-skip-permissions
       EXIT_CODE=$?
 
       cleanup_pid "$MONITOR_PID"; MONITOR_PID=""
