@@ -72,6 +72,16 @@ cd ~/my-existing-codebase/.ralph
 
 Creates an isolated `.ralph/` workspace inside your existing project, with its own git history so it doesn't pollute your project's commits. Agents can read parent code via `../`.
 
+### D. Standalone (fully self-contained, no framework dependency)
+
+```bash
+~/ralPhD/scripts/init-project.sh ~/research/solar-review --standalone
+cd ~/research/solar-review/.ralph
+./ralphd plan
+```
+
+Copies the entire engine into the workspace. No symlinks, no RALPH_HOME needed at runtime. Add project-specific agents directly to `.claude/agents/`. Useful when you want a portable, versionable workspace that doesn't depend on the original ralPhD checkout.
+
 Plan mode produces `implementation-plan.md`. Build mode executes it.
 
 See [Initialization modes](#initialization-modes) for details on what `init-project.sh` sets up.
@@ -85,7 +95,8 @@ See [Initialization modes](#initialization-modes) for details on what `init-proj
 | Mode | Flag | What happens |
 |------|------|-------------|
 | **Local** (default) | — | Symlinks `.claude/agents/`, `specs/`, and `templates/` to RALPH_HOME. Changes to the framework are immediately visible in all workspaces. |
-| **CI** (Continuous Integration) | `--ci` | Copies those directories instead of symlinking. Symlinks don't survive `git checkout` on a different machine, so CI pipelines need real files. |
+| **Standalone** | `--standalone` | Copies the **full engine** (`ralph-loop.sh`, `lib/`, `tools/`, `ralph_agent.py`, prompts, config, specs, templates, agents) into the workspace. No symlinks, no RALPH_HOME dependency at runtime. Project-specific agents can be added directly to `.claude/agents/`. Includes launcher, git init, and brownfield detection. |
+| **CI** | `--ci` | Copies specs, templates, and agents (like standalone) but skips the engine, launcher, and git init. For GitHub Actions where the workflow calls `ralph-loop.sh` directly via RALPH_HOME. |
 
 ### Layout
 
