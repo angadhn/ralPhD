@@ -4,11 +4,14 @@ set -euo pipefail
 # init-project.sh — Initialize a workspace for ralPhD
 #
 # Usage:
-#   RALPH_HOME=/path/to/ralPhD bash scripts/init-project.sh [workspace] [--ci]
+#   RALPH_HOME=/path/to/ralPhD bash scripts/init-project.sh [workspace] [--ci|--standalone]
 #
 # Options:
-#   --ci    CI mode: copy specs/templates instead of symlinking,
-#           skip ralphd launcher and brownfield detection.
+#   --ci          CI mode: copy specs/templates instead of symlinking,
+#                 skip ralphd launcher and brownfield detection.
+#   --standalone  Standalone mode: copy the full engine into the workspace.
+#                 No symlinks, no RALPH_HOME dependency at runtime.
+#                 Includes launcher, git init, and brownfield detection.
 #
 # Layout:
 #   Content directories (human-inputs, ai-generated-outputs, papers, corpus,
@@ -27,10 +30,12 @@ if [ ! -f "$RALPH_HOME/ralph_agent.py" ]; then
 fi
 
 CI_MODE=false
+STANDALONE=false
 WORKSPACE=""
 for arg in "$@"; do
   case "$arg" in
     --ci) CI_MODE=true ;;
+    --standalone) STANDALONE=true ;;
     *) WORKSPACE="$arg" ;;
   esac
 done
@@ -56,6 +61,7 @@ fi
 echo "Initializing ralph workspace: $WORKSPACE"
 echo "Framework: $RALPH_HOME"
 $CI_MODE && echo "Mode: CI (copy, no symlinks)"
+$STANDALONE && echo "Mode: standalone (full engine copy, no symlinks)"
 
 # --- Content directories ---
 # human-inputs/ — user-provided context: reviewer feedback, prior submissions,
@@ -99,8 +105,8 @@ else
 fi
 
 # --- specs and templates ---
-if $CI_MODE; then
-  # CI: copy directories (symlinks don't survive git commits)
+if $CI_MODE || $STANDALONE; then
+  # Copy directories (standalone: full isolation; CI: symlinks don't survive git commits)
   for dir in specs templates; do
     if [ ! -d "$WORKSPACE/$dir" ]; then
       cp -r "$RALPH_HOME/$dir" "$WORKSPACE/$dir"
@@ -132,8 +138,8 @@ cp -n "$RALPH_HOME/templates/implementation-plan.md" "$WORKSPACE/implementation-
 [ -f "$WORKSPACE/iteration_count" ] || echo "0" > "$WORKSPACE/iteration_count"
 
 # --- .claude/agents ---
-if $CI_MODE; then
-  # CI: copy agents (symlinks don't survive git commits)
+if $CI_MODE || $STANDALONE; then
+  # Copy agents (standalone: full isolation; CI: symlinks don't survive git commits)
   if [ ! -d "$WORKSPACE/.claude/agents" ]; then
     mkdir -p "$WORKSPACE/.claude"
     cp -r "$RALPH_HOME/.claude/agents" "$WORKSPACE/.claude/agents"
@@ -152,6 +158,39 @@ else
   else
     echo "  Skipping .claude/agents/ (already exists as regular dir)"
   fi
+fi
+
+# --- Standalone: copy the full engine ---
+if $STANDALONE; then
+  # Core entry points
+  for f in ralph-loop.sh ralph_agent.py providers.py requirements.txt \
+           context-budgets.json prompt-build.md prompt-plan.md; do
+    if [ ! -e "$WORKSPACE/$f" ]; then
+      cp "$RALPH_HOME/$f" "$WORKSPACE/$f"
+    fi
+  done
+  echo "  Copied engine files"
+
+  # lib/ — shell libraries sourced by ralph-loop.sh
+  if [ ! -d "$WORKSPACE/lib" ]; then
+    cp -r "$RALPH_HOME/lib" "$WORKSPACE/lib"
+    echo "  Copied lib/"
+  fi
+
+  # tools/ — MCP server and tool implementations
+  if [ ! -d "$WORKSPACE/tools" ]; then
+    cp -r "$RALPH_HOME/tools" "$WORKSPACE/tools"
+    echo "  Copied tools/"
+  fi
+
+  # scripts/ — archive, usage extraction, eval (skip init-project.sh itself)
+  mkdir -p "$WORKSPACE/scripts"
+  for f in archive.sh extract_session_usage.py evaluate_iteration.py; do
+    if [ ! -e "$WORKSPACE/scripts/$f" ]; then
+      cp "$RALPH_HOME/scripts/$f" "$WORKSPACE/scripts/$f"
+    fi
+  done
+  echo "  Copied scripts/"
 fi
 
 # --- human-inputs/ README (first-init only) ---
@@ -180,7 +219,11 @@ INPUTS_README
 fi
 
 # --- .ralphrc ---
-echo "RALPH_HOME=$RALPH_HOME" > "$WORKSPACE/.ralphrc"
+if $STANDALONE; then
+  echo "RALPH_HOME=$WORKSPACE" > "$WORKSPACE/.ralphrc"
+else
+  echo "RALPH_HOME=$RALPH_HOME" > "$WORKSPACE/.ralphrc"
+fi
 
 # --- Local-only: ralphd launcher and brownfield detection ---
 if ! $CI_MODE; then
@@ -270,6 +313,9 @@ echo ""
 echo "Workspace ready: $WORKSPACE"
 if $CI_MODE; then
   echo "  CI mode — run ralph-loop.sh with RALPH_HOME=$RALPH_HOME"
+elif $STANDALONE; then
+  echo "  Standalone — no RALPH_HOME dependency at runtime"
+  echo "  cd $WORKSPACE && ./ralphd plan"
 else
   echo "  cd $WORKSPACE && ./ralphd plan"
 fi
