@@ -29,6 +29,10 @@ After each major step, commit all modified output files immediately (`git add <o
 - Write `checkpoint.md` last — update Knowledge State and set Next Task for the next agent.
 - Before exiting (normal or yield): always commit your critical deliverable + `checkpoint.md`.
 
+## Parallel Execution
+
+When running as part of a parallel phase, the environment variable `PARALLEL_TASK_IDX` is set to a unique integer identifying this agent's task slot. If `PARALLEL_TASK_IDX` is set, namespace output files with it to avoid collisions with other parallel agents writing to the same canonical paths.
+
 ## Read-Only Inputs
 
 Agents produce outputs in their designated directories. Never modify another agent's output files or the user's source data.

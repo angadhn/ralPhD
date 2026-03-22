@@ -692,12 +692,30 @@ except Exception as e:
 
 # ── Parallel phase execution ────────────────────────────────
 
+check_duplicate_agents() {
+  # Detects duplicate agent names in a parallel phase.
+  # Returns 1 with error output if duplicates found, 0 otherwise.
+  # Usage: check_duplicate_agents "scout" "critic" "scout"
+  local seen=()
+  for a in "$@"; do
+    for s in "${seen[@]}"; do
+      if [ "$s" = "$a" ]; then
+        echo "  ✗ Parallel phase aborted: agent '$a' appears multiple times"
+        echo "    Same-agent parallel execution causes merge conflicts on shared output files."
+        echo "    Fix: split duplicate agents into separate phases, or use unique agent names."
+        return 1
+      fi
+    done
+    seen+=("$a")
+  done
+  return 0
+}
+
 run_parallel_phase() {
   local phase_line=$1
   local pids=()
   local agents=()
   local worktrees=()
-  local task_idx=0
 
   echo "  ⚡ Parallel phase detected: $phase_line"
   echo "  🌿 Using worktree isolation"
@@ -706,8 +724,29 @@ run_parallel_phase() {
   local base_commit
   base_commit=$(git rev-parse HEAD)
 
-  # --- Phase 1: Create worktrees and spawn agents ---
+  # --- Collect: read all tasks into arrays before any work ---
+  local task_agents=()
+  local task_descs=()
   while IFS='|' read -r agent_name task_desc; do
+    task_agents+=("$agent_name")
+    task_descs+=("$task_desc")
+  done < <(collect_phase_tasks "implementation-plan.md" "$phase_line")
+
+  if [ ${#task_agents[@]} -eq 0 ]; then
+    echo "  No parallel tasks to run."
+    return 1
+  fi
+
+  # --- Validate: fail closed on duplicate agent names ---
+  if ! check_duplicate_agents "${task_agents[@]}"; then
+    return 1
+  fi
+
+  # --- Spawn: create worktrees and dispatch agents ---
+  local task_idx=0
+  for i in "${!task_agents[@]}"; do
+    local agent_name="${task_agents[$i]}"
+    local task_desc="${task_descs[$i]}"
     task_idx=$((task_idx + 1))
     local output_dir="${RALPH_RUN}/parallel-${ITERATION}-${task_idx}"
     mkdir -p "$output_dir"
@@ -752,6 +791,9 @@ $(cat "$PROMPT_FILE")"
     # Determine working directory: worktree if available, otherwise current dir (legacy)
     local work_dir="${wt_dir:-.}"
 
+    # Export task index so agents can namespace outputs to avoid collisions
+    export PARALLEL_TASK_IDX=$task_idx
+
     if $use_claude_fallback; then
       local agent_system_prompt mcp_config
       agent_system_prompt=$(build_claude_system_prompt "$agent_name")
@@ -779,10 +821,11 @@ $(cat "$PROMPT_FILE")"
 
     # Stagger spawns to avoid rate limiting when hitting OAuth simultaneously
     sleep 2
-  done < <(collect_phase_tasks "implementation-plan.md" "$phase_line")
+  done
+  unset PARALLEL_TASK_IDX
 
   if [ ${#pids[@]} -eq 0 ]; then
-    echo "  No parallel tasks to run."
+    echo "  No parallel tasks to run (all agents not found)."
     return 1
   fi
 

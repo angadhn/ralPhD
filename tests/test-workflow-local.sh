@@ -3037,6 +3037,36 @@ fi
 rm -rf "$CTX_TEST_DIR"
 echo ""
 
+# ── Test 25: Duplicate-agent detection in parallel phases ─────
+echo "--- 25. Duplicate Agent Detection ---"
+
+# 25a. check_duplicate_agents rejects duplicate agent names
+if check_duplicate_agents "scout" "critic" "scout" 2>/dev/null | grep -q "scout"; then
+  if ! check_duplicate_agents "scout" "critic" "scout" 2>/dev/null; then
+    pass "25a: duplicate agents detected and rejected"
+  else
+    fail "25a: duplicate agents should return non-zero"
+  fi
+else
+  fail "25a: duplicate agents should mention 'scout' in error"
+fi
+
+# 25b. check_duplicate_agents accepts unique agent names
+if check_duplicate_agents "scout" "critic" "deep-reader" 2>/dev/null; then
+  pass "25b: unique agents accepted"
+else
+  fail "25b: unique agents should return zero"
+fi
+
+# 25c. check_duplicate_agents handles single agent
+if check_duplicate_agents "coder" 2>/dev/null; then
+  pass "25c: single agent accepted"
+else
+  fail "25c: single agent should return zero"
+fi
+
+echo ""
+
 # ── Summary ───────────────────────────────────────────────────
 echo "=== Results: $PASS/$TESTS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then
