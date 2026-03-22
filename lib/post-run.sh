@@ -34,7 +34,7 @@ cleanup_loop_processes() {
   [ -n "${JSONL_MONITOR_PID:-}" ] && kill "$JSONL_MONITOR_PID" 2>/dev/null || true
   [ -n "${MONITOR_PID:-}" ] && kill "$MONITOR_PID" 2>/dev/null || true
   [ -n "${CLAUDE_PID:-}" ] && kill "$CLAUDE_PID" 2>/dev/null || true
-  rm -f "$YIELD_FILE" "$CTX_FILE" "$BUDGET_FILE" "$CB_FILE"
+  rm -f "$YIELD_FILE" "$CTX_FILE" "$BUDGET_FILE"
 }
 
 # Kill and wait for a background process by PID.

@@ -2906,6 +2906,41 @@ fi
 rm -rf "$YIELD_TEST_DIR" "$YIELD_EMPTY_DIR"
 echo ""
 
+# ── Test 23: Circuit breaker state survives cleanup ───────────
+echo "--- 23. Circuit Breaker Cleanup ---"
+
+CB_TEST_DIR=$(mktemp -d)
+
+# 23a. CB_FILE should survive cleanup_loop_processes
+CB_FILE="$CB_TEST_DIR/circuit-breaker"
+YIELD_FILE="$CB_TEST_DIR/yield"
+CTX_FILE="$CB_TEST_DIR/context"
+BUDGET_FILE="$CB_TEST_DIR/budget"
+JSONL_MONITOR_PID=""
+MONITOR_PID=""
+CLAUDE_PID=""
+
+echo "3" > "$CB_FILE"
+touch "$YIELD_FILE" "$CTX_FILE" "$BUDGET_FILE"
+
+cleanup_loop_processes 2>/dev/null
+
+if [ -f "$CB_FILE" ] && [ "$(cat "$CB_FILE")" = "3" ]; then
+  pass "23a: CB_FILE survives cleanup_loop_processes"
+else
+  fail "23a: CB_FILE survives cleanup_loop_processes"
+fi
+
+# 23b. Other monitoring files should be deleted by cleanup
+if [ ! -f "$YIELD_FILE" ] && [ ! -f "$CTX_FILE" ] && [ ! -f "$BUDGET_FILE" ]; then
+  pass "23b: monitoring files deleted by cleanup"
+else
+  fail "23b: monitoring files deleted by cleanup"
+fi
+
+rm -rf "$CB_TEST_DIR"
+echo ""
+
 # ── Summary ───────────────────────────────────────────────────
 echo "=== Results: $PASS/$TESTS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then
