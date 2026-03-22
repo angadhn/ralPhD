@@ -29,7 +29,23 @@ from providers import (
     detect_provider, create_client, call_model,
     format_assistant_message, format_tool_results,
     get_transient_errors, get_status_error_class,
+    get_context_window,
 )
+
+
+def context_threshold(model: str) -> float:
+    """Return the context usage threshold for a model.
+
+    Matches the shell-level thresholds in ralph-loop.sh:349-352:
+    65% for >=1M windows, 50% for <1M.
+    """
+    return 0.65 if get_context_window(model) >= 1_000_000 else 0.50
+
+
+def should_stop_for_context(input_tokens: int, model: str) -> bool:
+    """Return True if per-turn input tokens exceed the context threshold."""
+    limit = get_context_window(model)
+    return input_tokens > limit * context_threshold(model)
 
 
 def should_yield() -> bool:
@@ -235,9 +251,15 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
         # Feed results back, loop again
         messages.append(format_tool_results(provider, tool_results))
 
-        # End-of-turn gates: yield signal from monitor
+        # End-of-turn gates
         if should_yield():
             print("  [yield] Context threshold reached — stopping agent loop", file=sys.stderr)
+            break
+        if should_stop_for_context(response.input_tokens, model):
+            ctx_limit = get_context_window(model)
+            pct = int(context_threshold(model) * 100)
+            print(f"  [context] Input tokens ({response.input_tokens}) exceed "
+                  f"{pct}% of context window ({ctx_limit}) — stopping", file=sys.stderr)
             break
 
     duration_ms = int(_time.time() * 1000) - start_ms

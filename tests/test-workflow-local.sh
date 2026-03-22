@@ -2941,6 +2941,102 @@ fi
 rm -rf "$CB_TEST_DIR"
 echo ""
 
+# ── Test 24: Context window tracking in ralph_agent.py ────────
+echo "--- 24. Context Window Tracking ---"
+
+# 24a. get_context_window returns correct values
+if RALPH_HOME="$RALPH_HOME" python3 -c "
+import sys
+sys.path.insert(0, '$RALPH_HOME')
+from providers import get_context_window
+assert get_context_window('claude-sonnet-4-6') == 1_000_000, 'sonnet should be 1M'
+assert get_context_window('claude-haiku-4-5') == 200_000, 'haiku should be 200k'
+assert get_context_window('gpt-5.4') == 272_000, 'gpt-5.4 should be 272k'
+" 2>/dev/null; then
+  pass "24a: get_context_window returns correct values"
+else
+  fail "24a: get_context_window returns correct values"
+fi
+
+# 24b. context_threshold returns correct thresholds
+if RALPH_HOME="$RALPH_HOME" python3 -c "
+import sys
+sys.path.insert(0, '$RALPH_HOME')
+from ralph_agent import context_threshold
+assert context_threshold('claude-sonnet-4-6') == 0.65, '1M model should be 0.65'
+assert context_threshold('claude-opus-4-6') == 0.65, '1M model should be 0.65'
+assert context_threshold('claude-haiku-4-5') == 0.50, '<1M model should be 0.50'
+assert context_threshold('gpt-5.4') == 0.50, '<1M model should be 0.50'
+" 2>/dev/null; then
+  pass "24b: context_threshold returns correct thresholds"
+else
+  fail "24b: context_threshold returns correct thresholds"
+fi
+
+# 24c. should_stop_for_context detects threshold breach
+if RALPH_HOME="$RALPH_HOME" python3 -c "
+import sys
+sys.path.insert(0, '$RALPH_HOME')
+from ralph_agent import should_stop_for_context
+# 1M window, 65% threshold = 650k. 700k > 650k → should stop
+assert should_stop_for_context(700_000, 'claude-sonnet-4-6') == True
+# 500k < 650k → should not stop
+assert should_stop_for_context(500_000, 'claude-sonnet-4-6') == False
+# 200k window, 50% threshold = 100k. 110k > 100k → should stop
+assert should_stop_for_context(110_000, 'claude-haiku-4-5') == True
+# 90k < 100k → should not stop
+assert should_stop_for_context(90_000, 'claude-haiku-4-5') == False
+" 2>/dev/null; then
+  pass "24c: should_stop_for_context detects threshold breach"
+else
+  fail "24c: should_stop_for_context detects threshold breach"
+fi
+
+# 24d. Loop integration: context gate stops agent loop after one turn
+CTX_TEST_DIR=$(mktemp -d)
+if RALPH_RUN="$CTX_TEST_DIR" RALPH_HOME="$RALPH_HOME" python3 -c "
+import sys, os
+sys.path.insert(0, '$RALPH_HOME')
+import ralph_agent
+
+call_count = 0
+
+class MockToolCall:
+    name = 'read_file'
+    id = 'tc_mock_1'
+    input = {'path': '/tmp/test'}
+
+class MockResponse:
+    text_blocks = ['mock output']
+    tool_calls = [MockToolCall()]
+    input_tokens = 700_000  # above 65% of 1M = 650k
+    output_tokens = 50
+    cache_creation_input_tokens = 0
+    cache_read_input_tokens = 0
+    raw_content = None
+    raw = None
+
+def mock_create_client(provider): return None
+def mock_call_model(*a, **kw):
+    global call_count
+    call_count += 1
+    return MockResponse()
+def mock_execute_tool(name, inp): return 'mock result'
+
+ralph_agent.create_client = mock_create_client
+ralph_agent.call_model = mock_call_model
+ralph_agent.execute_tool = mock_execute_tool
+
+ralph_agent.run_agent('coder', 'test', 'do something', 'claude-sonnet-4-6', 4096)
+assert call_count == 1, f'Expected 1 call, got {call_count}'
+" 2>/dev/null; then
+  pass "24d: context gate stops loop after one turn"
+else
+  fail "24d: context gate stops loop after one turn"
+fi
+rm -rf "$CTX_TEST_DIR"
+echo ""
+
 # ── Summary ───────────────────────────────────────────────────
 echo "=== Results: $PASS/$TESTS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then
