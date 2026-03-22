@@ -1,29 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# test-workflow-local.sh — Simulate the GitHub Actions workflow locally
+# test-runtime-local.sh — Local runtime regression harness
 #
-# Tests the critical path without calling the Anthropic API:
-#   1. CI init (init-project.sh --ci)
-#   2. Template injection (thread, date, autonomy)
-#   3. RALPH_HOME resolution in ralph-loop.sh
-#   4. Agent detection from checkpoint.md
-#   5. Workflow YAML structure
-#   6. Idempotent re-init
-#   7. Path context preamble (RALPH_HOME separation)
-#   8. Tool path resolution (RALPH_HOME)
-#   9. Commit-back step (post-run result delivery)
-#   10. Webhook callback step (result delivery to external URL)
-#   11. End-to-end pipeline integration
-#   12. Architecture field parsing (--serial/--parallel flags)
-#   13. Parallel phase detection (phase heading annotations)
-#   14. eval.jsonl output format (evaluate_iteration.py --dry-run)
-#   15. Local init layout (split content/workspace, symlinks)
+# Covers the current loop/runtime critical path without calling the Anthropic API:
+# - workspace init in --ci mode
+# - template injection and RALPH_HOME resolution
+# - agent detection and path/tool resolution
+# - runtime integration and idempotent re-init
+# - architecture/parallel/worktree/merge/eval behavior
+# - yield/context/circuit-breaker and plan-audit safeguards
 #
-# Usage: bash tests/test-workflow-local.sh
+# Usage: bash tests/test-runtime-local.sh
 
 RALPH_HOME="$(cd "$(dirname "$0")/.." && pwd)"
-REDACTOR="$RALPH_HOME/scripts/redact_secrets.py"
 source "$RALPH_HOME/lib/detect.sh"
 source "$RALPH_HOME/lib/config.sh"
 source "$RALPH_HOME/lib/exec.sh"
@@ -55,7 +45,7 @@ sedi() {
   fi
 }
 
-echo "=== Test: Workflow Local Simulation ==="
+echo "=== Test: Runtime Local Regression ==="
 echo "RALPH_HOME: $RALPH_HOME"
 echo "WORKSPACE:  $WORKSPACE"
 echo ""
@@ -168,7 +158,7 @@ cat > "$WORKSPACE/checkpoint.md" << 'EOF'
 
 ## Next Task
 
-3. Create the workflow file — **coder**
+3. Create the runtime harness — **coder**
 EOF
 
 DETECTED=$(detect_agent_from_checkpoint "$WORKSPACE/checkpoint.md")
@@ -269,48 +259,6 @@ fi
 for agent in coder scout critic paper-writer; do
   check "agent file exists: $agent.md" test -f "$RALPH_HOME/.claude/agents/$agent.md"
 done
-echo ""
-
-# ── Test 5: Workflow YAML structure ───────────────────────────
-echo "--- 5. Workflow YAML Validation ---"
-check "ralph-run.yml exists" test -f "$RALPH_HOME/.github/workflows/ralph-run.yml"
-
-if python3 -c "
-import yaml, sys
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-jobs = doc.get('jobs', {})
-assert 'ralph-loop' in jobs, 'missing ralph-loop job'
-steps = jobs['ralph-loop']['steps']
-assert len(steps) >= 9, f'expected >=9 steps, got {len(steps)}'
-step_names = [s.get('name', '') for s in steps]
-assert any('Check out ralPhD' in n for n in step_names), 'missing checkout step'
-assert any('Initialize' in n for n in step_names), 'missing init step'
-assert any('ralph-loop' in n for n in step_names), 'missing run step'
-assert any('Commit results' in n for n in step_names), 'missing commit-back step'
-assert any('Upload' in n for n in step_names), 'missing upload step'
-assert any('summary' in n.lower() for n in step_names), 'missing summary step'
-
-# Check inputs
-on_field = doc.get(True) or doc.get('on')
-inputs = on_field['workflow_dispatch']['inputs']
-required_inputs = {'thread', 'prompt'}
-for inp in required_inputs:
-    assert inp in inputs, f'missing required input: {inp}'
-    assert inputs[inp].get('required', False), f'{inp} should be required'
-sys.exit(0)
-" 2>/dev/null; then
-  pass "YAML structure valid (jobs, steps, inputs)"
-else
-  fail "YAML structure validation"
-fi
-
-# Check no secrets in the workflow file
-if grep -q 'sk-ant\|AKIA\|ghp_' "$RALPH_HOME/.github/workflows/ralph-run.yml" 2>/dev/null; then
-  fail "secrets found in workflow file!"
-else
-  pass "no hardcoded secrets in workflow"
-fi
 echo ""
 
 # ── Test 6: Idempotent re-init ────────────────────────────────
@@ -420,8 +368,8 @@ import sys
 sys.path.insert(0, '$RALPH_HOME')
 from tools import TOOLS, AGENT_TOOLS, SERVER_TOOLS, get_tools_for_agent
 
-# All 21 tools should be registered
-assert len(TOOLS) == 22, f'Expected 22 tools, got {len(TOOLS)}'
+# All merged local tools should be registered
+assert len(TOOLS) == 25, f'Expected 25 tools, got {len(TOOLS)}'
 
 # Every tool in AGENT_TOOLS must exist in TOOLS or SERVER_TOOLS
 for agent, tool_list in AGENT_TOOLS.items():
@@ -434,9 +382,9 @@ for agent in AGENT_TOOLS:
     assert len(names) > 0, f'Agent {agent} has no tools'
     assert len(schemas) == len(names), f'Schema count mismatch for {agent}'
 " 2>/dev/null; then
-  pass "tools/__init__.py: all 22 tools load, agent registries valid"
+  pass "tools/__init__.py: all 25 tools load, agent registries valid"
 else
-  fail "tools/__init__.py: all 22 tools load, agent registries valid"
+  fail "tools/__init__.py: all 25 tools load, agent registries valid"
 fi
 
 # Test checks.py, pdf.py, download.py all use the shared _scripts_dir
@@ -461,656 +409,9 @@ else
 fi
 echo ""
 
-# ── Test 9: Commit-back step ─────────────────────────────────
-echo "--- 9. Commit-back Step ---"
-
-# 9a. Verify commit_mode input in YAML
-if python3 -c "
-import yaml, sys
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-on_field = doc.get(True) or doc.get('on')
-inputs = on_field['workflow_dispatch']['inputs']
-assert 'commit_mode' in inputs, 'missing commit_mode input'
-cm = inputs['commit_mode']
-assert cm['default'] == 'branch', f'commit_mode default should be branch, got {cm[\"default\"]}'
-assert set(cm['options']) == {'branch', 'direct', 'none'}, f'unexpected options: {cm[\"options\"]}'
-" 2>/dev/null; then
-  pass "commit_mode input: exists with branch/direct/none options"
-else
-  fail "commit_mode input validation"
-fi
-
-# 9b. Verify commit-back step conditions
-if python3 -c "
-import yaml, sys
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-steps = doc['jobs']['ralph-loop']['steps']
-commit_step = None
-for s in steps:
-    if 'Commit results' in s.get('name', ''):
-        commit_step = s
-        break
-assert commit_step is not None, 'commit-back step not found'
-
-# Must have condition: only when target_repo is set and commit_mode != none
-cond = commit_step.get('if', '')
-assert 'target_repo' in cond, 'commit-back should check target_repo'
-assert 'none' in cond, 'commit-back should check commit_mode != none'
-
-# Must have env vars for thread, commit_mode, target_ref
-env_block = commit_step.get('env', {})
-assert 'INPUT_THREAD' in env_block, 'missing INPUT_THREAD env'
-assert 'INPUT_COMMIT_MODE' in env_block, 'missing INPUT_COMMIT_MODE env'
-assert 'INPUT_TARGET_REF' in env_block, 'missing INPUT_TARGET_REF env'
-" 2>/dev/null; then
-  pass "commit-back step: conditions and env vars correct"
-else
-  fail "commit-back step conditions/env validation"
-fi
-
-# 9c. Verify commit-back step handles branch and direct modes
-COMMIT_SCRIPT=$(python3 -c "
-import yaml
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-for s in doc['jobs']['ralph-loop']['steps']:
-    if 'Commit results' in s.get('name', ''):
-        print(s.get('run', ''))
-        break
-" 2>/dev/null)
-
-if echo "$COMMIT_SCRIPT" | grep -q 'ralph/' && \
-   echo "$COMMIT_SCRIPT" | grep -q 'branch' && \
-   echo "$COMMIT_SCRIPT" | grep -q 'direct'; then
-  pass "commit-back script: handles branch (ralph/<thread>) and direct modes"
-else
-  fail "commit-back script: missing branch/direct handling"
-fi
-
-if echo "$COMMIT_SCRIPT" | grep -q 'git push'; then
-  pass "commit-back script: includes git push"
-else
-  fail "commit-back script: missing git push"
-fi
-
-if echo "$COMMIT_SCRIPT" | grep -q 'No.*commit\|No.*change\|nothing.*to commit'; then
-  pass "commit-back script: handles no-changes case"
-else
-  fail "commit-back script: missing no-changes handling"
-fi
-
-# 9d. Simulate commit-back with a proper origin/clone (like CI)
-COMMIT_TEST_DIR=$(mktemp -d)
-(
-  # Create a bare "remote" repo (simulates GitHub)
-  ORIGIN_DIR="$COMMIT_TEST_DIR/origin.git"
-  WORK_DIR="$COMMIT_TEST_DIR/workspace"
-
-  git init --bare "$ORIGIN_DIR" --quiet 2>/dev/null
-
-  # Clone and make initial commit (simulates actions/checkout)
-  git clone "$ORIGIN_DIR" "$WORK_DIR" --quiet 2>/dev/null
-  cd "$WORK_DIR"
-  git config user.name "ralph[bot]"
-  git config user.email "ralph-bot@users.noreply.github.com"
-  echo "initial" > README.md
-  git add -A && git commit -m "initial" --quiet
-  git push origin main --quiet 2>/dev/null
-
-  # Simulate agent work: create outputs on top of origin/main
-  mkdir -p ai-generated-outputs/test-thread/coder
-  echo "task summary" > ai-generated-outputs/test-thread/coder/task-summary.md
-  echo "updated checkpoint" > checkpoint.md
-
-  # Run the commit-back logic (extracted from workflow)
-  INPUT_THREAD="test-thread"
-  INPUT_COMMIT_MODE="branch"
-  INPUT_TARGET_REF="main"
-
-  # Stage any uncommitted changes
-  if ! (git diff --quiet HEAD && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]); then
-    git add -A
-    git commit -m "ralph: agent outputs for thread '${INPUT_THREAD}'" \
-      --author="ralph[bot] <ralph-bot@users.noreply.github.com>" --quiet
-  fi
-
-  # Count commits since origin/main
-  COMMIT_COUNT=$(git log --author="ralph\[bot\]" --oneline "origin/${INPUT_TARGET_REF}..HEAD" 2>/dev/null | wc -l | tr -d '[:space:]')
-
-  if [ "$COMMIT_COUNT" = "0" ]; then
-    exit 1
-  fi
-
-  # Verify the commit was made
-  LAST_MSG=$(git log -1 --format='%s')
-  echo "$LAST_MSG" | grep -q "ralph: agent outputs" || exit 1
-  echo "$LAST_MSG" | grep -q "test-thread" || exit 1
-
-  # Push to branch (simulates branch mode)
-  BRANCH_NAME="ralph/${INPUT_THREAD}"
-  git push origin "HEAD:refs/heads/${BRANCH_NAME}" --force --quiet 2>/dev/null || exit 1
-
-  # Verify the branch was created on origin
-  git ls-remote --heads origin | grep -q "ralph/test-thread" || exit 1
-)
-if [ $? -eq 0 ]; then
-  pass "commit-back simulation: agent outputs committed and pushed to branch"
-else
-  fail "commit-back simulation"
-fi
-
-# 9e. Verify no-changes case doesn't fail
-(
-  cd "$COMMIT_TEST_DIR/workspace"
-  # No new changes — should gracefully detect nothing to push
-  if git diff --quiet HEAD && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
-    # Commit count should be 0 (we already pushed)
-    COMMIT_COUNT=$(git log --author="ralph\[bot\]" --oneline "origin/main..HEAD" 2>/dev/null | wc -l | tr -d '[:space:]')
-    # After the push to branch, HEAD is still ahead of origin/main by 1
-    # This is fine — in real CI the step would just push again (idempotent)
-    exit 0
-  fi
-  exit 1
-)
-if [ $? -eq 0 ]; then
-  pass "commit-back simulation: no-changes case handled"
-else
-  fail "commit-back simulation: no-changes case"
-fi
-
-# 9f. Verify summary step includes commit_mode
-if python3 -c "
-import yaml
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-for s in doc['jobs']['ralph-loop']['steps']:
-    if 'summary' in s.get('name', '').lower():
-        run = s.get('run', '')
-        assert 'commit_mode' in run.lower() or 'COMMIT_MODE' in run, 'summary should include commit_mode'
-        env = s.get('env', {})
-        assert 'INPUT_COMMIT_MODE' in env, 'summary env missing INPUT_COMMIT_MODE'
-        break
-" 2>/dev/null; then
-  pass "summary step: includes commit_mode info"
-else
-  fail "summary step: missing commit_mode"
-fi
-
-rm -rf "$COMMIT_TEST_DIR"
-echo ""
-
-# ── Test 10: Webhook callback step ───────────────────────────
-echo "--- 10. Webhook Callback Step ---"
-
-# 10a. Verify callback_url input in YAML
-if python3 -c "
-import yaml, sys
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-on_field = doc.get(True) or doc.get('on')
-inputs = on_field['workflow_dispatch']['inputs']
-assert 'callback_url' in inputs, 'missing callback_url input'
-cu = inputs['callback_url']
-assert cu.get('required', True) == False, 'callback_url should not be required'
-assert cu['default'] == '', 'callback_url default should be empty string'
-assert cu['type'] == 'string', 'callback_url type should be string'
-" 2>/dev/null; then
-  pass "callback_url input: exists, optional, default empty"
-else
-  fail "callback_url input validation"
-fi
-
-# 10b. Verify webhook step exists with correct conditions
-if python3 -c "
-import yaml, sys
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-steps = doc['jobs']['ralph-loop']['steps']
-webhook_step = None
-for s in steps:
-    if 'webhook' in s.get('name', '').lower() or 'callback' in s.get('name', '').lower():
-        webhook_step = s
-        break
-assert webhook_step is not None, 'webhook/callback step not found'
-
-# Must run on always() and only when callback_url is set
-cond = webhook_step.get('if', '')
-assert 'always()' in cond, f'webhook should run on always(), got: {cond}'
-assert 'callback_url' in cond, f'webhook should check callback_url, got: {cond}'
-" 2>/dev/null; then
-  pass "webhook step: exists with always() + callback_url condition"
-else
-  fail "webhook step conditions"
-fi
-
-# 10c. Verify webhook step has required env vars
-if python3 -c "
-import yaml, sys
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-steps = doc['jobs']['ralph-loop']['steps']
-webhook_step = None
-for s in steps:
-    if 'webhook' in s.get('name', '').lower() or 'callback' in s.get('name', '').lower():
-        webhook_step = s
-        break
-env_block = webhook_step.get('env', {})
-required_env = ['INPUT_CALLBACK_URL', 'INPUT_THREAD', 'INPUT_MODE', 'INPUT_COMMIT_MODE']
-for e in required_env:
-    assert e in env_block, f'webhook step missing env: {e}'
-# CALLBACK_SECRET should reference a secret
-assert 'CALLBACK_SECRET' in env_block, 'webhook step missing CALLBACK_SECRET env'
-assert 'secrets.CALLBACK_SECRET' in str(env_block['CALLBACK_SECRET']), 'CALLBACK_SECRET should reference secrets'
-" 2>/dev/null; then
-  pass "webhook step: has required env vars including CALLBACK_SECRET"
-else
-  fail "webhook step env vars"
-fi
-
-# 10d. Verify webhook script builds JSON with jq and uses curl
-WEBHOOK_SCRIPT=$(python3 -c "
-import yaml
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-for s in doc['jobs']['ralph-loop']['steps']:
-    if 'webhook' in s.get('name', '').lower() or 'callback' in s.get('name', '').lower():
-        print(s.get('run', ''))
-        break
-" 2>/dev/null)
-
-if echo "$WEBHOOK_SCRIPT" | grep -q 'jq'; then
-  pass "webhook script: uses jq for JSON construction"
-else
-  fail "webhook script: missing jq usage"
-fi
-
-if echo "$WEBHOOK_SCRIPT" | grep -q 'curl'; then
-  pass "webhook script: uses curl for HTTP POST"
-else
-  fail "webhook script: missing curl usage"
-fi
-
-if echo "$WEBHOOK_SCRIPT" | grep -q 'ralph.run.completed'; then
-  pass "webhook script: includes event type"
-else
-  fail "webhook script: missing event type"
-fi
-
-if echo "$WEBHOOK_SCRIPT" | grep -q 'X-Ralph-Signature'; then
-  pass "webhook script: includes HMAC signature header"
-else
-  fail "webhook script: missing HMAC signature"
-fi
-
-if echo "$WEBHOOK_SCRIPT" | grep -q 'openssl.*hmac'; then
-  pass "webhook script: uses openssl for HMAC computation"
-else
-  fail "webhook script: missing openssl HMAC"
-fi
-
-# 10e. Verify retry logic
-if echo "$WEBHOOK_SCRIPT" | grep -q 'attempt.*[123]\|for attempt'; then
-  pass "webhook script: has retry logic"
-else
-  fail "webhook script: missing retry logic"
-fi
-
-if echo "$WEBHOOK_SCRIPT" | grep -q 'non-fatal\|non.fatal'; then
-  pass "webhook script: failure is non-fatal"
-else
-  fail "webhook script: should be non-fatal on failure"
-fi
-
-# 10f. Verify redaction helper masks representative secrets
-if PYTHONPATH="$RALPH_HOME" python3 -c "
-from tools.redact import preview_text, redact_text
-
-sample = '''
-ANTHROPIC_API_KEY=sk-ant-abcdef1234567890
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.secretpayload1234567890
-ghp_abcdefghijklmnopqrstuvwxyz1234567890
------BEGIN OPENSSH PRIVATE KEY-----
-abc123
------END OPENSSH PRIVATE KEY-----
-'''.strip()
-redacted = redact_text(sample)
-assert 'sk-ant-' not in redacted
-assert 'Bearer eyJ' not in redacted
-assert 'ghp_' not in redacted
-assert 'BEGIN OPENSSH PRIVATE KEY' not in redacted
-assert '[REDACTED]' in redacted
-
-preview = preview_text('OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz1234567890')
-assert 'sk-proj-' not in preview
-assert '[REDACTED]' in preview
-" 2>/dev/null; then
-  pass "redaction helper: masks representative secrets"
-else
-  fail "redaction helper: failed to mask representative secrets"
-fi
-
-# 10g. Simulate webhook JSON payload construction
-WEBHOOK_TEST_DIR=$(mktemp -d)
-(
-  cd "$WEBHOOK_TEST_DIR"
-
-  # Create a mock checkpoint
-  cat > checkpoint.md << 'CKPT'
-# Checkpoint — webhook-test
-
-**Thread:** webhook-test
-**Last updated:** 2026-03-11
-**Last agent:** coder
-**Status:** testing
-Token: sk-ant-webhooksecret1234567890
-
-## Knowledge State
-
-| Task | Status | Notes |
-|------|--------|-------|
-| 1. First task | done | completed |
-| 2. Second task | done | completed |
-| 3. Third task | pending | next up |
-
-## Next Task
-
-3. Third task — **coder**
-CKPT
-
-  # Build the JSON payload using the same jq command from the workflow
-  INPUT_THREAD="webhook-test"
-  INPUT_MODE="build"
-  INPUT_AUTONOMY="autopilot"
-  INPUT_MAX_ITER="5"
-  INPUT_TARGET="owner/repo"
-  INPUT_TARGET_REF="main"
-  INPUT_COMMIT_MODE="branch"
-
-  STATUS="completed"
-  CHECKPOINT_SUMMARY=$(head -20 checkpoint.md | python3 "$REDACTOR" | python3 -c "
-import sys, json
-print(json.dumps(sys.stdin.read()))" 2>/dev/null | sed 's/^"//;s/"$//')
-
-  LAST_TASK=$(grep -m1 '## Next Task' checkpoint.md -A2 2>/dev/null | tail -1 | sed 's/^ *//' | python3 "$REDACTOR" | tr -d '\n' || echo "")
-  LAST_AGENT=$(grep -m1 '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null | sed 's/.*:\*\* *//' || echo "")
-  TASKS_DONE=$(grep -c '| done |' checkpoint.md 2>/dev/null || echo "0")
-  TASKS_TOTAL=$(grep -c '| done \|| pending \|| in.progress |' checkpoint.md 2>/dev/null || echo "0")
-
-  REVIEW_NEEDED="false"
-  REVIEW_BODY=""
-
-  PAYLOAD=$(jq -n \
-    --arg thread "$INPUT_THREAD" \
-    --arg status "$STATUS" \
-    --arg mode "$INPUT_MODE" \
-    --arg autonomy "$INPUT_AUTONOMY" \
-    --arg max_iter "$INPUT_MAX_ITER" \
-    --arg target_repo "$INPUT_TARGET" \
-    --arg target_ref "$INPUT_TARGET_REF" \
-    --arg commit_mode "$INPUT_COMMIT_MODE" \
-    --arg last_agent "$LAST_AGENT" \
-    --arg next_task "$LAST_TASK" \
-    --arg tasks_done "$TASKS_DONE" \
-    --arg tasks_total "$TASKS_TOTAL" \
-    --argjson review_needed "$REVIEW_NEEDED" \
-    --arg review_body "$REVIEW_BODY" \
-    --arg checkpoint_summary "$CHECKPOINT_SUMMARY" \
-    --arg run_id "local" \
-    --arg run_url "https://github.com/local/actions/runs/0" \
-    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{
-      event: "ralph.run.completed",
-      timestamp: $timestamp,
-      thread: $thread,
-      status: $status,
-      config: {
-        mode: $mode,
-        autonomy: $autonomy,
-        max_iterations: ($max_iter | tonumber),
-        target_repo: $target_repo,
-        target_ref: $target_ref,
-        commit_mode: $commit_mode
-      },
-      result: {
-        last_agent: $last_agent,
-        next_task: $next_task,
-        tasks_done: ($tasks_done | tonumber),
-        tasks_total: ($tasks_total | tonumber),
-        review_needed: $review_needed,
-        review_body: (if $review_needed then $review_body else null end),
-        checkpoint_summary: $checkpoint_summary
-      },
-      run: {
-        id: $run_id,
-        url: $run_url
-      }
-    }')
-
-  # Validate the JSON payload
-  echo "$PAYLOAD" | python3 -c "
-import sys, json
-p = json.load(sys.stdin)
-assert p['event'] == 'ralph.run.completed', f'wrong event: {p[\"event\"]}'
-assert p['thread'] == 'webhook-test', f'wrong thread: {p[\"thread\"]}'
-assert p['status'] == 'completed', f'wrong status: {p[\"status\"]}'
-assert p['config']['mode'] == 'build', f'wrong mode: {p[\"config\"][\"mode\"]}'
-assert p['config']['max_iterations'] == 5, f'max_iter should be int 5, got: {p[\"config\"][\"max_iterations\"]}'
-assert p['config']['commit_mode'] == 'branch', f'wrong commit_mode'
-assert p['result']['last_agent'] == 'coder', f'wrong last_agent: {p[\"result\"][\"last_agent\"]}'
-assert p['result']['tasks_done'] == 2, f'wrong tasks_done: {p[\"result\"][\"tasks_done\"]}'
-assert p['result']['tasks_total'] == 3, f'wrong tasks_total: {p[\"result\"][\"tasks_total\"]}'
-assert p['result']['review_needed'] == False, 'review_needed should be False'
-assert p['result']['review_body'] is None, 'review_body should be None when no review'
-assert 'webhook-test' in p['result']['checkpoint_summary'], 'checkpoint_summary should contain thread name'
-assert '[REDACTED]' in p['result']['checkpoint_summary'], 'checkpoint_summary should be redacted'
-assert 'sk-ant-webhooksecret' not in p['result']['checkpoint_summary'], 'checkpoint_summary leaked a token'
-assert p['run']['id'] == 'local', f'wrong run id'
-assert 'timestamp' in p, 'missing timestamp'
-" || exit 1
-)
-if [ $? -eq 0 ]; then
-  pass "webhook JSON payload: valid structure with redacted summary"
-else
-  fail "webhook JSON payload construction"
-fi
-
-# 10h. Test HMAC signature generation
-(
-  cd "$WEBHOOK_TEST_DIR"
-  PAYLOAD='{"event":"ralph.run.completed","thread":"test"}'
-  SECRET="test-secret-key"
-  SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/.*= //')
-
-  # Verify the signature is a valid hex string (64 chars for SHA-256)
-  if echo "$SIGNATURE" | grep -qE '^[a-f0-9]{64}$'; then
-    true
-  else
-    exit 1
-  fi
-
-  # Verify signature is deterministic (same input = same output)
-  SIGNATURE2=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/.*= //')
-  [ "$SIGNATURE" = "$SIGNATURE2" ] || exit 1
-
-  # Verify different secret produces different signature
-  SIGNATURE3=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "other-secret" | sed 's/.*= //')
-  [ "$SIGNATURE" != "$SIGNATURE3" ] || exit 1
-)
-if [ $? -eq 0 ]; then
-  pass "HMAC signature: deterministic, correct format, secret-dependent"
-else
-  fail "HMAC signature generation"
-fi
-
-# 10i. Test review_needed payload variation
-(
-  cd "$WEBHOOK_TEST_DIR"
-
-  # Create HUMAN_REVIEW_NEEDED.md
-  cat > HUMAN_REVIEW_NEEDED.md << 'REVIEW'
-## Phase 1 Complete
-
-All archive tasks done. Ready for Phase 2 (workflow creation).
-Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.reviewsecret1234567890
-REVIEW
-
-  STATUS="review_needed"
-  REVIEW_NEEDED="true"
-  REVIEW_BODY=$(python3 "$REDACTOR" HUMAN_REVIEW_NEEDED.md | python3 -c "
-import sys, json
-print(json.dumps(sys.stdin.read()))" 2>/dev/null | sed 's/^"//;s/"$//')
-
-  PAYLOAD=$(jq -n \
-    --arg status "$STATUS" \
-    --argjson review_needed "$REVIEW_NEEDED" \
-    --arg review_body "$REVIEW_BODY" \
-    '{
-      status: $status,
-      result: {
-        review_needed: $review_needed,
-        review_body: (if $review_needed then $review_body else null end)
-      }
-    }')
-
-  echo "$PAYLOAD" | python3 -c "
-import sys, json
-p = json.load(sys.stdin)
-assert p['status'] == 'review_needed', f'wrong status: {p[\"status\"]}'
-assert p['result']['review_needed'] == True, 'review_needed should be True'
-assert 'Phase 1 Complete' in p['result']['review_body'], 'review_body should contain review content'
-assert '[REDACTED]' in p['result']['review_body'], 'review_body should be redacted'
-assert 'Bearer eyJ' not in p['result']['review_body'], 'review_body leaked a bearer token'
-" || exit 1
-)
-if [ $? -eq 0 ]; then
-  pass "webhook payload: review_needed=true includes redacted review body"
-else
-  fail "webhook payload review_needed variation"
-fi
-
-# 10j. Verify summary step includes callback info and redaction
-if python3 -c "
-import yaml
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-for s in doc['jobs']['ralph-loop']['steps']:
-    if 'summary' in s.get('name', '').lower():
-        run = s.get('run', '')
-        assert 'callback' in run.lower() or 'CALLBACK' in run, 'summary should mention callback'
-        assert 'redact_secrets.py' in run, 'summary should redact exported content'
-        env = s.get('env', {})
-        assert 'INPUT_CALLBACK_URL' in env, 'summary env missing INPUT_CALLBACK_URL'
-        break
-" 2>/dev/null; then
-  pass "summary step: includes callback info and redaction"
-else
-  fail "summary step: missing callback info or redaction"
-fi
-
-# 10k. Verify sanitized artifact preparation and upload path
-if python3 -c "
-import yaml
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-steps = doc['jobs']['ralph-loop']['steps']
-prep = next((s for s in steps if 'prepare sanitized artifact' in s.get('name', '').lower()), None)
-upload = next((s for s in steps if 'upload' in s.get('name', '').lower()), None)
-assert prep is not None, 'missing sanitized artifact preparation step'
-assert 'artifact-redacted' in prep.get('run', ''), 'prep step should build artifact-redacted bundle'
-assert upload is not None, 'missing upload step'
-assert upload.get('with', {}).get('path') == 'artifact-redacted/', 'upload should use sanitized artifact bundle'
-" 2>/dev/null; then
-  pass "artifact upload: sanitized bundle prepared and uploaded"
-else
-  fail "artifact upload: missing sanitized bundle"
-fi
-
-# 10l. Verify webhook step comes before upload/summary (correct ordering)
-if python3 -c "
-import yaml
-with open('$RALPH_HOME/.github/workflows/ralph-run.yml') as f:
-    doc = yaml.safe_load(f)
-steps = doc['jobs']['ralph-loop']['steps']
-step_names = [s.get('name', '') for s in steps]
-webhook_idx = next(i for i, n in enumerate(step_names) if 'webhook' in n.lower() or 'callback' in n.lower())
-upload_idx = next(i for i, n in enumerate(step_names) if 'upload' in n.lower())
-summary_idx = next(i for i, n in enumerate(step_names) if 'summary' in n.lower())
-commit_idx = next(i for i, n in enumerate(step_names) if 'commit results' in n.lower())
-# Webhook should be after commit-back but before upload
-assert webhook_idx > commit_idx, f'webhook (idx {webhook_idx}) should be after commit-back (idx {commit_idx})'
-assert webhook_idx < upload_idx, f'webhook (idx {webhook_idx}) should be before upload (idx {upload_idx})'
-assert webhook_idx < summary_idx, f'webhook (idx {webhook_idx}) should be before summary (idx {summary_idx})'
-" 2>/dev/null; then
-  pass "webhook step: correctly ordered (after commit, before upload/summary)"
-else
-  fail "webhook step ordering"
-fi
-
-# 10m. Simulate sanitized artifact bundle creation
-(
-  cd "$WEBHOOK_TEST_DIR"
-  mkdir -p ai-generated-outputs logs
-  cat > ai-generated-outputs/task.md << 'OUT'
-Agent note: ghp_abcdefghijklmnopqrstuvwxyz1234567890
-OUT
-  cat > logs/usage.jsonl << 'USAGE'
-{"result":"OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz1234567890"}
-USAGE
-
-  ARTIFACT_DIR="$WEBHOOK_TEST_DIR/artifact-redacted"
-  sanitize_copy() {
-    local src="$1"
-    local dst="$2"
-    mkdir -p "$(dirname "$dst")"
-    python3 "$REDACTOR" "$src" > "$dst"
-  }
-
-  rm -rf "$ARTIFACT_DIR"
-  mkdir -p "$ARTIFACT_DIR/ai-generated-outputs" "$ARTIFACT_DIR/logs"
-
-  for path in checkpoint.md implementation-plan.md HUMAN_REVIEW_NEEDED.md; do
-    if [ -f "$path" ]; then
-      sanitize_copy "$path" "$ARTIFACT_DIR/$path"
-    fi
-  done
-
-  while IFS= read -r path; do
-    sanitize_copy "$path" "$ARTIFACT_DIR/$path"
-  done < <(find ai-generated-outputs logs -type f | sort)
-
-  python3 -c "
-from pathlib import Path
-
-artifact = Path('$WEBHOOK_TEST_DIR/artifact-redacted')
-checkpoint = (artifact / 'checkpoint.md').read_text()
-review = (artifact / 'HUMAN_REVIEW_NEEDED.md').read_text()
-usage = (artifact / 'logs' / 'usage.jsonl').read_text()
-task = (artifact / 'ai-generated-outputs' / 'task.md').read_text()
-
-assert '[REDACTED]' in checkpoint
-assert 'sk-ant-webhooksecret' not in checkpoint
-assert '[REDACTED]' in review
-assert 'Bearer eyJ' not in review
-assert '[REDACTED]' in usage
-assert 'sk-proj-' not in usage
-assert '[REDACTED]' in task
-assert 'ghp_' not in task
-"
-)
-if [ $? -eq 0 ]; then
-  pass "sanitized artifact bundle: redacts checkpoint, review, logs, and AI outputs"
-else
-  fail "sanitized artifact bundle creation"
-fi
-
-rm -rf "$WEBHOOK_TEST_DIR"
-echo ""
-
-# ── Test 11: End-to-end pipeline integration ─────────────────
-echo "--- 11. End-to-End Pipeline Integration ---"
-echo "  (Chains all workflow steps in a single workspace)"
+# ── Test 11: End-to-end runtime integration ──────────────────
+echo "--- 11. End-to-End Runtime Integration ---"
+echo "  (Exercises init, dispatch inputs, agent outputs, and re-init in one workspace)"
 
 E2E_DIR=$(mktemp -d)
 E2E_ORIGIN="$E2E_DIR/origin.git"
@@ -1120,7 +421,7 @@ E2E_RALPH_HOME="$RALPH_HOME"
 (
   set -e
 
-  # ── 11a. Create bare origin + clone (simulates actions/checkout) ──
+  # ── 11a. Create bare origin + clone (local repo + remote simulation) ──
   git init --bare "$E2E_ORIGIN" --quiet 2>/dev/null
   git clone "$E2E_ORIGIN" "$E2E_WORKSPACE" --quiet 2>/dev/null
   cd "$E2E_WORKSPACE"
@@ -1132,7 +433,7 @@ E2E_RALPH_HOME="$RALPH_HOME"
   git add -A && git commit -m "initial: seed project" --quiet
   git push origin main --quiet 2>/dev/null
 
-  # ── 11b. Run init-project.sh --ci (workflow step 5, first-run path) ──
+  # ── 11b. Run init-project.sh --ci (first-run path) ──
   RALPH_HOME="$E2E_RALPH_HOME" bash "$E2E_RALPH_HOME/scripts/init-project.sh" --ci "$E2E_WORKSPACE" > /dev/null 2>&1
 
   # Verify all init artifacts exist
@@ -1143,7 +444,7 @@ E2E_RALPH_HOME="$RALPH_HOME"
     [ -d "$d" ] || { echo "INIT_FAIL: missing $d/"; exit 1; }
   done
 
-  # ── 11c. Inject templates (workflow step 5, template injection) ──
+  # ── 11c. Inject templates and operator inputs ──
   E2E_THREAD="e2e-test-pipeline"
   E2E_AUTONOMY="autopilot"
   E2E_PROMPT="Write the introduction section"
@@ -1276,168 +577,15 @@ CKPT2
   git commit -m "ralph: agent outputs for thread '${E2E_THREAD}'" \
     --author="ralph[bot] <ralph-bot@users.noreply.github.com>" --quiet
 
-  # ── 11f. Commit-back step (workflow step 7) ──
-  INPUT_COMMIT_MODE="branch"
-  INPUT_TARGET_REF="main"
-
-  # Count ralph[bot] commits since origin/main
-  COMMIT_COUNT=$(git log --author="ralph\[bot\]" --oneline "origin/${INPUT_TARGET_REF}..HEAD" 2>/dev/null | wc -l | tr -d '[:space:]')
-  [ "$COMMIT_COUNT" -gt 0 ] || { echo "COMMIT_FAIL: no ralph[bot] commits found"; exit 1; }
-
-  # Push to branch (simulates branch mode)
-  BRANCH_NAME="ralph/${E2E_THREAD}"
-  git push origin "HEAD:refs/heads/${BRANCH_NAME}" --force --quiet 2>/dev/null
-
-  # Verify branch exists on origin
-  git ls-remote --heads "$E2E_ORIGIN" | grep -q "ralph/${E2E_THREAD}" \
-    || { echo "PUSH_FAIL: branch not found on origin"; exit 1; }
-
-  # Verify branch content
-  BRANCH_TREE=$(git ls-tree --name-only "origin/${BRANCH_NAME}" 2>/dev/null | sort)
-  echo "$BRANCH_TREE" | grep -q "sections" || { echo "PUSH_FAIL: sections/ missing from branch"; exit 1; }
-  echo "$BRANCH_TREE" | grep -q "ai-generated-outputs" || { echo "PUSH_FAIL: ai-generated-outputs/ missing"; exit 1; }
-  echo "$BRANCH_TREE" | grep -q "checkpoint.md" || { echo "PUSH_FAIL: checkpoint.md missing from branch"; exit 1; }
-
-  # ── 11g. Webhook payload construction (workflow step 8) ──
-  STATUS="completed"
-  CHECKPOINT_SUMMARY=$(head -20 checkpoint.md | python3 -c "
-import sys, json
-print(json.dumps(sys.stdin.read()))" 2>/dev/null | sed 's/^"//;s/"$//')
-
-  LAST_TASK=$(grep -m1 '## Next Task' checkpoint.md -A2 2>/dev/null | tail -1 | sed 's/^ *//' || echo "")
-  LAST_AGENT=$(grep -m1 '^\*\*Last agent:\*\*' checkpoint.md 2>/dev/null | sed 's/.*:\*\* *//' || echo "")
-  TASKS_DONE=$(grep -c '| done |' checkpoint.md 2>/dev/null || echo "0")
-  TASKS_TOTAL=$(grep -c '| done \|| pending \|| in.progress |' checkpoint.md 2>/dev/null || echo "0")
-  REVIEW_NEEDED="false"
-  REVIEW_BODY=""
-
-  PAYLOAD=$(jq -n \
-    --arg thread "$E2E_THREAD" \
-    --arg status "$STATUS" \
-    --arg mode "build" \
-    --arg autonomy "$E2E_AUTONOMY" \
-    --arg max_iter "5" \
-    --arg target_repo "test-org/test-project" \
-    --arg target_ref "$INPUT_TARGET_REF" \
-    --arg commit_mode "$INPUT_COMMIT_MODE" \
-    --arg last_agent "$LAST_AGENT" \
-    --arg next_task "$LAST_TASK" \
-    --arg tasks_done "$TASKS_DONE" \
-    --arg tasks_total "$TASKS_TOTAL" \
-    --argjson review_needed "$REVIEW_NEEDED" \
-    --arg review_body "$REVIEW_BODY" \
-    --arg checkpoint_summary "$CHECKPOINT_SUMMARY" \
-    --arg run_id "e2e-local" \
-    --arg run_url "https://github.com/local/actions/runs/0" \
-    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{
-      event: "ralph.run.completed",
-      timestamp: $timestamp,
-      thread: $thread,
-      status: $status,
-      config: {
-        mode: $mode,
-        autonomy: $autonomy,
-        max_iterations: ($max_iter | tonumber),
-        target_repo: $target_repo,
-        target_ref: $target_ref,
-        commit_mode: $commit_mode
-      },
-      result: {
-        last_agent: $last_agent,
-        next_task: $next_task,
-        tasks_done: ($tasks_done | tonumber),
-        tasks_total: ($tasks_total | tonumber),
-        review_needed: $review_needed,
-        review_body: (if $review_needed then $review_body else null end),
-        checkpoint_summary: $checkpoint_summary
-      },
-      run: {
-        id: $run_id,
-        url: $run_url
-      }
-    }')
-
-  # Validate the payload reflects the full pipeline state
-  echo "$PAYLOAD" | python3 -c "
-import sys, json
-p = json.load(sys.stdin)
-assert p['event'] == 'ralph.run.completed'
-assert p['thread'] == 'e2e-test-pipeline'
-assert p['status'] == 'completed'
-assert p['config']['mode'] == 'build'
-assert p['config']['autonomy'] == 'autopilot'
-assert p['config']['commit_mode'] == 'branch'
-assert p['config']['target_repo'] == 'test-org/test-project'
-assert p['result']['last_agent'] == 'coder', f'last_agent: {p[\"result\"][\"last_agent\"]}'
-assert p['result']['tasks_done'] == 1, f'tasks_done: {p[\"result\"][\"tasks_done\"]}'
-assert p['result']['tasks_total'] == 3, f'tasks_total: {p[\"result\"][\"tasks_total\"]}'
-assert p['result']['review_needed'] == False
-assert p['result']['review_body'] is None
-assert 'e2e-test-pipeline' in p['result']['checkpoint_summary']
-assert 'task 1 done' in p['result']['checkpoint_summary']
-" || { echo "WEBHOOK_FAIL: payload validation"; exit 1; }
-
-  # HMAC signature verification (round-trip)
-  SECRET="e2e-test-secret"
-  SIG=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/.*= //')
-  SIG2=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/.*= //')
-  [ "$SIG" = "$SIG2" ] || { echo "HMAC_FAIL: non-deterministic"; exit 1; }
-  echo "$SIG" | grep -qE '^[a-f0-9]{64}$' || { echo "HMAC_FAIL: bad format"; exit 1; }
-
-  # ── 11h. Artifact file verification (workflow step 9) ──
-  # These are the paths that upload-artifact would collect
+  # ── 11f. Runtime artifact verification ──
   [ -d "ai-generated-outputs/${E2E_THREAD}" ] || { echo "ARTIFACT_FAIL: outputs dir missing"; exit 1; }
   [ -f "ai-generated-outputs/${E2E_THREAD}/coder/task-summary.md" ] || { echo "ARTIFACT_FAIL: task-summary missing"; exit 1; }
   [ -f "checkpoint.md" ] || { echo "ARTIFACT_FAIL: checkpoint missing"; exit 1; }
   [ -f "implementation-plan.md" ] || { echo "ARTIFACT_FAIL: plan missing"; exit 1; }
   [ -d "logs" ] || { echo "ARTIFACT_FAIL: logs dir missing"; exit 1; }
 
-  # ── 11i. Run summary generation (workflow step 10) ──
-  SUMMARY_OUTPUT=$(
-    INPUT_THREAD="$E2E_THREAD"
-    INPUT_MODE="build"
-    INPUT_AUTONOMY="$E2E_AUTONOMY"
-    INPUT_MAX_ITER="5"
-    INPUT_COMMIT_MODE="branch"
-    INPUT_TARGET="test-org/test-project"
-    INPUT_TARGET_REF="main"
-    INPUT_CALLBACK_URL="https://api.example.com/webhooks/ralph"
-
-    {
-      echo "## Ralph Run Summary"
-      echo ""
-      echo "- **Thread:** ${INPUT_THREAD}"
-      echo "- **Mode:** ${INPUT_MODE}"
-      echo "- **Autonomy:** ${INPUT_AUTONOMY}"
-      echo "- **Max iterations:** ${INPUT_MAX_ITER}"
-      echo "- **Commit mode:** ${INPUT_COMMIT_MODE}"
-      if [ -n "${INPUT_TARGET}" ]; then
-        echo "- **Target repo:** ${INPUT_TARGET}@${INPUT_TARGET_REF}"
-      fi
-      if [ -n "${INPUT_CALLBACK_URL}" ]; then
-        echo "- **Callback:** configured"
-      fi
-      echo ""
-      if [ -f checkpoint.md ]; then
-        echo "### Checkpoint"
-        echo '```'
-        head -30 checkpoint.md
-        echo '```'
-      fi
-    }
-  )
-
-  echo "$SUMMARY_OUTPUT" | grep -q "Thread.*e2e-test-pipeline" || { echo "SUMMARY_FAIL: thread missing"; exit 1; }
-  echo "$SUMMARY_OUTPUT" | grep -q "Mode.*build" || { echo "SUMMARY_FAIL: mode missing"; exit 1; }
-  echo "$SUMMARY_OUTPUT" | grep -q "Autonomy.*autopilot" || { echo "SUMMARY_FAIL: autonomy missing"; exit 1; }
-  echo "$SUMMARY_OUTPUT" | grep -q "Commit mode.*branch" || { echo "SUMMARY_FAIL: commit_mode missing"; exit 1; }
-  echo "$SUMMARY_OUTPUT" | grep -q "Target repo.*test-org/test-project" || { echo "SUMMARY_FAIL: target missing"; exit 1; }
-  echo "$SUMMARY_OUTPUT" | grep -q "Callback.*configured" || { echo "SUMMARY_FAIL: callback missing"; exit 1; }
-  echo "$SUMMARY_OUTPUT" | grep -q "task 1 done" || { echo "SUMMARY_FAIL: checkpoint state missing"; exit 1; }
-
-  # ── 11j. Subsequent run simulation (re-init idempotency) ──
-  # On a second workflow_dispatch, existing files should be preserved
+  # ── 11g. Subsequent run simulation (re-init idempotency) ──
+  # On a second run, existing state should be preserved
   RALPH_HOME="$E2E_RALPH_HOME" bash "$E2E_RALPH_HOME/scripts/init-project.sh" --ci "$E2E_WORKSPACE" > /dev/null 2>&1
 
   # checkpoint.md should NOT be overwritten (has our agent's work)
@@ -1458,18 +606,14 @@ if [ "$E2E_EXIT" -eq 0 ]; then
   pass "11c: template injection (thread, prompt, autonomy)"
   pass "11d: agent detection from checkpoint.md (coder)"
   pass "11e: simulated agent outputs (task-summary, sections/, checkpoint update)"
-  pass "11f: commit-back pushes to ralph/<thread> branch with correct content"
-  pass "11g: webhook payload has correct structure and values from pipeline state"
-  pass "11h: artifact paths exist (outputs, checkpoint, plan, logs)"
-  pass "11i: run summary includes all config fields and checkpoint state"
-  pass "11j: subsequent run preserves checkpoint, allows new prompt injection"
+  pass "11f: runtime artifact paths exist (outputs, checkpoint, plan, logs)"
+  pass "11g: subsequent run preserves checkpoint and allows new prompt injection"
 else
-  fail "end-to-end pipeline integration (exit code: $E2E_EXIT)"
+  fail "end-to-end runtime integration (exit code: $E2E_EXIT)"
 fi
 
 rm -rf "$E2E_DIR"
 echo ""
-
 
 # ── Test 12: Architecture field parsing ──────────────────────
 echo "--- 12. Architecture Field Parsing ---"
