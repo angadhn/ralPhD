@@ -166,7 +166,15 @@ Because `.claude/agents/` is symlinked as a whole directory, new agent files cre
 | `RALPH_CONTEXT_WINDOW` | per-model | Context window override in tokens (e.g. `200000` to revert to 200k) |
 | `RALPH_MCP_LOG` | — | Path to MCP server debug log (opt-in; e.g. `/tmp/ralph-mcp.log`) |
 
-By default each agent uses the model specified in `context-budgets.json` (Opus for reasoning-heavy agents, Sonnet for coder/research-coder/figure-stylist). Setting `RALPH_MODEL` overrides this globally — all agents use that one model.
+By default each agent uses the model specified in `context-budgets.json`. The current default config uses Opus for all listed agents. Setting `RALPH_MODEL` overrides this globally — all agents use that one model.
+
+`context-budgets.json` currently uses three core fields:
+
+- `model`: which model the agent runs on
+- `effort`: provider-specific reasoning effort for models that support it
+- `max_tokens`: maximum output tokens for one model response; Ralph defaults this to `32768` if not set
+
+The richer monitor fields (`max_step`, `steps.read_inputs`, `steps.read_chunk`) are intentionally not set by default. They tune when the shell monitor recommends `CAUTION` or `YIELD`, so they should be added only after observing a real agent's context behavior rather than guessing.
 
 **OpenAI model policy:** Only **GPT-5.4** (high thinking mode) is supported for OpenAI. Ralph automatically sets `reasoning_effort: "high"` for GPT-5.4 calls. Context window is 272k tokens.
 

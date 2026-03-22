@@ -116,6 +116,32 @@ check "prompt-build.md exists in RALPH_HOME" test -f "$RALPH_HOME/prompt-build.m
 check "prompt-plan.md exists in RALPH_HOME" test -f "$RALPH_HOME/prompt-plan.md"
 check "context-budgets.json exists in RALPH_HOME" test -f "$RALPH_HOME/context-budgets.json"
 
+if python3 -c "
+import json, glob, os, sys
+
+agents = sorted(
+    os.path.splitext(os.path.basename(p))[0]
+    for p in glob.glob('$RALPH_HOME/.claude/agents/*.md')
+)
+with open('$RALPH_HOME/context-budgets.json') as f:
+    budgets = json.load(f)
+
+non_runtime = {'README', 'agent-base', 'agent-template'}
+runtime_agents = [a for a in agents if a not in non_runtime]
+missing = [a for a in runtime_agents if a not in budgets]
+assert not missing, f'Missing budget entries: {missing}'
+
+for name in runtime_agents:
+    entry = budgets[name]
+    assert entry.get('model'), f'{name} missing model'
+    assert entry.get('effort'), f'{name} missing effort'
+    assert entry.get('max_tokens') == 32768, f'{name} max_tokens should be 32768'
+" 2>/dev/null; then
+  pass "context-budgets.json: all runtime agents have model/effort/max_tokens"
+else
+  fail "context-budgets.json: all runtime agents have model/effort/max_tokens"
+fi
+
 # Test RALPH_HOME validation from ralph-loop.sh
 if RALPH_HOME="$RALPH_HOME" bash -c '
   RALPH_HOME="${RALPH_HOME}"
