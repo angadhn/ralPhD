@@ -42,15 +42,30 @@ def context_threshold(model: str) -> float:
     return 0.65 if get_context_window(model) >= 1_000_000 else 0.50
 
 
-def should_stop_for_context(input_tokens: int, output_tokens: int, model: str) -> bool:
+def estimate_tool_result_tokens(tool_results: list) -> int:
+    """Estimate token count from tool result payloads (~4 chars per token)."""
+    total_chars = 0
+    for tr in tool_results:
+        content = tr.get("content", "")
+        if isinstance(content, str):
+            total_chars += len(content)
+        elif isinstance(content, list):
+            # Multimodal content blocks
+            for block in content:
+                if isinstance(block, dict) and "text" in block:
+                    total_chars += len(block["text"])
+    return total_chars // 4
+
+
+def should_stop_for_context(input_tokens: int, output_tokens: int,
+                            model: str, tool_result_tokens: int = 0) -> bool:
     """Return True if the estimated next-turn input exceeds the context threshold.
 
-    The next request will include at minimum: this turn's input + this turn's
-    output (appended as assistant message) + tool results.  We estimate
-    conservatively as input + output; the real next request will be even larger.
+    The next request includes: this turn's input + this turn's output
+    (appended as assistant message) + tool result payloads.
     """
     limit = get_context_window(model)
-    estimated_next = input_tokens + output_tokens
+    estimated_next = input_tokens + output_tokens + tool_result_tokens
     return estimated_next >= limit * context_threshold(model)
 
 
@@ -261,7 +276,8 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
         if should_yield():
             print("  [yield] Context threshold reached — stopping agent loop", file=sys.stderr)
             break
-        if should_stop_for_context(response.input_tokens, response.output_tokens, model):
+        if should_stop_for_context(response.input_tokens, response.output_tokens,
+                                   model, estimate_tool_result_tokens(tool_results)):
             ctx_limit = get_context_window(model)
             pct = int(context_threshold(model) * 100)
             print(f"  [context] Input tokens ({response.input_tokens}) exceed "
