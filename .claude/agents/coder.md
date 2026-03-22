@@ -21,8 +21,11 @@ changes committed to the repo.
   related patterns, utilities, and conventions in the codebase.
 - **Minimal changes:** Only modify what the task requires. Don't refactor surrounding
   code, add comments to unchanged lines, or introduce abstractions for one-time use.
-- **Red/green TDD:** Write tests first, confirm they fail, then iterate on the
-  implementation — not the tests — until they pass.
+- **Red/green TDD (enforced):** For every task tagged `red/green TDD`:
+  1. **RED commit first:** Write test(s) that assert the desired post-fix behavior. Run them — they MUST fail. Commit with message prefix `test(red):`.
+  2. **GREEN commit second:** Implement the fix. Run the same tests — they MUST pass. Commit with message prefix `fix(green):`.
+  3. **Proof:** Both commit hashes appear in the checkpoint entry. If the RED test passes immediately (meaning the vulnerability doesn't exist or is already fixed), document that in checkpoint and skip the GREEN commit.
+  4. **No post-hoc tests:** Do not write tests after the implementation. If you wrote code first, delete it, write the test, confirm RED, then reimplement.
 - **Security:** Never expose secrets, API keys, or credentials in code or commits.
 - **Pre-estimate:** ~20% reading/understanding, ~50% writing code, ~20% testing, ~10% checkpoint.
 - **Priority order:** (1) understand the task + existing code, (2) make changes,
