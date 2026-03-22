@@ -349,9 +349,9 @@ merge_checkpoints() {
       merged_did="${merged_did}${did_section}"$'\n'
     fi
 
-    # Extract knowledge state table rows — only "done" entries to avoid stale "pending" duplicates
+    # Extract knowledge state table rows — all data rows (deduped later)
     local knowledge_rows
-    knowledge_rows=$(awk '/^## Knowledge State/{found=1; next} /^## /{found=0} found && /^\|/ && !/^\|.*Task.*Status/ && /done/' "$wt_cp" 2>/dev/null)
+    knowledge_rows=$(awk '/^## Knowledge State/{found=1; next} /^## /{found=0} found && /^\|/ && !/^\|.*Task.*Status/ && !/^\|[-]+/' "$wt_cp" 2>/dev/null)
     if [ -n "$knowledge_rows" ]; then
       merged_knowledge="${merged_knowledge}${knowledge_rows}"$'\n'
     fi
@@ -370,9 +370,18 @@ merge_checkpoints() {
     echo "| Task | Status | Notes |"
     echo "|------|--------|-------|"
     if [ -n "$merged_knowledge" ]; then
-      echo "$merged_knowledge" | sort -u
+      # Dedup by task column (col 2), last-seen wins (later in worktree-array order)
+      echo "$merged_knowledge" | awk -F'|' '
+        NF>=3 { k=$2; gsub(/^[ \t]+|[ \t]+$/,"",k); d[k]=$0; if(!(k in idx)){idx[k]=++n;o[n]=k} }
+        END { for(i=1;i<=n;i++) print d[o[i]] }
+      '
     fi
     echo ""
+    if [ -n "$merged_did" ]; then
+      echo "## What I Did"
+      echo ""
+      echo "$merged_did"
+    fi
     echo "## Last Reflection"
     echo ""
     echo "<parallel merge — see individual agent outputs>"

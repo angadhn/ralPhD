@@ -3067,6 +3067,128 @@ fi
 
 echo ""
 
+# ── Test 26: merge_checkpoints preserves What I Did and non-done rows ─
+echo "--- 26. Lossy Merge Fix ---"
+
+MERGE26_DIR=$(mktemp -d)
+
+# Base checkpoint (on main)
+cat > "$MERGE26_DIR/base-checkpoint.md" << 'MERGEEOF'
+# Checkpoint — test-thread
+
+**Thread:** test-thread
+**Last updated:** 2026-03-20
+**Last agent:** planner
+**Status:** in-progress
+
+## Knowledge State
+
+| Task | Status | Notes |
+|------|--------|-------|
+
+## Last Reflection
+
+<none yet>
+
+## Next Task
+
+1. Do something — **coder**
+MERGEEOF
+
+# Worktree 1 checkpoint — has "What I Did" and a "done" row
+cat > "$MERGE26_DIR/wt1-checkpoint.md" << 'MERGEEOF'
+# Checkpoint — test-thread
+
+**Thread:** test-thread
+**Last updated:** 2026-03-20
+**Last agent:** scout
+**Status:** in-progress
+
+## Knowledge State
+
+| Task | Status | Notes |
+|------|--------|-------|
+| 1 | done | Scraped site A |
+
+## What I Did
+
+- Scraped site A, found 5 requirements
+- Generated corpus file
+
+## Last Reflection
+
+Good run, found useful data.
+
+## Next Task
+
+2. Scrape B — **scout**
+MERGEEOF
+
+# Worktree 2 checkpoint — has "What I Did" and a "failed" row
+cat > "$MERGE26_DIR/wt2-checkpoint.md" << 'MERGEEOF'
+# Checkpoint — test-thread
+
+**Thread:** test-thread
+**Last updated:** 2026-03-20
+**Last agent:** scout
+**Status:** in-progress
+
+## Knowledge State
+
+| Task | Status | Notes |
+|------|--------|-------|
+| 2 | failed | API rate limited |
+
+## What I Did
+
+- Attempted site B, hit rate limit after 3 pages
+
+## Last Reflection
+
+Failed due to rate limiting.
+
+## Next Task
+
+2. Scrape B — **scout**
+MERGEEOF
+
+# Run merge
+cp "$MERGE26_DIR/base-checkpoint.md" "$MERGE26_DIR/output.md"
+merge_checkpoints "$MERGE26_DIR/output.md" \
+  "$MERGE26_DIR/wt1-checkpoint.md" \
+  "$MERGE26_DIR/wt2-checkpoint.md"
+
+# 26a. "What I Did" content preserved from wt1
+if grep -q "Scraped site A" "$MERGE26_DIR/output.md"; then
+  pass "26a: What I Did from wt1 preserved"
+else
+  fail "26a: What I Did from wt1 should be in merged checkpoint"
+fi
+
+# 26b. "What I Did" content preserved from wt2
+if grep -q "site B" "$MERGE26_DIR/output.md"; then
+  pass "26b: What I Did from wt2 preserved"
+else
+  fail "26b: What I Did from wt2 should be in merged checkpoint"
+fi
+
+# 26c. Non-done knowledge row (failed) preserved
+if grep -q "failed" "$MERGE26_DIR/output.md"; then
+  pass "26c: non-done knowledge row preserved"
+else
+  fail "26c: non-done (failed) knowledge row should be in merged checkpoint"
+fi
+
+# 26d. Done knowledge row still preserved
+if grep -q "Scraped site A" "$MERGE26_DIR/output.md" && grep -q "done" "$MERGE26_DIR/output.md"; then
+  pass "26d: done knowledge row still preserved"
+else
+  fail "26d: done knowledge row should still be in merged checkpoint"
+fi
+
+rm -rf "$MERGE26_DIR"
+echo ""
+
 # ── Summary ───────────────────────────────────────────────────
 echo "=== Results: $PASS/$TESTS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then
