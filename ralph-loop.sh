@@ -39,7 +39,7 @@ if [ ! -f "$PROMPT_FILE" ]; then
   exit 1
 fi
 
-CONTEXT_THRESHOLD=50  # default for ≤200k; overridden to 65 for 1M windows below
+CONTEXT_THRESHOLD=45  # default for <1M windows; overridden to 20 for 1M windows below
 CTX_FILE="$RALPH_RUN/context-pct"
 YIELD_FILE="$RALPH_RUN/yield"
 BUDGET_FILE="$RALPH_RUN/budget-info"
@@ -375,11 +375,11 @@ while true; do
     done
     if [ -n "$MONITOR_SCRIPT" ]; then
       CONTEXT_WINDOW=$(resolve_context_window "$CLAUDE_MODEL")
-      # Larger windows can afford a higher yield threshold
+      # 1M windows yield earlier; smaller windows use a 45% threshold.
       if [ "$CONTEXT_WINDOW" -ge 1000000 ] 2>/dev/null; then
-        CONTEXT_THRESHOLD=65
+        CONTEXT_THRESHOLD=20
       else
-        CONTEXT_THRESHOLD=50
+        CONTEXT_THRESHOLD=45
       fi
       bash "$MONITOR_SCRIPT" "$CONTEXT_THRESHOLD" "$CONTEXT_WINDOW" &
       JSONL_MONITOR_PID=$!

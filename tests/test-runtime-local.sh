@@ -2134,10 +2134,10 @@ if RALPH_HOME="$RALPH_HOME" python3 -c "
 import sys
 sys.path.insert(0, '$RALPH_HOME')
 from ralph_agent import context_threshold
-assert context_threshold('claude-sonnet-4-6') == 0.65, '1M model should be 0.65'
-assert context_threshold('claude-opus-4-6') == 0.65, '1M model should be 0.65'
-assert context_threshold('claude-haiku-4-5') == 0.50, '<1M model should be 0.50'
-assert context_threshold('gpt-5.4') == 0.50, '<1M model should be 0.50'
+assert context_threshold('claude-sonnet-4-6') == 0.20, '1M model should be 0.20'
+assert context_threshold('claude-opus-4-6') == 0.20, '1M model should be 0.20'
+assert context_threshold('claude-haiku-4-5') == 0.45, '<1M model should be 0.45'
+assert context_threshold('gpt-5.4') == 0.45, '<1M model should be 0.45'
 " 2>/dev/null; then
   pass "24b: context_threshold returns correct thresholds"
 else
@@ -2149,23 +2149,23 @@ if RALPH_HOME="$RALPH_HOME" python3 -c "
 import sys
 sys.path.insert(0, '$RALPH_HOME')
 from ralph_agent import should_stop_for_context, estimate_tool_result_tokens
-# 1M window, 65% threshold = 650k. 700k+50k+0=750k >= 650k → should stop
-assert should_stop_for_context(700_000, 50_000, 'claude-sonnet-4-6') == True
-# 400k+100k+0=500k < 650k → should not stop
-assert should_stop_for_context(400_000, 100_000, 'claude-sonnet-4-6') == False
-# Transition case: 600k+50k+0=650k >= 650k → should stop
-assert should_stop_for_context(600_000, 50_000, 'claude-sonnet-4-6') == True
-# Large tool result case: 600k+10k+40k(tool)=650k >= 650k → should stop
-assert should_stop_for_context(600_000, 10_000, 'claude-sonnet-4-6', tool_result_tokens=40_000) == True
-# Below with tool results: 500k+10k+40k=550k < 650k → should not stop
-assert should_stop_for_context(500_000, 10_000, 'claude-sonnet-4-6', tool_result_tokens=40_000) == False
+# 1M window, 20% threshold = 200k. 180k+30k+0=210k >= 200k → should stop
+assert should_stop_for_context(180_000, 30_000, 'claude-sonnet-4-6') == True
+# 150k+20k+0=170k < 200k → should not stop
+assert should_stop_for_context(150_000, 20_000, 'claude-sonnet-4-6') == False
+# Transition case: 190k+10k+0=200k >= 200k → should stop
+assert should_stop_for_context(190_000, 10_000, 'claude-sonnet-4-6') == True
+# Large tool result case: 180k+5k+15k(tool)=200k >= 200k → should stop
+assert should_stop_for_context(180_000, 5_000, 'claude-sonnet-4-6', tool_result_tokens=15_000) == True
+# Below with tool results: 160k+5k+15k=180k < 200k → should not stop
+assert should_stop_for_context(160_000, 5_000, 'claude-sonnet-4-6', tool_result_tokens=15_000) == False
 # estimate_tool_result_tokens: ~4 chars per token
 tr = [{'type': 'tool_result', 'tool_use_id': 'x', 'content': 'a' * 40_000}]
 est = estimate_tool_result_tokens(tr)
 assert 9_000 <= est <= 11_000, f'Expected ~10k tokens for 40k chars, got {est}'
-# 200k window, 50% threshold = 100k
-assert should_stop_for_context(80_000, 30_000, 'claude-haiku-4-5') == True
-assert should_stop_for_context(60_000, 30_000, 'claude-haiku-4-5') == False
+# 200k window, 45% threshold = 90k
+assert should_stop_for_context(70_000, 25_000, 'claude-haiku-4-5') == True
+assert should_stop_for_context(50_000, 30_000, 'claude-haiku-4-5') == False
 " 2>/dev/null; then
   pass "24c: should_stop_for_context detects threshold breach"
 else
@@ -2189,7 +2189,7 @@ class MockToolCall:
 class MockResponse:
     text_blocks = ['mock output']
     tool_calls = [MockToolCall()]
-    input_tokens = 700_000  # above 65% of 1M = 650k
+    input_tokens = 250_000  # above 20% of 1M = 200k
     output_tokens = 50
     cache_creation_input_tokens = 0
     cache_read_input_tokens = 0
@@ -2233,8 +2233,8 @@ class MockToolCall:
 class MockResponse:
     text_blocks = ['mock output']
     tool_calls = [MockToolCall()]
-    input_tokens = 600_000  # below 650k threshold alone
-    output_tokens = 50_000  # but 600k+50k=650k >= 650k threshold
+    input_tokens = 190_000  # below 200k threshold alone
+    output_tokens = 10_000  # but 190k+10k=200k >= 200k threshold
     cache_creation_input_tokens = 0
     cache_read_input_tokens = 0
     raw_content = None
@@ -2262,10 +2262,9 @@ rm -rf "$CTX_TRANS_DIR"
 
 # 24f. Large tool result case: input+output below threshold but tool results push it over
 # Note: truncate_result() caps individual results to 50k chars (~12.5k tokens).
-# So we set input_tokens=635k, output_tokens=2k (637k < 650k without tool results).
-# Tool result of 50k chars → ~12.5k estimated tokens → 637k+12.5k=649.5k.
-# With the tool result, estimated_next ≈ 649.5k which is just under 650k.
-# Using 636k input → 636k+2k+12.5k = 650.5k >= 650k → should stop.
+# So we set input_tokens=186k, output_tokens=2k (188k < 200k without tool results).
+# Tool result of 50k chars → ~12.5k estimated tokens → 188k+12.5k=200.5k.
+# With the tool result, estimated_next ≈ 200.5k which crosses the 200k threshold.
 CTX_TOOL_DIR=$(mktemp -d)
 if RALPH_RUN="$CTX_TOOL_DIR" RALPH_HOME="$RALPH_HOME" python3 -c "
 import sys, os
@@ -2282,8 +2281,8 @@ class MockToolCall:
 class MockResponse:
     text_blocks = ['mock output']
     tool_calls = [MockToolCall()]
-    input_tokens = 636_000  # below 650k threshold
-    output_tokens = 2_000   # input+output = 638k, still below 650k
+    input_tokens = 186_000  # below 200k threshold
+    output_tokens = 2_000   # input+output = 188k, still below 200k
     cache_creation_input_tokens = 0
     cache_read_input_tokens = 0
     raw_content = None
@@ -2296,7 +2295,7 @@ def mock_call_model(*a, **kw):
     return MockResponse()
 
 # Return a tool result at the truncation limit (50k chars → ~12.5k tokens)
-# 638k + 12.5k = 650.5k >= 650k threshold → should stop
+# 188k + 12.5k = 200.5k >= 200k threshold → should stop
 def mock_execute_tool(n, i): return 'x' * 50_000
 
 ralph_agent.create_client = mock_create_client

@@ -37,9 +37,9 @@ def context_threshold(model: str) -> float:
     """Return the context usage threshold for a model.
 
     Matches the shell-level thresholds in ralph-loop.sh:349-352:
-    65% for >=1M windows, 50% for <1M.
+    20% for >=1M windows, 45% for <1M.
     """
-    return 0.65 if get_context_window(model) >= 1_000_000 else 0.50
+    return 0.20 if get_context_window(model) >= 1_000_000 else 0.45
 
 
 def estimate_tool_result_tokens(tool_results: list) -> int:
