@@ -42,10 +42,16 @@ def context_threshold(model: str) -> float:
     return 0.65 if get_context_window(model) >= 1_000_000 else 0.50
 
 
-def should_stop_for_context(input_tokens: int, model: str) -> bool:
-    """Return True if per-turn input tokens exceed the context threshold."""
+def should_stop_for_context(input_tokens: int, output_tokens: int, model: str) -> bool:
+    """Return True if the estimated next-turn input exceeds the context threshold.
+
+    The next request will include at minimum: this turn's input + this turn's
+    output (appended as assistant message) + tool results.  We estimate
+    conservatively as input + output; the real next request will be even larger.
+    """
     limit = get_context_window(model)
-    return input_tokens > limit * context_threshold(model)
+    estimated_next = input_tokens + output_tokens
+    return estimated_next >= limit * context_threshold(model)
 
 
 def should_yield() -> bool:
@@ -255,7 +261,7 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
         if should_yield():
             print("  [yield] Context threshold reached — stopping agent loop", file=sys.stderr)
             break
-        if should_stop_for_context(response.input_tokens, model):
+        if should_stop_for_context(response.input_tokens, response.output_tokens, model):
             ctx_limit = get_context_window(model)
             pct = int(context_threshold(model) * 100)
             print(f"  [context] Input tokens ({response.input_tokens}) exceed "

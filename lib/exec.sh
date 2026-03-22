@@ -339,6 +339,19 @@ merge_checkpoints() {
   local merged_did=""
   local latest_next_task=""
 
+  # Harvest pre-existing state from the base checkpoint first (worktree entries
+  # come later and win on dedup, so base rows are only kept if no worktree updates them)
+  local base_knowledge
+  base_knowledge=$(awk '/^## Knowledge State/{found=1; next} /^## /{found=0} found && /^\|/ && !/^\|.*Task.*Status/ && !/^\|[-]+/' "$base_checkpoint" 2>/dev/null)
+  if [ -n "$base_knowledge" ]; then
+    merged_knowledge="${base_knowledge}"$'\n'
+  fi
+  local base_did
+  base_did=$(awk '/^## (What I Did|Last Action|Work Done)/{found=1; next} /^## /{found=0} found' "$base_checkpoint" 2>/dev/null)
+  if [ -n "$base_did" ]; then
+    merged_did="${base_did}"$'\n'
+  fi
+
   for wt_cp in "${wt_checkpoints[@]}"; do
     if [ ! -f "$wt_cp" ]; then continue; fi
 

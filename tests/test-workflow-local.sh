@@ -2973,19 +2973,21 @@ else
   fail "24b: context_threshold returns correct thresholds"
 fi
 
-# 24c. should_stop_for_context detects threshold breach
+# 24c. should_stop_for_context detects threshold breach (estimates next turn as input+output)
 if RALPH_HOME="$RALPH_HOME" python3 -c "
 import sys
 sys.path.insert(0, '$RALPH_HOME')
 from ralph_agent import should_stop_for_context
-# 1M window, 65% threshold = 650k. 700k > 650k → should stop
-assert should_stop_for_context(700_000, 'claude-sonnet-4-6') == True
-# 500k < 650k → should not stop
-assert should_stop_for_context(500_000, 'claude-sonnet-4-6') == False
-# 200k window, 50% threshold = 100k. 110k > 100k → should stop
-assert should_stop_for_context(110_000, 'claude-haiku-4-5') == True
-# 90k < 100k → should not stop
-assert should_stop_for_context(90_000, 'claude-haiku-4-5') == False
+# 1M window, 65% threshold = 650k. 700k+50k=750k >= 650k → should stop
+assert should_stop_for_context(700_000, 50_000, 'claude-sonnet-4-6') == True
+# 400k+100k=500k < 650k → should not stop
+assert should_stop_for_context(400_000, 100_000, 'claude-sonnet-4-6') == False
+# Transition case: 600k input + 50k output = 650k >= 650k → should stop
+assert should_stop_for_context(600_000, 50_000, 'claude-sonnet-4-6') == True
+# 200k window, 50% threshold = 100k. 80k+30k=110k >= 100k → should stop
+assert should_stop_for_context(80_000, 30_000, 'claude-haiku-4-5') == True
+# 60k+30k=90k < 100k → should not stop
+assert should_stop_for_context(60_000, 30_000, 'claude-haiku-4-5') == False
 " 2>/dev/null; then
   pass "24c: should_stop_for_context detects threshold breach"
 else
@@ -3035,6 +3037,50 @@ else
   fail "24d: context gate stops loop after one turn"
 fi
 rm -rf "$CTX_TEST_DIR"
+
+# 24e. Transition case: input below threshold but input+output crosses it
+CTX_TRANS_DIR=$(mktemp -d)
+if RALPH_RUN="$CTX_TRANS_DIR" RALPH_HOME="$RALPH_HOME" python3 -c "
+import sys, os
+sys.path.insert(0, '$RALPH_HOME')
+import ralph_agent
+
+call_count = 0
+
+class MockToolCall:
+    name = 'read_file'
+    id = 'tc_mock_1'
+    input = {'path': '/tmp/test'}
+
+class MockResponse:
+    text_blocks = ['mock output']
+    tool_calls = [MockToolCall()]
+    input_tokens = 600_000  # below 650k threshold alone
+    output_tokens = 50_000  # but 600k+50k=650k >= 650k threshold
+    cache_creation_input_tokens = 0
+    cache_read_input_tokens = 0
+    raw_content = None
+    raw = None
+
+def mock_create_client(p): return None
+def mock_call_model(*a, **kw):
+    global call_count
+    call_count += 1
+    return MockResponse()
+def mock_execute_tool(n, i): return 'mock result'
+
+ralph_agent.create_client = mock_create_client
+ralph_agent.call_model = mock_call_model
+ralph_agent.execute_tool = mock_execute_tool
+
+ralph_agent.run_agent('coder', 'test', 'do something', 'claude-sonnet-4-6', 4096)
+assert call_count == 1, f'Expected 1 call (transition case), got {call_count}'
+" 2>/dev/null; then
+  pass "24e: transition case (input+output crosses threshold) stops loop"
+else
+  fail "24e: transition case (input+output crosses threshold) stops loop"
+fi
+rm -rf "$CTX_TRANS_DIR"
 echo ""
 
 # ── Test 25: Duplicate-agent detection in parallel phases ─────
@@ -3072,7 +3118,7 @@ echo "--- 26. Lossy Merge Fix ---"
 
 MERGE26_DIR=$(mktemp -d)
 
-# Base checkpoint (on main)
+# Base checkpoint (on main) — has pre-existing state that must survive merge
 cat > "$MERGE26_DIR/base-checkpoint.md" << 'MERGEEOF'
 # Checkpoint — test-thread
 
@@ -3085,6 +3131,11 @@ cat > "$MERGE26_DIR/base-checkpoint.md" << 'MERGEEOF'
 
 | Task | Status | Notes |
 |------|--------|-------|
+| 0 | done | base row from previous phase |
+
+## What I Did
+
+- base did from previous iteration
 
 ## Last Reflection
 
@@ -3184,6 +3235,20 @@ if grep -q "Scraped site A" "$MERGE26_DIR/output.md" && grep -q "done" "$MERGE26
   pass "26d: done knowledge row still preserved"
 else
   fail "26d: done knowledge row should still be in merged checkpoint"
+fi
+
+# 26e. Pre-existing base knowledge row survives merge
+if grep -q "base row from previous phase" "$MERGE26_DIR/output.md"; then
+  pass "26e: base checkpoint knowledge row preserved"
+else
+  fail "26e: base checkpoint knowledge row should survive merge"
+fi
+
+# 26f. Pre-existing base "What I Did" content survives merge
+if grep -q "base did from previous iteration" "$MERGE26_DIR/output.md"; then
+  pass "26f: base checkpoint What I Did preserved"
+else
+  fail "26f: base checkpoint What I Did should survive merge"
 fi
 
 rm -rf "$MERGE26_DIR"
