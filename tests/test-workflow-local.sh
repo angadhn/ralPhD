@@ -27,6 +27,7 @@ REDACTOR="$RALPH_HOME/scripts/redact_secrets.py"
 source "$RALPH_HOME/lib/detect.sh"
 source "$RALPH_HOME/lib/config.sh"
 source "$RALPH_HOME/lib/exec.sh"
+source "$RALPH_HOME/lib/post-run.sh"
 PARSER_FIXTURE_DIR="$RALPH_HOME/tests/fixtures/parser"
 WORKSPACE=$(mktemp -d)
 PASS=0
@@ -3311,6 +3312,124 @@ else
 fi
 
 rm -rf "$MERGE26_DIR"
+echo ""
+
+# ── Test 27: Plan-mode audit + commit/push helpers ─────────────
+echo "--- 27. Plan Audit + Commit ---"
+
+PLAN27_DIR=$(mktemp -d)
+PLAN27_REMOTE=$(mktemp -d)
+
+(
+  cd "$PLAN27_REMOTE"
+  git init --bare --initial-branch=main >/dev/null 2>&1
+)
+
+(
+  cd "$PLAN27_DIR"
+  git init --initial-branch=main >/dev/null 2>&1
+  git remote add origin "$PLAN27_REMOTE"
+  cat > checkpoint.md <<'EOF'
+# Checkpoint
+
+## Next Task
+
+1. Plan something — **plan**
+EOF
+  cat > implementation-plan.md <<'EOF'
+# Plan
+
+- [ ] 1. Do the thing — **coder**
+EOF
+  git add checkpoint.md implementation-plan.md
+  git commit -m "init" --quiet
+  git push origin main --quiet 2>/dev/null
+
+  export CURRENT_THREAD="plan-audit-test"
+  export PLAN_AUDIT_FILE="$PLAN27_DIR/plan-audit-failed"
+
+  SNAPSHOT_OK=$(mktemp)
+  ALLOWED_OK=$(mktemp)
+  VIOLATIONS_OK=$(mktemp)
+  plan_write_state_snapshot "$SNAPSHOT_OK"
+  printf '\n- [ ] 2. Another task — **coder**\n' >> implementation-plan.md
+  if plan_audit_changed_files "$SNAPSHOT_OK" "$ALLOWED_OK" "$VIOLATIONS_OK" \
+      && grep -q '^implementation-plan.md$' "$ALLOWED_OK" \
+      && ! [ -s "$VIOLATIONS_OK" ]; then
+    pass "27a: plan audit accepts allowlisted file changes"
+  else
+    fail "27a: plan audit should accept allowlisted file changes"
+  fi
+
+  if plan_commit_and_push_changes "$ALLOWED_OK" >/dev/null 2>&1 \
+      && git log -1 --format='%s' | grep -q "plan: update plan state" \
+      && git --git-dir="$PLAN27_REMOTE" log --format='%s' main -1 2>/dev/null | grep -q "plan: update plan state"; then
+    pass "27b: allowlisted plan changes committed and pushed"
+  else
+    fail "27b: allowlisted plan changes should be committed and pushed"
+  fi
+
+  SNAPSHOT_BAD=$(mktemp)
+  ALLOWED_BAD=$(mktemp)
+  VIOLATIONS_BAD=$(mktemp)
+  plan_write_state_snapshot "$SNAPSHOT_BAD"
+  printf 'unauthorized\n' > README.md
+  if ! plan_audit_changed_files "$SNAPSHOT_BAD" "$ALLOWED_BAD" "$VIOLATIONS_BAD" \
+      && grep -q '^README.md$' "$VIOLATIONS_BAD" \
+      && grep -q '^README.md$' "$PLAN_AUDIT_FILE"; then
+    pass "27c: plan audit rejects unauthorized file changes"
+  else
+    fail "27c: plan audit should reject unauthorized file changes"
+  fi
+)
+
+rm -rf "$PLAN27_DIR" "$PLAN27_REMOTE"
+echo ""
+
+# ── Test 28: Planner prompt and wrapper restrictions ───────────
+echo "--- 28. Planner Restrictions ---"
+
+if grep -q "## IMPORTANT" "$RALPH_HOME/prompt-plan.md" \
+    && grep -q "Do \\*\\*not\\*\\* create or edit \`.claude/agents/\\*\\.md\`" "$RALPH_HOME/prompt-plan.md"; then
+  pass "28a: prompt-plan.md has explicit IMPORTANT planner boundary"
+else
+  fail "28a: prompt-plan.md should declare strict planner boundaries"
+fi
+
+if grep -q -- '--allowedTools "Read" "Glob" "Grep" "Bash"' "$RALPH_HOME/ralph-loop.sh" \
+    && ! grep -q '"Agent"' "$RALPH_HOME/ralph-loop.sh" \
+    && ! grep -q 'Write(.claude/agents/\\*\\.md)' "$RALPH_HOME/ralph-loop.sh"; then
+  pass "28b: ralph-loop.sh plan mode removed Agent and agent-file writes"
+else
+  fail "28b: ralph-loop.sh should remove Agent and agent-file writes from plan mode"
+fi
+
+if grep -q 'implementation-plan.md' "$RALPH_HOME/.claude/agents/plan.md" \
+    && grep -q 'Do \\*\\*not\\*\\* delegate to other agents' "$RALPH_HOME/.claude/agents/plan.md"; then
+  pass "28c: plan agent file restrictions aligned with wrapper"
+else
+  fail "28c: plan agent file restrictions should align with wrapper"
+fi
+
+echo ""
+
+# ── Test 29: Coder/refactorer prompt contracts ─────────────────
+echo "--- 29. Agent Prompt Contracts ---"
+
+if grep -q "Plan is intent, repo is truth" "$RALPH_HOME/.claude/agents/coder.md" \
+    && grep -q "Record the RED commit hash" "$RALPH_HOME/.claude/agents/coder.md"; then
+  pass "29a: coder prompt documents repo-truth + RED proof rules"
+else
+  fail "29a: coder prompt should document repo-truth + RED proof rules"
+fi
+
+if grep -q "Baseline-before / baseline-after verification" "$RALPH_HOME/.claude/agents/refactorer.md" \
+    && grep -q "Do not change public APIs" "$RALPH_HOME/.claude/agents/refactorer.md"; then
+  pass "29b: refactorer prompt enforces semantic preservation"
+else
+  fail "29b: refactorer prompt should enforce semantic preservation"
+fi
+
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────

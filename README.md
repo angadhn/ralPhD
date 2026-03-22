@@ -457,7 +457,7 @@ Based on [ghuntley's agent architecture](https://ghuntley.com/agent): the agent 
 - **No orchestrator agent.** `checkpoint.md` and `implementation-plan.md` are the shared state. The dispatcher is ~25 lines. Claude picks the highest-priority task each iteration.
 - **One agent per iteration.** Each iteration gets a fresh context window. No agent mixing, no subagent spawning.
 - **Per-agent tool registries.** Each agent only sees the tools it needs. Scout gets citation tools, critic gets compliance checkers, research-coder gets only the essentials. This focuses the model's attention and prevents tool misuse. Tool registries are enforced on both the `ralph_agent.py` path (API key present) and the MCP fallback path (`claude -p` + `mcp_server.py`, for OAuth/Max plan users without an API key); plan mode and interactive CLI mode (`claude`/`codex`) use provider-native tools.
-- **Plan mode creates agents on the fly.** If a task needs a capability that doesn't exist yet, plan mode can write a new agent file rather than forcing everything through the predefined roles.
+- **Plan mode records missing capabilities rather than creating agents.** If a task needs a capability that doesn't exist yet, plan mode writes a scoped follow-up task instead of editing `.claude/agents/*` directly.
 - **Peer-reviewed sources only.** Scout searches academic databases via `tools/_citation.py`. No general web search — journal submissions cite peer-reviewed and conference papers.
 - **Human in the loop.** `HUMAN CHECKPOINT` tasks pause for review. `inbox.md` allows mid-run steering. Reflections every 5 iterations surface drift.
 

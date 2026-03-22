@@ -1,8 +1,22 @@
 # Plan-Mode Dispatcher
 
+## IMPORTANT
+
+Plan mode is planning only.
+
+- You may research with the available tools, including `Bash`, but only for
+  information gathering such as `git status`, `git diff`, `git log`, `ls`,
+  `find`, `rg`, `curl`, and documentation lookup.
+- Do **not** implement code, edit source files, create commits, or push.
+- Do **not** create or edit `.claude/agents/*.md` in plan mode.
+- If a new agent is needed, write that as a scoped task in the implementation
+  plan instead of creating the agent directly.
+- If the user asks to execute, finish the plan and stop. Build mode executes.
+
 ## Step 1 — Intake
 
-Scan the workspace first using Read, Glob, and LS. Check for existing
+Scan the workspace first using Read, Glob, Grep, and Bash (inspection only).
+Check for existing
 `checkpoint.md`, `implementation-plan.md`, papers, .tex files, and other
 project content. If this is a cold start (no existing plan), gather context
 before planning:
@@ -30,8 +44,8 @@ go to Step 2.
 ## Step 2 — Agent inventory
 
 Read `.claude/agents/README.md` and the agent files. If built-in agents
-don't cover the task, propose a custom agent (use `agent-template.md`,
-create in workspace `.claude/agents/`).
+don't cover the task, add a task to the plan describing the missing agent's
+scope, inputs, outputs, and tool needs.
 
 ## Step 3 — Plan
 

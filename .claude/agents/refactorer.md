@@ -16,14 +16,24 @@ without changing behavior. Produces refactored source files with verified result
 
 ## Operational Guardrails
 
-- **Red/green TDD:** Run verification (tests, linters, syntax checks) before touching
-  anything. After refactoring, run the same checks — output must match.
+- **Baseline-before / baseline-after verification:** Run verification (tests,
+  linters, syntax checks) before touching anything. After refactoring, run the
+  same checks again — outcomes must match.
 - **No behavior changes:** Don't fix bugs, add features, or change semantics. If you
-  spot a bug, note it in the task summary but don't fix it.
+  spot a bug, note it in the task summary and checkpoint but don't fix it.
+- **Preserve interfaces:** Do not change public APIs, CLI flags, environment
+  variables, file formats, output paths, or externally consumed log/error text
+  unless the task explicitly allows it.
 - **Minimal blast radius:** One logical change per commit. Extract functions first,
   then restructure callers, then clean up — not all at once.
+- **Anti-churn:** No formatting-only edits, dependency changes, file moves,
+  comment rewrites, or cleanup outside the target slice unless the task
+  explicitly asks for them.
 - **Understand before modifying:** Read the full file and its dependencies before
   changing anything. Search for all call sites of functions you're extracting.
+- **Baseline failures:** If verification is already failing before you touch the
+  code, record that baseline and preserve it. Do not silently "improve" the
+  code by fixing unrelated failures.
 - **Pre-estimate:** ~30% reading/understanding, ~40% refactoring, ~20% verification, ~10% checkpoint.
 - **Priority order:** (1) verify current behavior, (2) refactor, (3) re-verify,
   (4) update checkpoint
@@ -48,7 +58,7 @@ AI-generated-outputs/<thread>/refactorer/
 5. Run verification: `bash -n <file>`, `shellcheck <file>`, or project test suite
 6. Refactor: extract functions, restructure, deduplicate (one logical change at a time)
 7. Re-run verification — confirm identical behavior
-8. If checks fail: revert and retry (max 3 attempts, then document the failure)
+8. If checks fail: undo only your own last refactor attempt and retry (max 3 attempts, then document the failure). Never revert unrelated local changes.
 9. Write `task-summary.md`: files changed, what was extracted/moved, before/after metrics
 10. Update `checkpoint.md` — mark task done in Knowledge State, set Next Task
 11. Commit all changes (source files + task-summary.md + checkpoint.md)

@@ -37,6 +37,174 @@ cleanup_loop_processes() {
   rm -f "$YIELD_FILE" "$CTX_FILE" "$BUDGET_FILE"
 }
 
+plan_is_allowed_file() {
+  case "$1" in
+    checkpoint.md|implementation-plan.md|implementation-plan-*.md|inbox.md)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+plan_write_state_snapshot() {
+  local snapshot_file=$1
+  : > "$snapshot_file"
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  while IFS= read -r path; do
+    [ -z "$path" ] && continue
+    local sig
+    if [ -e "$path" ]; then
+      sig=$(git hash-object "$path" 2>/dev/null || cksum < "$path" | awk '{print $1}')
+    else
+      sig="__missing__"
+    fi
+    printf '%s\t%s\n' "$sig" "$path" >> "$snapshot_file"
+  done < <(
+    {
+      git diff --name-only 2>/dev/null
+      git diff --cached --name-only 2>/dev/null
+      git ls-files --others --exclude-standard 2>/dev/null
+    } | awk 'NF' | sort -u
+  )
+}
+
+plan_collect_changed_paths() {
+  local before_snapshot=$1
+  local after_snapshot=$2
+  python3 - "$before_snapshot" "$after_snapshot" <<'PY'
+import sys
+
+def load(path):
+    data = {}
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            for raw in fh:
+                raw = raw.rstrip("\n")
+                if not raw:
+                    continue
+                sig, _, name = raw.partition("\t")
+                data[name] = sig
+    except FileNotFoundError:
+        pass
+    return data
+
+before = load(sys.argv[1])
+after = load(sys.argv[2])
+for name in sorted(set(before) | set(after)):
+    if before.get(name) != after.get(name):
+        print(name)
+PY
+}
+
+plan_audit_changed_files() {
+  local before_snapshot=$1
+  local allowed_out=$2
+  local violations_out=$3
+  local after_snapshot
+  after_snapshot=$(mktemp)
+  : > "$allowed_out"
+  : > "$violations_out"
+
+  plan_write_state_snapshot "$after_snapshot"
+  while IFS= read -r path; do
+    [ -z "$path" ] && continue
+    if plan_is_allowed_file "$path"; then
+      printf '%s\n' "$path" >> "$allowed_out"
+    else
+      printf '%s\n' "$path" >> "$violations_out"
+    fi
+  done < <(plan_collect_changed_paths "$before_snapshot" "$after_snapshot")
+
+  rm -f "$after_snapshot"
+
+  if [ -s "$violations_out" ]; then
+    cp "$violations_out" "$PLAN_AUDIT_FILE"
+    return 1
+  fi
+
+  rm -f "$PLAN_AUDIT_FILE"
+  return 0
+}
+
+plan_commit_and_push_changes() {
+  local changed_file=$1
+  local files=()
+  while IFS= read -r path; do
+    [ -z "$path" ] && continue
+    files+=("$path")
+  done < "$changed_file"
+
+  if [ ${#files[@]} -eq 0 ]; then
+    echo "  (no plan-state changes to commit)"
+    return 0
+  fi
+
+  git add -- "${files[@]}" 2>/dev/null || {
+    echo "  ✗ Could not stage plan-state files"
+    return 1
+  }
+
+  if git diff --cached --quiet -- "${files[@]}" 2>/dev/null; then
+    echo "  (no staged plan-state changes to commit)"
+    return 0
+  fi
+
+  local thread_name="${CURRENT_THREAD:-plan}"
+  git commit -m "plan: update plan state for ${thread_name}" --quiet 2>/dev/null || {
+    echo "  ✗ Could not commit plan-state files"
+    return 1
+  }
+
+  local branch_name=""
+  branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  if git remote get-url origin >/dev/null 2>&1 && [ -n "$branch_name" ] && [ "$branch_name" != "HEAD" ]; then
+    git push origin "HEAD:${branch_name}" --quiet 2>/dev/null || {
+      echo "  ✗ Plan files committed locally, but push failed"
+      return 1
+    }
+    echo "  Plan-state files committed and pushed."
+  else
+    echo "  Plan-state files committed locally (push skipped — no origin or detached HEAD)."
+  fi
+
+  return 0
+}
+
+plan_violation_paths_still_dirty() {
+  if [ ! -f "$PLAN_AUDIT_FILE" ]; then
+    return 1
+  fi
+
+  local still_dirty=1
+  local seen=""
+  while IFS= read -r path; do
+    [ -z "$path" ] && continue
+    if git ls-files --others --exclude-standard -- "$path" 2>/dev/null | grep -q .; then
+      printf '%s\n' "$path"
+      still_dirty=0
+      continue
+    fi
+    if ! git diff --quiet -- "$path" 2>/dev/null; then
+      printf '%s\n' "$path"
+      still_dirty=0
+      continue
+    fi
+    if ! git diff --cached --quiet -- "$path" 2>/dev/null; then
+      printf '%s\n' "$path"
+      still_dirty=0
+      continue
+    fi
+  done < "$PLAN_AUDIT_FILE"
+
+  return "$still_dirty"
+}
+
 # Kill and wait for a background process by PID.
 # Caller is responsible for resetting the PID variable afterward.
 cleanup_pid() {

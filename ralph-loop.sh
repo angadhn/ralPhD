@@ -43,6 +43,7 @@ CONTEXT_THRESHOLD=50  # default for ≤200k; overridden to 65 for 1M windows bel
 CTX_FILE="$RALPH_RUN/context-pct"
 YIELD_FILE="$RALPH_RUN/yield"
 BUDGET_FILE="$RALPH_RUN/budget-info"
+PLAN_AUDIT_FILE="$RALPH_RUN/plan-audit-failed"
 POLL_INTERVAL=5
 BACKOFF=60
 USAGE_LOG="logs/usage.jsonl"
@@ -151,6 +152,11 @@ while true; do
       fi
     fi
 
+    PLAN_SNAPSHOT=$(mktemp)
+    PLAN_ALLOWED=$(mktemp)
+    PLAN_VIOLATIONS=$(mktemp)
+    plan_write_state_snapshot "$PLAN_SNAPSHOT"
+
     # Run plan agent via claude CLI
     PLAN_SYSTEM="$(cat "${RALPH_HOME}/.claude/agents/plan.md")"
     SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
@@ -162,7 +168,7 @@ while true; do
       --session-id "$SESSION_ID" \
       --permission-mode plan \
       --name "${CURRENT_THREAD:-ralPhD-plan}" \
-      --allowedTools "Read" "Glob" "Grep" "Bash" "Agent" \
+      --allowedTools "Read" "Glob" "Grep" "Bash" \
         "Edit(/checkpoint.md)" \
         "Edit(/implementation-plan.md)" \
         "Edit(/implementation-plan-*.md)" \
@@ -170,8 +176,7 @@ while true; do
         "Write(/checkpoint.md)" \
         "Write(/implementation-plan.md)" \
         "Write(/implementation-plan-*.md)" \
-        "Write(/inbox.md)" \
-        "Write(.claude/agents/*.md)"
+        "Write(/inbox.md)"
     EXIT_CODE=$?
 
     cleanup_pid "$MONITOR_PID"; MONITOR_PID=""
@@ -179,12 +184,37 @@ while true; do
     # Log interactive session usage
     log_interactive_session "$SESSION_ID" "plan"
 
+    if ! plan_audit_changed_files "$PLAN_SNAPSHOT" "$PLAN_ALLOWED" "$PLAN_VIOLATIONS"; then
+      echo ""
+      echo "✗ Plan audit failed — unauthorized files changed:"
+      sed 's/^/  - /' "$PLAN_VIOLATIONS"
+      echo "  Build is blocked until these changes are resolved."
+      EXIT_CODE=1
+    elif [ "$EXIT_CODE" -eq 0 ]; then
+      if ! plan_commit_and_push_changes "$PLAN_ALLOWED"; then
+        EXIT_CODE=1
+      fi
+    fi
+
+    rm -f "$PLAN_SNAPSHOT" "$PLAN_ALLOWED" "$PLAN_VIOLATIONS"
+
     # Plan mode is one-shot — exit after this session
     if [ "$EXIT_CODE" -eq 0 ]; then
       echo ""
       echo "=== Planning session complete. Run 'build' to start executing. ==="
     fi
     break
+  fi
+
+  if [ -f "$PLAN_AUDIT_FILE" ]; then
+    if DIRTY_VIOLATIONS=$(plan_violation_paths_still_dirty); then
+      echo ""
+      echo "✗ Build blocked — unresolved plan-mode file violations remain:"
+      printf '%s\n' "$DIRTY_VIOLATIONS" | sed 's/^/  - /'
+      echo "  Resolve or discard those changes, then rerun plan/build."
+      break
+    fi
+    rm -f "$PLAN_AUDIT_FILE"
   fi
 
   # --- Build mode: detect agent ---
