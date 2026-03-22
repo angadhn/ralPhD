@@ -2804,6 +2804,108 @@ VAL_TEST_DIR=$(mktemp -d)
 rm -rf "$VAL_TEST_DIR"
 echo ""
 
+# ── Test 22: Yield signal check in ralph_agent.py ─────────────
+echo "--- 22. Yield Signal ---"
+
+# 22a. should_yield() returns True when RALPH_RUN is set and yield file exists
+YIELD_TEST_DIR=$(mktemp -d)
+touch "$YIELD_TEST_DIR/yield"
+if RALPH_RUN="$YIELD_TEST_DIR" python3 -c "
+import sys, os
+sys.path.insert(0, '$RALPH_HOME')
+from ralph_agent import should_yield
+assert should_yield() == True, 'should_yield() must return True when yield file exists'
+" 2>/dev/null; then
+  pass "22a: should_yield() returns True with yield file"
+else
+  fail "22a: should_yield() returns True with yield file"
+fi
+
+# 22b. should_yield() returns False when RALPH_RUN is unset
+if python3 -c "
+import sys, os
+os.environ.pop('RALPH_RUN', None)
+sys.path.insert(0, '$RALPH_HOME')
+from ralph_agent import should_yield
+assert should_yield() == False, 'should_yield() must return False when RALPH_RUN unset'
+" 2>/dev/null; then
+  pass "22b: should_yield() returns False when RALPH_RUN unset"
+else
+  fail "22b: should_yield() returns False when RALPH_RUN unset"
+fi
+
+# 22c. should_yield() returns False when RALPH_RUN set but no yield file
+YIELD_EMPTY_DIR=$(mktemp -d)
+if RALPH_RUN="$YIELD_EMPTY_DIR" python3 -c "
+import sys, os
+sys.path.insert(0, '$RALPH_HOME')
+from ralph_agent import should_yield
+assert should_yield() == False, 'should_yield() must return False when no yield file'
+" 2>/dev/null; then
+  pass "22c: should_yield() returns False without yield file"
+else
+  fail "22c: should_yield() returns False without yield file"
+fi
+
+# 22d. Loop integration: yield gate stops agent loop after one turn
+if RALPH_RUN="$YIELD_TEST_DIR" RALPH_HOME="$RALPH_HOME" python3 -c "
+import sys, os, types
+sys.path.insert(0, '$RALPH_HOME')
+import ralph_agent
+
+# Track call_model invocations
+call_count = 0
+
+class MockToolCall:
+    name = 'read_file'
+    id = 'tc_mock_1'
+    input = {'path': '/tmp/test'}
+
+class MockResponse:
+    text_blocks = ['mock output']
+    tool_calls = [MockToolCall()]
+    input_tokens = 100
+    output_tokens = 50
+    cache_creation_input_tokens = 0
+    cache_read_input_tokens = 0
+    raw_content = None
+    raw = None
+
+def mock_create_client(provider):
+    return None
+
+def mock_call_model(*args, **kwargs):
+    global call_count
+    call_count += 1
+    return MockResponse()
+
+def mock_execute_tool(name, inp):
+    return 'mock result'
+
+# Monkeypatch
+ralph_agent.create_client = mock_create_client
+ralph_agent.call_model = mock_call_model
+ralph_agent.execute_tool = mock_execute_tool
+
+# Yield file already exists in YIELD_TEST_DIR (created above)
+# Run the agent — should complete one turn then stop
+ralph_agent.run_agent(
+    agent_name='coder',
+    system_prompt='test',
+    task='do something',
+    model='claude-sonnet-4-6',
+    max_tokens=4096,
+)
+assert call_count == 1, f'Expected 1 call_model invocation, got {call_count}'
+" 2>/dev/null; then
+  pass "22d: yield gate stops loop after one turn"
+else
+  fail "22d: yield gate stops loop after one turn"
+fi
+
+rm -rf "$YIELD_TEST_DIR" "$YIELD_EMPTY_DIR"
+echo ""
+
 # ── Summary ───────────────────────────────────────────────────
 echo "=== Results: $PASS/$TESTS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then

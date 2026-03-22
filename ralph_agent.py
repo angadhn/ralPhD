@@ -32,6 +32,19 @@ from providers import (
 )
 
 
+def should_yield() -> bool:
+    """Check if the shell monitor has signalled the agent to yield.
+
+    The monitor (lib/monitor.sh) touches $RALPH_RUN/yield when context usage
+    exceeds the threshold.  Guards against empty RALPH_RUN to avoid resolving
+    a bare 'yield' relative to cwd.
+    """
+    run_dir = os.environ.get("RALPH_RUN", "")
+    if not run_dir:
+        return False
+    return os.path.exists(os.path.join(run_dir, "yield"))
+
+
 def truncate_result(result: str, limit: int = 50000) -> str:
     """Truncate tool results while preserving complete lines/JSON entries.
 
@@ -221,6 +234,11 @@ def run_agent(agent_name: str, system_prompt: str, task: str, model: str,
 
         # Feed results back, loop again
         messages.append(format_tool_results(provider, tool_results))
+
+        # End-of-turn gates: yield signal from monitor
+        if should_yield():
+            print("  [yield] Context threshold reached — stopping agent loop", file=sys.stderr)
+            break
 
     duration_ms = int(_time.time() * 1000) - start_ms
 
