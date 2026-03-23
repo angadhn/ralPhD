@@ -412,8 +412,10 @@ while true; do
           --tools "" \
           --mcp-config "$MCP_CONFIG" \
           --append-system-prompt "$AGENT_SYSTEM_PROMPT" \
-          --output-format json \
-          --dangerously-skip-permissions > $RALPH_RUN/output.json &
+          --output-format stream-json \
+          --verbose \
+          --dangerously-skip-permissions \
+          | python3 "${RALPH_HOME}/lib/stream-filter.py" "$RALPH_RUN/output.json" &
         CLAUDE_PID=$!
       else
         echo "$PROMPT" | python3 "${RALPH_HOME}/ralph_agent.py" --agent "$CURRENT_AGENT" --task - --model "$CLAUDE_MODEL" --output-json $RALPH_RUN/output.json &
