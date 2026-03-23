@@ -2624,6 +2624,32 @@ from tools._citation import _build_doi_bib_index
 idx = _build_doi_bib_index('tests/fixtures/verify/test.bib')
 assert 'Hybrid' in idx['10.1016/j.jcp.2009.01.001']['title']
 "
+
+# ── 31. verify_cited_claims: PDF text extraction ───────────────
+
+check "31a: extract_page_texts returns 2 pages of text" \
+  python3 -c "
+from tools.pdf import extract_page_texts
+result = extract_page_texts('tests/fixtures/verify/test_paper.pdf')
+assert len(result['pages']) == 2, f'Expected 2, got {len(result["pages"])}'
+assert not result['is_scanned']
+"
+
+check "31b: extract_page_texts page 1 contains expected text" \
+  python3 -c "
+from tools.pdf import extract_page_texts
+result = extract_page_texts('tests/fixtures/verify/test_paper.pdf')
+text = result['pages'][0]['text']
+assert '40-60%' in text or '40\u201360%' in text, f'Expected 40-60%% in page 1 text'
+"
+
+check "31c: extract_page_texts respects pages param" \
+  python3 -c "
+from tools.pdf import extract_page_texts
+result = extract_page_texts('tests/fixtures/verify/test_paper.pdf', pages=[1])
+assert len(result['pages']) == 1
+assert result['pages'][0]['page'] == 2
+"
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────
