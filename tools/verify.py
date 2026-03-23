@@ -6,10 +6,29 @@ text for claims lacking ledger backing or with low confidence.
 
 import json
 import os
+import re
 from pathlib import Path
 
 from tools._helpers import parse_jsonl, format_truncated
 from tools._citation import _build_doi_bib_index, manifest_check
+from tools.pdf import extract_page_texts
+
+# Stopwords for term scoring (common English words to ignore)
+_STOPWORDS = frozenset(
+    "a an the is are was were be been being have has had do does did "
+    "will would shall should may might can could of in to for on with "
+    "at by from as into through during before after above below between "
+    "and or but not no nor so yet both either neither each every all "
+    "any few more most other some such than too very also just about "
+    "over only then them they their there these those this that it its "
+    "he she we you his her our your".split()
+)
+
+# Number extraction regex
+_NUM_RE = re.compile(r"\d+\.?\d*\s*%?")
+
+# PDF text cache (keyed by absolute path)
+_pdf_text_cache = {}
 
 
 def _handle_verify_cited_claims(inp):
@@ -77,10 +96,9 @@ def _handle_verify_cited_claims(inp):
             verdicts.append(verdict)
             continue
 
-        # Fall through to PDF (stub for now — returns PDF_MISSING)
-        verdict["support_label"] = "PDF_MISSING"
-        verdict["support_source"] = "pdf"
-        verdict["notes"] = "No ledger backing; PDF fallback not yet implemented"
+        # Fall through to PDF
+        pdf_result = _resolve_from_pdf(source_key, doi, claim, papers_dir, auto_download)
+        verdict.update(pdf_result)
         verdicts.append(verdict)
 
     # Write JSONL output
@@ -106,7 +124,6 @@ def _resolve_from_ledger(source_key, claim, ledger_by_key):
     best_overlap = 0
     for le in ledger_list:
         le_claim = le.get("claim", "")
-        # Simple overlap: count common words
         claim_words = set(claim.lower().split())
         le_words = set(le_claim.lower().split())
         overlap = len(claim_words & le_words) / max(len(claim_words), 1)
@@ -121,7 +138,6 @@ def _resolve_from_ledger(source_key, claim, ledger_by_key):
     extraction_type = best.get("extraction_type", "").lower()
     support_quote = best.get("support_quote")
 
-    # Ledger verdict rules
     if confidence == "high" and extraction_type == "direct_quote" and support_quote:
         return {"support_label": "DIRECT_SUPPORT", "support_source": "ledger",
                 "support_summary": f"Ledger: direct quote from {source_key}",
@@ -139,8 +155,150 @@ def _resolve_from_ledger(source_key, claim, ledger_by_key):
         return {"support_label": "PARTIAL_SUPPORT", "support_source": "ledger",
                 "support_summary": f"Ledger: medium confidence from {source_key}",
                 "support_page": best.get("source_section")}
-    # low or inference → fall through
     return None
+
+
+def _resolve_from_pdf(source_key, doi, claim, papers_dir, auto_download):
+    """Resolve a claim from the PDF. Returns dict update."""
+    # Find PDF file
+    pdf_path = _find_pdf(source_key, doi, papers_dir)
+
+    if not pdf_path:
+        if auto_download:
+            try:
+                from tools.download import _handle_citation_download
+                _handle_citation_download({"doi": doi, "output_dir": papers_dir})
+                pdf_path = _find_pdf(source_key, doi, papers_dir)
+            except Exception:
+                pass
+
+    if not pdf_path:
+        return {"support_label": "PDF_MISSING", "support_source": "pdf",
+                "notes": f"No PDF found for {source_key or doi}"}
+
+    # Extract text (with caching)
+    abs_path = str(Path(pdf_path).resolve())
+    if abs_path in _pdf_text_cache:
+        text_result = _pdf_text_cache[abs_path]
+    else:
+        text_result = extract_page_texts(pdf_path)
+        _pdf_text_cache[abs_path] = text_result
+
+    if text_result["is_scanned"]:
+        return {"support_label": "TEXT_UNAVAILABLE", "support_source": "pdf",
+                "notes": "Scanned PDF — no extractable text"}
+
+    if not text_result["pages"]:
+        return {"support_label": "TEXT_UNAVAILABLE", "support_source": "pdf",
+                "notes": "No text extracted from PDF"}
+
+    # Score pages
+    return _score_claim_against_pages(claim, text_result["pages"])
+
+
+def _find_pdf(source_key, doi, papers_dir):
+    """Find a PDF by source_key prefix or manifest lookup."""
+    pdir = Path(papers_dir)
+    if not pdir.exists():
+        return None
+
+    # Scan for files starting with source_key
+    if source_key:
+        for f in pdir.iterdir():
+            if f.suffix.lower() == ".pdf" and f.name.startswith(source_key):
+                return str(f)
+
+    # Try manifest
+    if doi:
+        result = manifest_check(doi, str(pdir))
+        if result.get("status") == "SKIP" and result.get("file"):
+            candidate = pdir / result["file"]
+            if candidate.exists():
+                return str(candidate)
+
+    return None
+
+
+def _tokenize_claim(claim):
+    """Tokenize claim: lowercase, remove stopwords, keep 3+ char tokens."""
+    words = re.findall(r"[a-zA-Z0-9%]+", claim.lower())
+    return [w for w in words if len(w) >= 3 and w not in _STOPWORDS]
+
+
+def _extract_numbers(text):
+    """Extract numeric values (with optional %) from text."""
+    return set(_NUM_RE.findall(text))
+
+
+def _score_claim_against_pages(claim, pages):
+    """Score claim against all pages using term co-occurrence + number anchoring."""
+    claim_tokens = _tokenize_claim(claim)
+    if not claim_tokens:
+        return {"support_label": "NO_SUPPORT", "support_source": "pdf",
+                "score": 0, "notes": "No scorable terms in claim"}
+
+    claim_numbers = _extract_numbers(claim)
+
+    best_score = 0.0
+    best_page = None
+    best_text = ""
+    best_numbers_match = False
+    best_numbers_contradict = False
+
+    for page_info in pages:
+        page_text = page_info["text"]
+        page_num = page_info["page"]
+        text_lower = page_text.lower()
+
+        # Term hits: fraction of claim tokens found in page
+        hits = sum(1 for t in claim_tokens if t in text_lower)
+        term_score = hits / len(claim_tokens)
+
+        if term_score < 0.3:
+            continue
+
+        # Number anchoring
+        page_numbers = _extract_numbers(page_text)
+        numbers_match = bool(claim_numbers and claim_numbers & page_numbers)
+        numbers_contradict = False
+
+        if claim_numbers and not numbers_match and page_numbers:
+            # Check if the page contains the same topic terms but different numbers
+            # This indicates a potential contradiction
+            claim_nums_clean = {n.strip().rstrip("%") for n in claim_numbers}
+            page_nums_clean = {n.strip().rstrip("%") for n in page_numbers}
+            if claim_nums_clean != page_nums_clean and term_score >= 0.4:
+                # Page discusses same topic (high term overlap) but with different numbers
+                numbers_contradict = True
+
+        if term_score > best_score:
+            best_score = term_score
+            best_page = page_num
+            best_text = page_text
+            best_numbers_match = numbers_match
+            best_numbers_contradict = numbers_contradict
+
+    if best_page is None:
+        return {"support_label": "NO_SUPPORT", "support_source": "pdf",
+                "score": 0, "notes": "No page matched claim terms above threshold"}
+
+    # Build support quote (first ~200 chars of best page)
+    quote = best_text.strip()[:200]
+
+    if best_numbers_contradict:
+        return {"support_label": "CONTRADICTED", "support_source": "pdf",
+                "support_page": best_page, "support_quote": quote,
+                "score": round(best_score, 3),
+                "notes": "Topic terms match but numbers differ"}
+
+    if best_numbers_match and best_score >= 0.5:
+        return {"support_label": "DIRECT_SUPPORT", "support_source": "pdf",
+                "support_page": best_page, "support_quote": quote,
+                "score": round(best_score, 3)}
+
+    return {"support_label": "PARTIAL_SUPPORT", "support_source": "pdf",
+            "support_page": best_page, "support_quote": quote,
+            "score": round(best_score, 3)}
 
 
 def _build_report(verdicts):
@@ -159,7 +317,6 @@ def _build_report(verdicts):
             lines.append(f"  {label}: {counts[label]}")
     lines.append("")
 
-    # Flag issues
     issues = [v for v in verdicts if v["support_label"] in
               ("CONTRADICTED", "NO_SUPPORT", "PDF_MISSING", "TEXT_UNAVAILABLE")]
     if not issues:
