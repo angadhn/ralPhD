@@ -10,7 +10,7 @@
 | Task | Status | Notes |
 |------|--------|-------|
 | 1. Fixtures | done | commit da1dda7 |
-| 2. _build_doi_bib_index | pending | depends: 1 |
+| 2. _build_doi_bib_index | done | RED 777a361, GREEN 9818e20 |
 | 3. extract_page_texts | pending | depends: 1 |
 | 4. verify_cited_claims ledger-first | pending | depends: 2,3 |
 | 5. PDF fallback verdicts | pending | depends: 4 |
@@ -24,4 +24,4 @@
 
 ## Next Task
 
-Task 2: `_build_doi_bib_index` — red/green TDD — **coder**
+Task 3: `extract_page_texts` — red/green TDD — **coder**
