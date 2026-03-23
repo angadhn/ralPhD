@@ -564,6 +564,31 @@ def manifest_add(doi: str, file: str, scout: str, title: str, papers_dir: str, n
     return {"status": "OK", "message": f"Added {file} to manifest"}
 
 
+# ── DOI-to-bib bridge ───────────────────────────────────────────
+
+
+def _build_doi_bib_index(bib_path: str) -> dict:
+    """Build a DOI → {source_key, title} index from a .bib file."""
+    try:
+        import bibtexparser
+    except ImportError:
+        return {}
+    bib_file = Path(bib_path)
+    if not bib_file.exists():
+        return {}
+    with open(bib_file, "r", encoding="utf-8") as f:
+        db = bibtexparser.load(f)
+    result = {}
+    for entry in db.entries:
+        doi = entry.get("doi", "").strip()
+        if doi:
+            result[doi.lower().strip()] = {
+                "source_key": entry.get("ID", ""),
+                "title": entry.get("title", "").strip("{}"),
+            }
+    return result
+
+
 # ── Cited tracker ────────────────────────────────────────────────
 
 
