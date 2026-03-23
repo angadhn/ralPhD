@@ -2694,6 +2694,152 @@ assert missing[0]['support_source'] != 'ledger', f'Missing2024 must not get ledg
 "
 
 rm -rf "$VERIFY_OUT"
+
+# ── 33. verify_cited_claims: PDF fallback verdicts ─────────────
+
+VERIFY_OUT=$(mktemp -d)
+# Create a single-entry tracker + empty ledger to isolate PDF scoring.
+SCORING_DIR=$(mktemp -d)
+echo '{"doi": "10.1016/j.jcp.2009.01.001", "section": "2.1", "role": "primary_evidence", "claim": "Hybrid RANS-LES methods reduce computational cost by 40-60% compared to wall-resolved LES"}' > "$SCORING_DIR/tracker.jsonl"
+echo '' > "$SCORING_DIR/empty-ledger.jsonl"
+cp tests/fixtures/verify/test_paper.pdf "$SCORING_DIR/Spalart2009_Hybrid_RANS-LES_cost.pdf"
+
+check "33a: Missing2024 (no PDF, auto_download=False) → PDF_MISSING" \
+  python3 -c "
+import json
+from tools.verify import _handle_verify_cited_claims
+out = '$VERIFY_OUT'
+_handle_verify_cited_claims({
+    'tracker_file': 'tests/fixtures/verify/cited_tracker.jsonl',
+    'ledger_file': 'tests/fixtures/verify/evidence-ledger.jsonl',
+    'bib_file': 'tests/fixtures/verify/test.bib',
+    'papers_dir': 'tests/fixtures/verify/',
+    'output_dir': out,
+    'auto_download': False,
+})
+records = [json.loads(l) for l in open(out + '/verify_report.jsonl')]
+missing = [r for r in records if r['doi'] == '10.9999/missing']
+assert len(missing) == 1
+assert missing[0]['support_label'] == 'PDF_MISSING', f'Expected PDF_MISSING, got {missing[0][\"support_label\"]}'
+assert missing[0]['support_source'] == 'pdf'
+"
+
+check "33b: Larsson2016 (low-confidence inference) falls through to PDF, not ledger" \
+  python3 -c "
+import json
+records = [json.loads(l) for l in open('$VERIFY_OUT/verify_report.jsonl')]
+larsson = [r for r in records if r['doi'] == '10.1146/annurev-fluid-2016']
+assert len(larsson) == 1
+assert larsson[0]['support_source'] == 'pdf', f'Larsson2016 should fall through to PDF, got source={larsson[0][\"support_source\"]}'
+"
+
+check "33c: JSONL report has one record per tracker entry" \
+  python3 -c "
+import json
+records = [json.loads(l) for l in open('$VERIFY_OUT/verify_report.jsonl')]
+assert len(records) == 4, f'Expected 4 records (one per tracker entry), got {len(records)}'
+assert all('support_label' in r for r in records)
+assert all('doi' in r for r in records)
+"
+
+rm -rf "$VERIFY_OUT"
+
+# ── 33d-f: tests that REQUIRE real PDF scoring ──
+
+VERIFY_OUT2=$(mktemp -d)
+
+check "33d: PDF with matching claim text → DIRECT_SUPPORT or PARTIAL_SUPPORT (not PDF_MISSING)" \
+  python3 -c "
+import json
+from tools.verify import _handle_verify_cited_claims
+_handle_verify_cited_claims({
+    'tracker_file': '$SCORING_DIR/tracker.jsonl',
+    'ledger_file': '$SCORING_DIR/empty-ledger.jsonl',
+    'bib_file': 'tests/fixtures/verify/test.bib',
+    'papers_dir': '$SCORING_DIR/',
+    'output_dir': '$VERIFY_OUT2',
+    'auto_download': False,
+})
+records = [json.loads(l) for l in open('$VERIFY_OUT2/verify_report.jsonl')]
+assert len(records) == 1
+r = records[0]
+assert r['support_label'] in ('DIRECT_SUPPORT', 'PARTIAL_SUPPORT'), f'PDF with matching text should score support, got {r[\"support_label\"]}'
+assert r['support_source'] == 'pdf'
+assert r.get('support_page') is not None, 'Must report the page where support was found'
+"
+
+check "33e: PDF scoring returns a non-null support_quote snippet" \
+  python3 -c "
+import json
+records = [json.loads(l) for l in open('$VERIFY_OUT2/verify_report.jsonl')]
+r = records[0]
+assert r.get('support_quote') is not None and len(r['support_quote']) > 0, f'Must return a support_quote text snippet from the PDF'
+"
+
+check "33f: PDF scoring sets a numeric score > 0" \
+  python3 -c "
+import json
+records = [json.loads(l) for l in open('$VERIFY_OUT2/verify_report.jsonl')]
+r = records[0]
+assert isinstance(r.get('score'), (int, float)) and r['score'] > 0, f'Score must be numeric and > 0 for a match, got {r.get(\"score\")}'
+"
+
+rm -rf "$VERIFY_OUT2"
+
+# ── 33g-h: CONTRADICTED and TEXT_UNAVAILABLE ──
+
+CONTRA_DIR=$(mktemp -d)
+echo '{"doi": "10.1146/annurev-fluid-2016", "section": "3.1", "role": "primary_evidence", "claim": "Wall-modeled LES is expected to become competitive for industrial flows with 25% error reduction"}' > "$CONTRA_DIR/tracker.jsonl"
+echo '' > "$CONTRA_DIR/empty-ledger.jsonl"
+cp tests/fixtures/verify/test_paper.pdf "$CONTRA_DIR/Larsson2016_Wall-modeled_LES_future.pdf"
+VERIFY_OUT3=$(mktemp -d)
+
+check "33g: claim says 25% but PDF page 2 says 15% with same topic terms → CONTRADICTED" \
+  python3 -c "
+import json
+from tools.verify import _handle_verify_cited_claims
+_handle_verify_cited_claims({
+    'tracker_file': '$CONTRA_DIR/tracker.jsonl',
+    'ledger_file': '$CONTRA_DIR/empty-ledger.jsonl',
+    'bib_file': 'tests/fixtures/verify/test.bib',
+    'papers_dir': '$CONTRA_DIR/',
+    'output_dir': '$VERIFY_OUT3',
+    'auto_download': False,
+})
+records = [json.loads(l) for l in open('$VERIFY_OUT3/verify_report.jsonl')]
+assert len(records) == 1
+r = records[0]
+assert r['support_label'] == 'CONTRADICTED', f'Topic terms match but 25%% vs 15%% -- expected CONTRADICTED, got {r[\"support_label\"]}'
+"
+
+rm -rf "$CONTRA_DIR" "$VERIFY_OUT3"
+
+# 33h: scanned PDF → TEXT_UNAVAILABLE
+SCAN_DIR=$(mktemp -d)
+echo '{"doi": "10.1016/j.jcp.2009.01.001", "section": "2.1", "role": "primary_evidence", "claim": "Hybrid RANS-LES methods reduce computational cost by 40-60%"}' > "$SCAN_DIR/tracker.jsonl"
+echo '' > "$SCAN_DIR/empty-ledger.jsonl"
+cp tests/fixtures/verify/scanned_paper.pdf "$SCAN_DIR/Spalart2009_Hybrid_RANS-LES_cost.pdf"
+VERIFY_OUT4=$(mktemp -d)
+
+check "33h: scanned PDF (no extractable text) → TEXT_UNAVAILABLE" \
+  python3 -c "
+import json
+from tools.verify import _handle_verify_cited_claims
+_handle_verify_cited_claims({
+    'tracker_file': '$SCAN_DIR/tracker.jsonl',
+    'ledger_file': '$SCAN_DIR/empty-ledger.jsonl',
+    'bib_file': 'tests/fixtures/verify/test.bib',
+    'papers_dir': '$SCAN_DIR/',
+    'output_dir': '$VERIFY_OUT4',
+    'auto_download': False,
+})
+records = [json.loads(l) for l in open('$VERIFY_OUT4/verify_report.jsonl')]
+assert len(records) == 1
+r = records[0]
+assert r['support_label'] == 'TEXT_UNAVAILABLE', f'Scanned PDF should produce TEXT_UNAVAILABLE, got {r[\"support_label\"]}'
+"
+
+rm -rf "$SCAN_DIR" "$VERIFY_OUT4" "$SCORING_DIR"
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────
