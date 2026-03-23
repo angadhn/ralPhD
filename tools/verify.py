@@ -167,7 +167,7 @@ def _resolve_from_pdf(source_key, doi, claim, papers_dir, auto_download):
         if auto_download:
             try:
                 from tools.download import _handle_citation_download
-                _handle_citation_download({"doi": doi, "output_dir": papers_dir})
+                _handle_citation_download({"doi": doi, "papers_dir": papers_dir})
                 pdf_path = _find_pdf(source_key, doi, papers_dir)
             except Exception:
                 pass
