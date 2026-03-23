@@ -52,7 +52,17 @@ def _handle_verify_cited_claims(inp):
         return f"No tracker entries match section_filter='{section_filter}'"
 
     # Build DOI→bib index
-    doi_bib = _build_doi_bib_index(bib_file) if bib_file else {}
+    if bib_file:
+        try:
+            doi_bib = _build_doi_bib_index(bib_file)
+        except ImportError:
+            return (f"ERROR: bibtexparser is not installed — cannot build DOI→source_key "
+                    f"index from {bib_file}. Ledger lookups will fail silently without it. "
+                    f"Run: pip install 'bibtexparser<2'")
+        except FileNotFoundError as e:
+            return f"ERROR: {e} — cannot build DOI→source_key index."
+    else:
+        doi_bib = {}
 
     # Parse ledger, index by source_key
     ledger_entries = parse_jsonl(ledger_file, on_error="skip")

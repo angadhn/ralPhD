@@ -568,14 +568,15 @@ def manifest_add(doi: str, file: str, scout: str, title: str, papers_dir: str, n
 
 
 def _build_doi_bib_index(bib_path: str) -> dict:
-    """Build a DOI → {source_key, title} index from a .bib file."""
-    try:
-        import bibtexparser
-    except ImportError:
-        return {}
+    """Build a DOI → {source_key, title} index from a .bib file.
+
+    Raises ImportError if bibtexparser is not installed.
+    Raises FileNotFoundError if the .bib file does not exist.
+    """
+    import bibtexparser
     bib_file = Path(bib_path)
     if not bib_file.exists():
-        return {}
+        raise FileNotFoundError(f"BibTeX file not found: {bib_path}")
     with open(bib_file, "r", encoding="utf-8") as f:
         db = bibtexparser.load(f)
     result = {}
