@@ -31,6 +31,11 @@ _NUM_RE = re.compile(r"\d+\.?\d*\s*%?")
 _pdf_text_cache = {}
 
 
+def _section_matches(section, filter_val):
+    """Match section exactly or as dot-separated prefix."""
+    return section == filter_val or section.startswith(filter_val + ".")
+
+
 def _handle_verify_cited_claims(inp):
     tracker_file = inp["tracker_file"]
     ledger_file = inp["ledger_file"]
@@ -47,7 +52,7 @@ def _handle_verify_cited_claims(inp):
 
     # Section filter
     if section_filter:
-        entries = [e for e in entries if e.get("section", "").startswith(section_filter)]
+        entries = [e for e in entries if _section_matches(e.get("section", ""), section_filter)]
     if not entries:
         return f"No tracker entries match section_filter='{section_filter}'"
 
