@@ -22,17 +22,22 @@ cb_is_open() {
 }
 
 validate_single_task_completion() {
-  # Compares plan before/after an iteration. Returns 1 if >1 task was newly checked.
+  # Compares plan before/after an iteration using set diff. Returns 1 if >1 task was newly checked.
   local before=$1
   local after=$2
-  local before_count after_count newly_completed
-  
-  before_count=$(grep -c "^\- \[x\]" "$before" 2>/dev/null) || before_count=0
-  after_count=$(grep -c "^\- \[x\]" "$after" 2>/dev/null) || after_count=0
-  newly_completed=$((after_count - before_count))
-  
-  if [ "$newly_completed" -gt 1 ]; then
-    echo "  ✗ Multi-task violation: $newly_completed tasks completed in one iteration (max 1)"
+  local before_set after_set newly_checked count
+
+  before_set=$(grep '^\- \[x\]' "$before" 2>/dev/null \
+    | sed 's/^- \[x\] \([0-9][0-9]*\)\..*/\1/' | sort -n) || true
+  after_set=$(grep '^\- \[x\]' "$after" 2>/dev/null \
+    | sed 's/^- \[x\] \([0-9][0-9]*\)\..*/\1/' | sort -n) || true
+
+  newly_checked=$(comm -13 <(printf '%s\n' $before_set | grep -v '^$') \
+                           <(printf '%s\n' $after_set | grep -v '^$')) || true
+  count=$(echo "$newly_checked" | grep -c '[0-9]') || count=0
+
+  if [ "$count" -gt 1 ]; then
+    echo "  ✗ Multi-task violation: tasks $(echo $newly_checked | tr '\n' ',' | sed 's/,$//') completed in one iteration (max 1)"
     return 1
   fi
   return 0
