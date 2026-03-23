@@ -104,78 +104,13 @@
   VERIFY: bash tests/test_single_task_enforcement.sh
   Commits: test(red): add set-based detection test G and fix(green): detect actual newly-checked tasks via set diff
 
-- [ ] 5. Section filter dot-boundary matching (red/green TDD) — **coder**
+- [x] 5. Section filter dot-boundary matching (red/green TDD) — **coder**
   RED: create `tests/test_section_filter_scoping.py`
-    ```python
-    """RED test: section_filter='1' must not match section '10'."""
-    import json, os
-    from pathlib import Path
-    from tools.verify import _handle_verify_cited_claims
-
-    def test_filter_1_excludes_10(tmp_path):
-        """section_filter='1' matches '1' and '1.1' but not '10' or '2.1'."""
-        tracker = tmp_path / "tracker.jsonl"
-        tracker.write_text(
-            '{"doi":"10.1/a","section":"1","claim":"claim a","role":"support"}\n'
-            '{"doi":"10.1/b","section":"1.1","claim":"claim b","role":"support"}\n'
-            '{"doi":"10.1/c","section":"10","claim":"claim c","role":"support"}\n'
-            '{"doi":"10.1/d","section":"2.1","claim":"claim d","role":"support"}\n'
-        )
-        ledger = tmp_path / "ledger.jsonl"
-        ledger.write_text("")
-        papers = tmp_path / "papers"
-        papers.mkdir()
-        output = tmp_path / "output"
-        _handle_verify_cited_claims({
-            "tracker_file": str(tracker),
-            "ledger_file": str(ledger),
-            "bib_file": "",
-            "papers_dir": str(papers),
-            "section_filter": "1",
-            "output_dir": str(output),
-        })
-        verdicts = [json.loads(l) for l in (output / "verify_report.jsonl").read_text().strip().split("\n")]
-        sections = {v["section"] for v in verdicts}
-        assert sections == {"1", "1.1"}, f"Expected {{'1', '1.1'}}, got {sections}"
-
-    def test_filter_exact_match(tmp_path):
-        """section_filter='2.1' matches only '2.1'."""
-        tracker = tmp_path / "tracker.jsonl"
-        tracker.write_text(
-            '{"doi":"10.1/a","section":"2","claim":"x","role":"support"}\n'
-            '{"doi":"10.1/b","section":"2.1","claim":"y","role":"support"}\n'
-            '{"doi":"10.1/c","section":"2.10","claim":"z","role":"support"}\n'
-        )
-        ledger = tmp_path / "ledger.jsonl"
-        ledger.write_text("")
-        papers = tmp_path / "papers"
-        papers.mkdir()
-        output = tmp_path / "output"
-        _handle_verify_cited_claims({
-            "tracker_file": str(tracker),
-            "ledger_file": str(ledger),
-            "bib_file": "",
-            "papers_dir": str(papers),
-            "section_filter": "2.1",
-            "output_dir": str(output),
-        })
-        verdicts = [json.loads(l) for l in (output / "verify_report.jsonl").read_text().strip().split("\n")]
-        sections = {v["section"] for v in verdicts}
-        assert sections == {"2.1"}, f"Expected {{'2.1'}}, got {sections}"
-    ```
     test_filter_1_excludes_10 fails because startswith("1") matches "10" → 3 verdicts not 2
     test_filter_exact_match fails because startswith("2.1") matches "2.10" → 2 verdicts not 1
   GREEN:
-    `tools/verify.py`: add helper at module level (after `_pdf_text_cache = {}` at line 31):
-      ```python
-      def _section_matches(section, filter_val):
-          """Match section exactly or as dot-separated prefix."""
-          return section == filter_val or section.startswith(filter_val + ".")
-      ```
-    `tools/verify.py` line 50: replace
-      `entries = [e for e in entries if e.get("section", "").startswith(section_filter)]`
-    with
-      `entries = [e for e in entries if _section_matches(e.get("section", ""), section_filter)]`
+    `tools/verify.py`: add `_section_matches(section, filter_val)` helper — exact match or dot-prefixed match
+    `tools/verify.py`: replace `startswith(section_filter)` with `_section_matches()`
   VERIFY: pytest tests/test_section_filter_scoping.py
   Commits: test(red): add section filter boundary tests and fix(green): use dot-boundary prefix matching
 
