@@ -18,7 +18,7 @@
 
 ## Last Reflection
 
-Task 4 complete. Rewrote validate_single_task_completion from count-based delta to set-based diff using comm -13. Test G confirms the fix: check+uncheck swap with 2 newly checked tasks is now correctly detected as a violation. All tests pass (7/7 enforcement + 5/5 TDD validation).
+Iteration 15: On track. 4/6 tasks done with clean TDD cadence. No drift or wasted effort. Task 5 (section filter) is the last code change before final critic review. No adjustments needed.
 
 ## Next Task
 
