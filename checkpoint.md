@@ -14,7 +14,7 @@
 | 3. extract_page_texts | done | RED 7d57a63, GREEN 7a7506b |
 | 4. verify_cited_claims ledger-first | done | RED 1651ad3, GREEN 27d3095 |
 | 5. PDF fallback verdicts | done | RED fa193ef, GREEN fefd010 |
-| 6. section_filter | pending | depends: 5 |
+| 6. section_filter | done | RED passes immediately (implemented in task 4), regression tests added 6ba0357 |
 | 7. Tool registration + agent prompts | pending | depends: 6 |
 | 8. Regression guard + spec update | pending | |
 
@@ -24,4 +24,4 @@
 
 ## Next Task
 
-Task 6: `section_filter` — red/green TDD — **coder**
+Task 7: Tool registration + agent prompts — red/green TDD — **coder**
