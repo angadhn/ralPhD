@@ -47,12 +47,12 @@ SERVER_TOOLS = {
 
 AGENT_TOOLS = {
     "paper-writer": _ESSENTIALS + ["check_language", "citation_lint", "compile_latex"],
-    "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure", "check_claims", "citation_verify_all", "verify_cited_claims"],
+    "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure", "check_claims", "citation_verify_all", "verify_cited_claims", "build_cited_tracker_from_tex"],
     "scout": _ESSENTIALS + ["web_search", "pdf_metadata", "citation_lookup", "citation_verify", "citation_verify_all", "citation_manifest", "citation_download"],
     "deep-reader": _ESSENTIALS + ["pdf_metadata", "extract_figure", "view_pdf_page"],
     "research-coder": _ESSENTIALS,
     "figure-stylist": _ESSENTIALS + ["check_figure", "view_pdf_page"],
-    "editor": _ESSENTIALS + ["check_claims", "check_language", "citation_lint", "citation_verify_all", "verify_cited_claims"],
+    "editor": _ESSENTIALS + ["check_claims", "check_language", "citation_lint", "citation_verify_all", "verify_cited_claims", "build_cited_tracker_from_tex"],
     "coherence-reviewer": _ESSENTIALS + ["check_claims", "check_language"],
     "provocateur": _ESSENTIALS + [],
     "synthesizer": _ESSENTIALS + ["citation_lint", "citation_verify_all"],

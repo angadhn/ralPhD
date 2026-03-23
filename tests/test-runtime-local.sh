@@ -2912,6 +2912,18 @@ check "35b: verify_cited_claims in AGENT_TOOLS for editor" \
 check "35c: verify_cited_claims in AGENT_TOOLS for critic" \
   python3 -c "from tools import AGENT_TOOLS; assert 'verify_cited_claims' in AGENT_TOOLS['critic']"
 
+check "35g: build_cited_tracker_from_tex in TOOLS registry" \
+  python3 -c "from tools import TOOLS; assert 'build_cited_tracker_from_tex' in TOOLS"
+
+check "35h: build_cited_tracker_from_tex in AGENT_TOOLS for editor + critic" \
+  python3 -c "from tools import AGENT_TOOLS; assert 'build_cited_tracker_from_tex' in AGENT_TOOLS['editor']; assert 'build_cited_tracker_from_tex' in AGENT_TOOLS['critic']"
+
+check "35i: editor.md mentions build_cited_tracker_from_tex" \
+  grep -q "build_cited_tracker_from_tex" "$RALPH_HOME/.claude/agents/editor.md"
+
+check "35j: critic.md mentions build_cited_tracker_from_tex" \
+  grep -q "build_cited_tracker_from_tex" "$RALPH_HOME/.claude/agents/critic.md"
+
 check "35d: editor.md mentions verify_cited_claims" \
   grep -q "verify_cited_claims" "$RALPH_HOME/.claude/agents/editor.md"
 
