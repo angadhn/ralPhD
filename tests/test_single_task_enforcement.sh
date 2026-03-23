@@ -158,6 +158,28 @@ else
   fail "F: halt_loop_with_error function not found"
 fi
 
+# ── Test G: check+uncheck swap — 2 newly checked tasks (set-based detection) ──
+DIR="$TMPDIR_BASE/g"
+mkdir -p "$DIR"
+make_plan "$DIR/before.md" \
+  "x First task — **coder**" \
+  "  Second task — **scout**" \
+  "  Third task — **critic**"
+make_plan "$DIR/after.md" \
+  "  First task — **coder**" \
+  "x Second task — **scout**" \
+  "x Third task — **critic**"
+
+if type validate_single_task_completion &>/dev/null; then
+  if ! validate_single_task_completion "$DIR/before.md" "$DIR/after.md"; then
+    pass "G: check+uncheck swap with 2 newly checked → violation detected"
+  else
+    fail "G: check+uncheck swap with 2 newly checked → no violation (count-based bug)"
+  fi
+else
+  fail "G: validate_single_task_completion function not found"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1
