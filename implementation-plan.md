@@ -67,7 +67,7 @@
   VERIFY: bash tests/test_single_task_enforcement.sh
   Commits: test(red): add halt_loop_with_error test F and fix(green): propagate nonzero exit on multi-task violation
 
-- [ ] 4. Detect actual newly-checked tasks via set diff (red/green TDD, depends: 3) — **coder**
+- [x] 4. Detect actual newly-checked tasks via set diff (red/green TDD, depends: 3) — **coder**
   RED: append test G to `tests/test_single_task_enforcement.sh`
     Test G: check+uncheck swap with 2 newly checked tasks
       before.md via `make_plan`: `"x First task — **coder**" "  Second task — **scout**" "  Third task — **critic**"`
