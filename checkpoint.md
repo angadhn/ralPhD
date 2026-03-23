@@ -10,7 +10,7 @@
 | Task | Status | Notes |
 |------|--------|-------|
 | 1. TDD task-format spec | done | prompt-plan.md + plan.md commit gate added (88bc4d5) |
-| 2. validate_plan_tdd_structure | pending | lib/post-run.sh + ralph-loop.sh wiring |
+| 2. validate_plan_tdd_structure | done | lib/post-run.sh function + ralph-loop.sh pre-loop gate. RED: 0df49bb, GREEN: 7d9036f |
 | 3. exit nonzero on violation | pending | halt_loop_with_error + LOOP_EXIT_CODE |
 | 4. set-based task detection | pending | rewrite validate_single_task_completion |
 | 5. section filter scoping | pending | dot-boundary prefix match in verify.py |
@@ -18,8 +18,8 @@
 
 ## Last Reflection
 
-Task 1 complete. Appended TDD format spec to prompt-plan.md and added commit gate to plan.md. Verification grep passed.
+Task 2 complete. Added validate_plan_tdd_structure() to lib/post-run.sh and wired as pre-loop gate in ralph-loop.sh. Fixed grep dash-parsing bug with `--` separator. All tests pass (5/5 new + 5/5 existing).
 
 ## Next Task
 
-- [ ] 2. Add validate_plan_tdd_structure and wire into build start (red/green TDD, depends: 1) — **coder**
+- [ ] 3. Exit nonzero on multi-task violation (red/green TDD) — **coder**

@@ -14,7 +14,7 @@
   VERIFY: grep -q 'RED:.*test file' prompt-plan.md && grep -q 'RED:.*GREEN:.*VERIFY:' .claude/agents/plan.md
   Commits: chore: add TDD task-format spec to planner layer
 
-- [ ] 2. Add validate_plan_tdd_structure and wire into build start (red/green TDD, depends: 1) — **coder**
+- [x] 2. Add validate_plan_tdd_structure and wire into build start (red/green TDD, depends: 1) — **coder**
   RED: create `tests/test_plan_tdd_validation.sh`
     Setup: source `lib/post-run.sh`; use `mktemp -d` with cleanup trap; use `pass()`/`fail()` helpers (same pattern as `test_single_task_enforcement.sh`)
     Test A: plan with coder TDD task missing `RED:` line
