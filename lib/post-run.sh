@@ -38,6 +38,10 @@ validate_single_task_completion() {
   return 0
 }
 
+halt_loop_with_error() {
+  LOOP_EXIT_CODE=1
+}
+
 validate_plan_tdd_structure() {
   # Checks that unchecked coder TDD tasks have all required sub-fields.
   local plan_path=$1

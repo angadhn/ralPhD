@@ -75,6 +75,7 @@ if [ -f "implementation-plan.md" ]; then
   fi
 fi
 
+LOOP_EXIT_CODE=0
 while true; do
   # --- Circuit breaker check ---
   if cb_is_open; then
@@ -582,7 +583,7 @@ while true; do
       cb_record_failure
       echo "  Build halted — agent completed multiple tasks in one iteration."
       rm -f "$PLAN_BEFORE_SNAPSHOT"
-      break
+      halt_loop_with_error; break
     fi
     rm -f "$PLAN_BEFORE_SNAPSHOT"
   fi
@@ -623,3 +624,4 @@ while true; do
     break
   fi
 done
+exit ${LOOP_EXIT_CODE:-0}
