@@ -145,6 +145,19 @@ else
   fail "E: validate_single_task_completion function not found"
 fi
 
+# ── Test F: halt_loop_with_error sets LOOP_EXIT_CODE ──
+if type halt_loop_with_error &>/dev/null; then
+  LOOP_EXIT_CODE=0
+  halt_loop_with_error
+  if [ "$LOOP_EXIT_CODE" -ne 0 ]; then
+    pass "F: halt_loop_with_error sets LOOP_EXIT_CODE nonzero"
+  else
+    fail "F: halt_loop_with_error did not set LOOP_EXIT_CODE"
+  fi
+else
+  fail "F: halt_loop_with_error function not found"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1
