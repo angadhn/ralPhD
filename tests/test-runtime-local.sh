@@ -2650,6 +2650,50 @@ result = extract_page_texts('tests/fixtures/verify/test_paper.pdf', pages=[1])
 assert len(result['pages']) == 1
 assert result['pages'][0]['page'] == 2
 "
+
+# ── 32. verify_cited_claims: ledger-first verdicts ─────────────
+
+VERIFY_OUT=$(mktemp -d)
+
+check "32a: Spalart2009 (direct_quote, high, no support_quote) → LEDGER_DIRECT" \
+  python3 -c "
+import json, os
+from tools.verify import _handle_verify_cited_claims
+_handle_verify_cited_claims({
+    'tracker_file': 'tests/fixtures/verify/cited_tracker.jsonl',
+    'ledger_file': 'tests/fixtures/verify/evidence-ledger.jsonl',
+    'bib_file': 'tests/fixtures/verify/test.bib',
+    'papers_dir': 'tests/fixtures/verify/',
+    'output_dir': '$VERIFY_OUT',
+    'auto_download': False,
+})
+records = [json.loads(l) for l in open('$VERIFY_OUT/verify_report.jsonl')]
+spalart = [r for r in records if r['doi'] == '10.1016/j.jcp.2009.01.001']
+assert len(spalart) == 1, f'Expected 1 Spalart record, got {len(spalart)}'
+assert spalart[0]['support_label'] == 'LEDGER_DIRECT', f'Expected LEDGER_DIRECT, got {spalart[0]["support_label"]}'
+assert spalart[0]['support_source'] == 'ledger'
+"
+
+check "32b: Shur2008 (paraphrase, high) → PARTIAL_SUPPORT not DIRECT_SUPPORT" \
+  python3 -c "
+import json
+records = [json.loads(l) for l in open('$VERIFY_OUT/verify_report.jsonl')]
+shur = [r for r in records if r['doi'] == '10.1016/j.ijhff.2008.02.001']
+assert len(shur) == 1
+assert shur[0]['support_label'] == 'PARTIAL_SUPPORT', f'Expected PARTIAL_SUPPORT, got {shur[0]["support_label"]}'
+assert shur[0]['support_source'] == 'ledger'
+"
+
+check "32c: Missing2024 (no ledger entry) → not resolved from ledger" \
+  python3 -c "
+import json
+records = [json.loads(l) for l in open('$VERIFY_OUT/verify_report.jsonl')]
+missing = [r for r in records if r['doi'] == '10.9999/missing']
+assert len(missing) == 1
+assert missing[0]['support_source'] != 'ledger', f'Missing2024 must not get ledger verdict'
+"
+
+rm -rf "$VERIFY_OUT"
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────
