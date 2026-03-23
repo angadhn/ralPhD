@@ -22,6 +22,9 @@ Each line is a JSON object with these fields:
 | `extraction_type` | enum | yes | One of: `"direct_quote"`, `"paraphrase"`, `"inference"`. |
 | `confidence` | enum | yes | One of: `"high"`, `"medium"`, `"low"`. |
 | `reviewer` | string | yes | Agent that created this entry (e.g. `"deep-reader"`, `"scout"`). |
+| `support_quote` | string | no | Verbatim text span from the source that supports the claim. |
+| `support_page` | string | no | Page number in the source PDF. |
+| `support_section` | string | no | Section heading in the source (more specific than source_section). |
 
 ### Extraction Types
 
