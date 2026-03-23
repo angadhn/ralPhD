@@ -82,3 +82,4 @@ describe them in the implementation plan.
 - [ ] implementation-plan.md has at least one unchecked task
 - [ ] checkpoint.md has a **Next Task** pointing to a real agent
 - [ ] All task entries end with an agent name
+- [ ] All unchecked coder tasks annotated "red/green TDD" have RED:/GREEN:/VERIFY:/Commits: sub-fields

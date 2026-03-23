@@ -66,3 +66,20 @@ Architecture options:
 When assigning tasks, match the development approach to the task type.
 Coder tasks that produce testable software should note "red/green TDD"
 in the task description so the coder agent knows to write tests first.
+
+For coder tasks annotated "red/green TDD", include decision-complete
+sub-fields indented below the task line:
+
+  - [ ] N. <description> — **coder** — red/green TDD
+    RED: <test file> <test name>: assert <condition>, fails because <reason>
+    GREEN: <file>:<function> — <exact change>
+    VERIFY: <shell command>
+    Commits: test(red): <msg> and fix(green): <msg>
+    Depends: <N,M> (if any)
+
+Rules:
+- The implementer must not need to make design decisions.
+- No placeholders: `...`, `TBD`, `TODO`, or "write a test showing X".
+- Each RED must name the exact test file, function/label, and assertion.
+- Each GREEN must name the exact file, function, and change.
+- Plans with incomplete TDD structure are rejected by the build validator.
