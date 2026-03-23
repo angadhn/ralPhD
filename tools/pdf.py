@@ -108,6 +108,43 @@ def get_fast_metadata(pdf_path: str) -> dict:
     }
 
 
+
+def extract_page_texts(pdf_path: str, pages: list = None) -> dict:
+    """Extract text from PDF pages. Returns {pages: [{page, text}], is_scanned}."""
+    import fitz
+
+    doc = fitz.open(pdf_path)
+    page_count = len(doc)
+
+    # Detect scanned PDF (same heuristic as get_fast_metadata)
+    total_images = 0
+    total_text_len = 0
+    for p in range(page_count):
+        total_images += len(doc[p].get_images(full=True))
+        total_text_len += len(doc[p].get_text("text"))
+    avg_text_per_page = total_text_len / max(page_count, 1)
+    is_scanned = total_images > 0 and avg_text_per_page < 100
+
+    if is_scanned:
+        doc.close()
+        return {"pages": [], "is_scanned": True}
+
+    if pages is None:
+        page_indices = range(page_count)
+    else:
+        page_indices = [i for i in pages if 0 <= i < page_count]
+
+    result_pages = []
+    for i in page_indices:
+        result_pages.append({
+            "page": i + 1,
+            "text": doc[i].get_text("text"),
+        })
+
+    doc.close()
+    return {"pages": result_pages, "is_scanned": False}
+
+
 def get_section_headings(pdf_path: str, doc=None) -> list:
     """Detect section headings from first 3 pages when ToC is absent.
 
