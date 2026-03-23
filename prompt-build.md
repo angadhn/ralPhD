@@ -9,7 +9,7 @@ Read the agent prompt at `.claude/agents/{agent}.md` (resolves workspace-first, 
 If the task has a mode prefix (STYLE-CHECK critic,
 GAP-FILL scout), the agent is still the last word.
 
-One iteration = one agent = one task.
+One iteration = one agent = one task. Do not start a second task in the same context window. Exit after completing the task so the loop can start a fresh iteration.
 
 IMPORTANT:
 - if `$RALPH_RUN/reflect` exists (RALPH_RUN defaults to `./run`), read `specs/reflection-template.md` (framework file) and complete the reflection BEFORE starting the task
@@ -25,17 +25,19 @@ IMPORTANT:
 
 Read the `**Autonomy:**` field in `implementation-plan.md`.
 
-- **autopilot** — proceed to the next task without pausing.
-- **stage-gates** — after completing a task, check if the next task
-  crosses a phase boundary (marked with `## Phase` headings or
-  `<!-- gate -->` comments in the plan). If it does:
-  1. Write the **next task line** from the implementation plan into
-     checkpoint.md's `## Next Task` (not a stage gate description).
-  2. Create `HUMAN_REVIEW_NEEDED.md` with a summary of what was
-     completed and what the next phase will do.
-  The loop will pause for user review. When the human approves, the
-  loop will pick up the correct next task automatically.
-- **step-by-step** — after every task, create `HUMAN_REVIEW_NEEDED.md`.
+All modes complete ONE task per iteration, then exit. The loop starts a
+fresh context window for each task. Autonomy controls only whether human
+review gates are created between phases:
+
+- **autopilot** — after completing the task, update checkpoint and exit.
+  The loop picks up the next task automatically. No human review gates.
+- **stage-gates** — same as autopilot, but if the next task crosses a
+  phase boundary (marked with `## Phase` headings or `<!-- gate -->`
+  comments in the plan), create `HUMAN_REVIEW_NEEDED.md` with a summary
+  of what was completed and what the next phase will do before exiting.
+  Write the **next task line** from the implementation plan into
+  checkpoint.md's `## Next Task`. The loop pauses for human review.
+- **step-by-step** — create `HUMAN_REVIEW_NEEDED.md` after every task.
 
 If the field is missing, default to **stage-gates**.
 
