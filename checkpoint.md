@@ -3,7 +3,7 @@
 **Thread:** verify-cited-claims
 **Last updated:** 2026-03-23
 **Last agent:** coder
-**Status:** ready to build
+**Status:** all tasks complete
 
 ## Knowledge State
 
@@ -16,7 +16,7 @@
 | 5. PDF fallback verdicts | done | RED fa193ef, GREEN fefd010 |
 | 6. section_filter | done | RED passes immediately, regression tests 6ba0357 |
 | 7. Tool registration + agent prompts | done | RED e0798a6, GREEN 5b0cc25 |
-| 8. Regression guard + spec update | pending | |
+| 8. Regression guard + spec update | done | RED a5c3f1a (36a/36b baseline pass), GREEN f89db47 |
 
 ## Last Reflection
 
@@ -24,4 +24,4 @@
 
 ## Next Task
 
-Task 8: Regression guard + spec update — red/green TDD — **coder**
+All 8 tasks complete. Thread ready for review.
