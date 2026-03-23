@@ -21,18 +21,32 @@ detect_agent_from_checkpoint() {
 
   next_task=$(extract_next_task_from_checkpoint "$checkpoint_path")
 
+  # Determine if next_task is a terminal/non-task state.
+  # Structured task lines start with a digit or checkbox ("- [").
+  # Anything else is prose (e.g. "Thread ready for review") or an
+  # explicit terminal marker — fall through to the plan.
+  local is_terminal=false
   case "$next_task" in
     none*|None*|"<"*|""|[Aa]ll\ tasks\ complete*|*ready\ to\ archive*|[Ss][Tt][Aa][Gg][Ee]\ [Gg][Aa][Tt][Ee]*)
-      if [ -n "$plan_path" ]; then
-        next_task=$(grep '^\- \[ \]' "$plan_path" 2>/dev/null \
-          | grep -v '<task description>\|<agent>' \
-          | head -1 | sed 's/^- \[ \] [0-9]*\. *//' | sed 's/\*//g')
-        next_task=$(echo "$next_task" | sed 's/^ *//; s/ *$//')
-      else
-        next_task=""
+      is_terminal=true
+      ;;
+    *)
+      if ! echo "$next_task" | grep -qE '^[0-9]|^- \['; then
+        is_terminal=true
       fi
       ;;
   esac
+
+  if $is_terminal; then
+    if [ -n "$plan_path" ]; then
+      next_task=$(grep '^\- \[ \]' "$plan_path" 2>/dev/null \
+        | grep -v '<task description>\|<agent>' \
+        | head -1 | sed 's/^- \[ \] [0-9]*\. *//' | sed 's/\*//g')
+      next_task=$(echo "$next_task" | sed 's/^ *//; s/ *$//')
+    else
+      next_task=""
+    fi
+  fi
 
   if [ -z "$next_task" ]; then
     echo ""
