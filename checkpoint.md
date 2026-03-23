@@ -13,7 +13,7 @@
 | 2. _build_doi_bib_index | done | RED 777a361, GREEN 9818e20 |
 | 3. extract_page_texts | done | RED 7d57a63, GREEN 7a7506b |
 | 4. verify_cited_claims ledger-first | done | RED 1651ad3, GREEN 27d3095 |
-| 5. PDF fallback verdicts | pending | depends: 4 |
+| 5. PDF fallback verdicts | done | RED fa193ef, GREEN fefd010 |
 | 6. section_filter | pending | depends: 5 |
 | 7. Tool registration + agent prompts | pending | depends: 6 |
 | 8. Regression guard + spec update | pending | |
@@ -24,4 +24,4 @@
 
 ## Next Task
 
-Task 5: PDF fallback verdicts — red/green TDD — **coder**
+Task 6: `section_filter` — red/green TDD — **coder**
