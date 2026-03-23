@@ -572,6 +572,23 @@ while true; do
     final_pct=$(cat "$CTX_FILE" 2>/dev/null | tr -d '[:space:]')
   fi
 
+  # --- Task progress summary ---
+  if [ -f implementation-plan.md ]; then
+    _done=$(grep -c '^\- \[x\]' implementation-plan.md 2>/dev/null) || _done=0
+    _todo=$(grep -c '^\- \[ \]' implementation-plan.md 2>/dev/null) || _todo=0
+    _total=$((_done + _todo))
+    # Last completed task (most recent [x] line)
+    _last_task=$(grep '^\- \[x\]' implementation-plan.md 2>/dev/null | tail -1 \
+      | sed 's/^- \[x\] //' | sed 's/ — \*\*.*$//' | head -c 80)
+    # Next task (first [ ] line)
+    _next_task=$(grep '^\- \[ \]' implementation-plan.md 2>/dev/null | head -1 \
+      | sed 's/^- \[ \] //' | sed 's/ — \*\*.*$//' | head -c 80)
+    echo "  --- Task progress: ${_done}/${_total} done ---"
+    [ -n "$_last_task" ] && echo "  Done: $_last_task"
+    [ -n "$_next_task" ] && echo "  Next: $_next_task"
+    [ "$_todo" -eq 0 ] && [ "$_done" -gt 0 ] && echo "  All tasks complete."
+  fi
+
   echo ""
   echo "=== Iteration $ITERATION complete (exit code: $EXIT_CODE${final_pct:+, context: ${final_pct}%}). Fresh context in 3s... ==="
   sleep 3
