@@ -2840,6 +2840,66 @@ assert r['support_label'] == 'TEXT_UNAVAILABLE', f'Scanned PDF should produce TE
 "
 
 rm -rf "$SCAN_DIR" "$VERIFY_OUT4" "$SCORING_DIR"
+
+# ── 34. verify_cited_claims: section_filter ────────────────────
+
+VERIFY_OUT=$(mktemp -d)
+
+check "34a: section_filter='2' limits to section 2.x entries only" \
+  python3 -c "
+import json
+from tools.verify import _handle_verify_cited_claims
+_handle_verify_cited_claims({
+    'tracker_file': 'tests/fixtures/verify/cited_tracker.jsonl',
+    'ledger_file': 'tests/fixtures/verify/evidence-ledger.jsonl',
+    'bib_file': 'tests/fixtures/verify/test.bib',
+    'papers_dir': 'tests/fixtures/verify/',
+    'output_dir': '$VERIFY_OUT',
+    'section_filter': '2',
+    'auto_download': False,
+})
+records = [json.loads(l) for l in open('$VERIFY_OUT/verify_report.jsonl')]
+assert len(records) == 2, f'section_filter=2 should yield 2 records (2.1, 2.2), got {len(records)}'
+sections = {r['section'] for r in records}
+assert all(s.startswith('2') for s in sections), f'All sections should start with 2, got {sections}'
+"
+
+check "34b: section_filter='3.1' limits to exact section" \
+  python3 -c "
+import json, os
+os.makedirs('$VERIFY_OUT/b', exist_ok=True)
+from tools.verify import _handle_verify_cited_claims
+_handle_verify_cited_claims({
+    'tracker_file': 'tests/fixtures/verify/cited_tracker.jsonl',
+    'ledger_file': 'tests/fixtures/verify/evidence-ledger.jsonl',
+    'bib_file': 'tests/fixtures/verify/test.bib',
+    'papers_dir': 'tests/fixtures/verify/',
+    'output_dir': '$VERIFY_OUT/b',
+    'section_filter': '3.1',
+    'auto_download': False,
+})
+records = [json.loads(l) for l in open('$VERIFY_OUT/b/verify_report.jsonl')]
+assert len(records) == 1, f'section_filter=3.1 should yield 1 record, got {len(records)}'
+"
+
+check "34c: no section_filter processes all 4 entries" \
+  python3 -c "
+import json, os
+os.makedirs('$VERIFY_OUT/c', exist_ok=True)
+from tools.verify import _handle_verify_cited_claims
+_handle_verify_cited_claims({
+    'tracker_file': 'tests/fixtures/verify/cited_tracker.jsonl',
+    'ledger_file': 'tests/fixtures/verify/evidence-ledger.jsonl',
+    'bib_file': 'tests/fixtures/verify/test.bib',
+    'papers_dir': 'tests/fixtures/verify/',
+    'output_dir': '$VERIFY_OUT/c',
+    'auto_download': False,
+})
+records = [json.loads(l) for l in open('$VERIFY_OUT/c/verify_report.jsonl')]
+assert len(records) == 4, f'No filter should yield 4 records, got {len(records)}'
+"
+
+rm -rf "$VERIFY_OUT"
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────
