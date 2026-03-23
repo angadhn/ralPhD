@@ -67,6 +67,13 @@ trap 'handle_interrupt_signal' INT
 
 print_loop_banner
 
+# --- Pre-loop plan validation ---
+if [ -f "implementation-plan.md" ]; then
+  if ! validate_plan_tdd_structure "implementation-plan.md"; then
+    echo "✗ Plan validation failed — fix TDD task structure before running build."
+    exit 1
+  fi
+fi
 
 while true; do
   # --- Circuit breaker check ---

@@ -38,6 +38,44 @@ validate_single_task_completion() {
   return 0
 }
 
+validate_plan_tdd_structure() {
+  # Checks that unchecked coder TDD tasks have all required sub-fields.
+  local plan_path=$1
+  local rc=0
+  local task_line sub_lines
+
+  while IFS= read -r task_line; do
+    # Get line number of this task
+    local line_num
+    line_num=$(grep -n -F -- "$task_line" "$plan_path" | head -1 | cut -d: -f1)
+    [ -z "$line_num" ] && continue
+
+    # Collect indented lines following this task (sub-fields)
+    sub_lines=$(awk -v start="$line_num" '
+      NR > start {
+        if (/^- \[/) exit
+        if (/^  /) print
+        else exit
+      }
+    ' "$plan_path")
+
+    local missing=""
+    echo "$sub_lines" | grep -q 'RED:' || missing="${missing} RED:"
+    echo "$sub_lines" | grep -q 'GREEN:' || missing="${missing} GREEN:"
+    echo "$sub_lines" | grep -q 'VERIFY:' || missing="${missing} VERIFY:"
+    echo "$sub_lines" | grep -q 'Commits:' || missing="${missing} Commits:"
+
+    if [ -n "$missing" ]; then
+      echo "  ✗ TDD task missing fields:${missing}"
+      echo "    Task: $task_line"
+      rc=1
+    fi
+  done < <(grep '^- \[ \]' "$plan_path" | grep 'red/green TDD' | grep '\*\*coder\*\*')
+
+  return $rc
+}
+
+
 restore_circuit_breaker_state() {
   if [ -f "$CB_FILE" ]; then
     CB_CONSECUTIVE_FAILURES=$(cat "$CB_FILE" 2>/dev/null | tr -d '[:space:]')
