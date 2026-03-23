@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## Iteration 5 — 2026-03-23
+- Final review (critic): all 15 tests pass, 77/78 runtime integration tests pass (1 pre-existing), no regressions. Thread complete.
+
 ## Reflection — Iteration 5 — 2026-03-23
 - Trajectory: on track. See ai-generated-outputs/reflections/reflection-iter-5.md
 
