@@ -2920,6 +2920,28 @@ check "35e: critic.md mentions verify_cited_claims" \
 
 check "35f: critic.md still has deep-reader notes cross-check" \
   grep -q "notes.md" "$RALPH_HOME/.claude/agents/critic.md"
+
+# ── 36. verify_cited_claims: regression guards ─────────────────
+
+check "36a: check_claims tool still exists and importable" \
+  python3 -c "from tools.claims import TOOLS; assert 'check_claims' in TOOLS; assert callable(TOOLS['check_claims']['function'])"
+
+check "36b: old tracker format (no source_key, no sentence_text) works" \
+  python3 -c "
+from tools.verify import _handle_verify_cited_claims
+r = _handle_verify_cited_claims({
+    'tracker_file': 'tests/fixtures/verify/cited_tracker.jsonl',
+    'ledger_file': 'tests/fixtures/verify/evidence-ledger.jsonl',
+    'bib_file': 'tests/fixtures/verify/test.bib',
+    'papers_dir': 'tests/fixtures/verify/',
+    'auto_download': False,
+})
+assert 'Traceback' not in r, f'Old format should work cleanly, got traceback'
+assert r.startswith('## verify_cited_claims report'), f'Should produce a valid report'
+"
+
+check "36c: evidence-format.md documents support_quote field" \
+  grep -q "support_quote" "$RALPH_HOME/specs/evidence-format.md"
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────
