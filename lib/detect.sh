@@ -55,6 +55,18 @@ detect_agent_from_checkpoint() {
 
   local agent="${next_task##* }"
   agent=$(echo "$agent" | sed 's/[^a-zA-Z0-9_-]//g')
+
+  # Validate: extracted word must correspond to a real agent file.
+  # Prevents annotations (e.g. "TDD") from being mistaken for agents.
+  if [ -n "$agent" ]; then
+    local agent_file
+    agent_file=$(resolve_agent_path "$agent")
+    if [ -z "$agent_file" ]; then
+      echo ""
+      return
+    fi
+  fi
+
   echo "$agent"
 }
 

@@ -22,4 +22,4 @@ Task 1 complete. Appended TDD format spec to prompt-plan.md and added commit gat
 
 ## Next Task
 
-- [ ] 2. Add validate_plan_tdd_structure and wire into build start — **coder** — red/green TDD
+- [ ] 2. Add validate_plan_tdd_structure and wire into build start (red/green TDD, depends: 1) — **coder**

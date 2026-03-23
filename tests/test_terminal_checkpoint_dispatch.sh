@@ -116,6 +116,29 @@ else
   fail "F: Legitimate task line → got '$DETECTED', expected 'coder'"
 fi
 
+# ── Test G: TDD annotation in parens must not leak into agent name ──
+DIR="$TMPDIR_BASE/g"
+mkdir -p "$DIR"
+make_checkpoint "$DIR" "- [ ] 2. Add feature (red/green TDD, depends: 1) — **coder**"
+DETECTED=$(detect_agent_from_checkpoint "$DIR/checkpoint.md")
+if [ "$DETECTED" = "coder" ]; then
+  pass "G: TDD annotation in parens → 'coder' (not 'TDD')"
+else
+  fail "G: TDD annotation in parens → got '$DETECTED', expected 'coder'"
+fi
+
+# ── Test H: TDD annotation NOT in parens is rejected by agent-file validation ──
+DIR="$TMPDIR_BASE/h"
+mkdir -p "$DIR"
+make_checkpoint "$DIR" "- [ ] 2. Add feature — **coder** — red/green TDD"
+make_plan "$DIR"
+DETECTED=$(detect_agent_from_checkpoint "$DIR/checkpoint.md" "$DIR/plan.md")
+if [ -z "$DETECTED" ] || [ "$DETECTED" = "scout" ]; then
+  pass "H: bare TDD annotation → rejected, falls back to plan ('$DETECTED')"
+else
+  fail "H: bare TDD annotation → got '$DETECTED', expected empty or plan fallback"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

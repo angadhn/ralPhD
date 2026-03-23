@@ -9,42 +9,23 @@
 
 - [x] 1. Add TDD task-format spec to planner prompts — **coder**
   Changes:
-  - `prompt-plan.md` after line 68: append the block below (do not replace existing lines 66-68):
-    ```
-    For coder tasks annotated "red/green TDD", include decision-complete
-    sub-fields indented below the task line:
-
-      - [ ] N. <description> — **coder** — red/green TDD
-        RED: <test file> <test name>: assert <condition>, fails because <reason>
-        GREEN: <file>:<function> — <exact change>
-        VERIFY: <shell command>
-        Commits: test(red): <msg> and fix(green): <msg>
-        Depends: <N,M> (if any)
-
-    Rules:
-    - The implementer must not need to make design decisions.
-    - No placeholders: `...`, `TBD`, `TODO`, or "write a test showing X".
-    - Each RED must name the exact test file, function/label, and assertion.
-    - Each GREEN must name the exact file, function, and change.
-    - Plans with incomplete TDD structure are rejected by the build validator.
-    ```
-  - `.claude/agents/plan.md` line 84 (after last commit gate): add:
-    `- [ ] All unchecked coder tasks annotated "red/green TDD" have RED:/GREEN:/VERIFY:/Commits: sub-fields`
+  - `prompt-plan.md` after line 68: append TDD format spec
+  - `.claude/agents/plan.md` line 84: add commit gate for TDD sub-fields
   VERIFY: grep -q 'RED:.*test file' prompt-plan.md && grep -q 'RED:.*GREEN:.*VERIFY:' .claude/agents/plan.md
   Commits: chore: add TDD task-format spec to planner layer
 
-- [ ] 2. Add validate_plan_tdd_structure and wire into build start — **coder** — red/green TDD (depends: 1)
+- [ ] 2. Add validate_plan_tdd_structure and wire into build start (red/green TDD, depends: 1) — **coder**
   RED: create `tests/test_plan_tdd_validation.sh`
     Setup: source `lib/post-run.sh`; use `mktemp -d` with cleanup trap; use `pass()`/`fail()` helpers (same pattern as `test_single_task_enforcement.sh`)
     Test A: plan with coder TDD task missing `RED:` line
-      Plan content: `- [ ] 1. Add feature — **coder** — red/green TDD\n  GREEN: lib/foo.sh\n  VERIFY: bash tests/test_foo.sh\n  Commits: test(red): x and fix(green): y`
+      Plan content: `- [ ] 1. Add feature (red/green TDD) — **coder**\n  GREEN: lib/foo.sh\n  VERIFY: bash tests/test_foo.sh\n  Commits: test(red): x and fix(green): y`
       Assert: `validate_plan_tdd_structure` returns 1 (reject)
       Fails because: function does not exist yet
     Test B: plan with coder TDD task missing `GREEN:` line
-      Plan content: `- [ ] 1. Add feature — **coder** — red/green TDD\n  RED: tests/test_foo.sh test_a\n  VERIFY: bash tests/test_foo.sh\n  Commits: test(red): x and fix(green): y`
+      Plan content: `- [ ] 1. Add feature (red/green TDD) — **coder**\n  RED: tests/test_foo.sh test_a\n  VERIFY: bash tests/test_foo.sh\n  Commits: test(red): x and fix(green): y`
       Assert: `validate_plan_tdd_structure` returns 1 (reject)
     Test C: complete coder TDD task (all 4 fields present)
-      Plan content: `- [ ] 1. Add feature — **coder** — red/green TDD\n  RED: tests/test_foo.sh\n  GREEN: lib/foo.sh\n  VERIFY: bash tests/test_foo.sh\n  Commits: test(red): x and fix(green): y`
+      Plan content: `- [ ] 1. Add feature (red/green TDD) — **coder**\n  RED: tests/test_foo.sh\n  GREEN: lib/foo.sh\n  VERIFY: bash tests/test_foo.sh\n  Commits: test(red): x and fix(green): y`
       Assert: `validate_plan_tdd_structure` returns 0 (accept)
     Test D: non-coder task (`— **critic**`, no TDD annotation)
       Assert: `validate_plan_tdd_structure` returns 0 (accept)
@@ -54,8 +35,8 @@
   GREEN:
     `lib/post-run.sh`: add `validate_plan_tdd_structure(plan_path)` after line 39
       Algorithm:
-      1. grep for lines matching `^\- \[ \].*\*\*coder\*\*.*red/green TDD` (unchecked coder TDD tasks)
-      2. for each match, read subsequent lines until next `^\- \[` or EOF
+      1. grep for unchecked task lines containing both `red/green TDD` and `\*\*coder\*\*` (order-independent)
+      2. for each match, read subsequent indented lines until next `^\- \[` or EOF
       3. check that at least one line matches each of: `RED:`, `GREEN:`, `VERIFY:`, `Commits:`
       4. if any field missing, echo which task and field, return 1
       5. if all tasks pass, return 0
@@ -65,7 +46,7 @@
 
 ## Phase B: Remaining Fixes
 
-- [ ] 3. Exit nonzero on multi-task violation — **coder** — red/green TDD
+- [ ] 3. Exit nonzero on multi-task violation (red/green TDD) — **coder**
   RED: append test F to `tests/test_single_task_enforcement.sh`
     Test F: `halt_loop_with_error` sets LOOP_EXIT_CODE
       Setup: `LOOP_EXIT_CODE=0`
@@ -86,7 +67,7 @@
   VERIFY: bash tests/test_single_task_enforcement.sh
   Commits: test(red): add halt_loop_with_error test F and fix(green): propagate nonzero exit on multi-task violation
 
-- [ ] 4. Detect actual newly-checked tasks via set diff — **coder** — red/green TDD (depends: 3)
+- [ ] 4. Detect actual newly-checked tasks via set diff (red/green TDD, depends: 3) — **coder**
   RED: append test G to `tests/test_single_task_enforcement.sh`
     Test G: check+uncheck swap with 2 newly checked tasks
       before.md via `make_plan`: `"x First task — **coder**" "  Second task — **scout**" "  Third task — **critic**"`
@@ -123,7 +104,7 @@
   VERIFY: bash tests/test_single_task_enforcement.sh
   Commits: test(red): add set-based detection test G and fix(green): detect actual newly-checked tasks via set diff
 
-- [ ] 5. Section filter dot-boundary matching — **coder** — red/green TDD
+- [ ] 5. Section filter dot-boundary matching (red/green TDD) — **coder**
   RED: create `tests/test_section_filter_scoping.py`
     ```python
     """RED test: section_filter='1' must not match section '10'."""

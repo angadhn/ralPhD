@@ -70,12 +70,11 @@ in the task description so the coder agent knows to write tests first.
 For coder tasks annotated "red/green TDD", include decision-complete
 sub-fields indented below the task line:
 
-  - [ ] N. <description> — **coder** — red/green TDD
+  - [ ] N. <description> (red/green TDD) — **<agent>**
     RED: <test file> <test name>: assert <condition>, fails because <reason>
     GREEN: <file>:<function> — <exact change>
     VERIFY: <shell command>
     Commits: test(red): <msg> and fix(green): <msg>
-    Depends: <N,M> (if any)
 
 Rules:
 - The implementer must not need to make design decisions.
