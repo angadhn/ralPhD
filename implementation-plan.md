@@ -46,7 +46,7 @@
 
 ## Phase B: Remaining Fixes
 
-- [ ] 3. Exit nonzero on multi-task violation (red/green TDD) — **coder**
+- [x] 3. Exit nonzero on multi-task violation (red/green TDD) — **coder**
   RED: append test F to `tests/test_single_task_enforcement.sh`
     Test F: `halt_loop_with_error` sets LOOP_EXIT_CODE
       Setup: `LOOP_EXIT_CODE=0`
