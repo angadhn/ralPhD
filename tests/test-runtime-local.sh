@@ -2599,6 +2599,31 @@ else
   fail "29b: refactorer prompt should enforce semantic preservation"
 fi
 
+
+# ── 30. verify_cited_claims: DOI-to-bib bridge ────────────────
+
+check "30a: _build_doi_bib_index parses fixture bib" \
+  python3 -c "
+from tools._citation import _build_doi_bib_index
+idx = _build_doi_bib_index('tests/fixtures/verify/test.bib')
+assert len(idx) == 4, f'Expected 4, got {len(idx)}'
+assert all('source_key' in v for v in idx.values())
+"
+
+check "30b: doi_bib_index is case-insensitive on DOI" \
+  python3 -c "
+from tools._citation import _build_doi_bib_index
+idx = _build_doi_bib_index('tests/fixtures/verify/test.bib')
+assert '10.1016/j.jcp.2009.01.001' in idx
+assert idx['10.1016/j.jcp.2009.01.001']['source_key'] == 'Spalart2009'
+"
+
+check "30c: doi_bib_index returns title" \
+  python3 -c "
+from tools._citation import _build_doi_bib_index
+idx = _build_doi_bib_index('tests/fixtures/verify/test.bib')
+assert 'Hybrid' in idx['10.1016/j.jcp.2009.01.001']['title']
+"
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────
