@@ -114,4 +114,4 @@
   VERIFY: pytest tests/test_section_filter_scoping.py
   Commits: test(red): add section filter boundary tests and fix(green): use dot-boundary prefix matching
 
-- [ ] 6. Final review — verify all tests pass, no regressions, acceptance criteria met (depends: 1,2,3,4,5) — **critic**
+- [x] 6. Final review — verify all tests pass, no regressions, acceptance criteria met (depends: 1,2,3,4,5) — **critic**
