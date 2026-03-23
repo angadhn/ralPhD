@@ -1,0 +1,4 @@
+{"doi": "10.1016/j.jcp.2009.01.001", "section": "2.1", "role": "primary_evidence", "claim": "Hybrid RANS-LES methods reduce computational cost by 40-60% compared to wall-resolved LES"}
+{"doi": "10.1016/j.ijhff.2008.02.001", "section": "2.2", "role": "supporting", "claim": "IDDES eliminates the grid-induced separation problem of DDES"}
+{"doi": "10.1146/annurev-fluid-2016", "section": "3.1", "role": "context", "claim": "Wall-modeled LES may overtake hybrid methods for industrial flows by 2030"}
+{"doi": "10.9999/missing", "section": "3.2", "role": "primary_evidence", "claim": "Novel coupling reduces error by 25%"}

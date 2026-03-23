@@ -1,0 +1,3 @@
+{"claim": "Hybrid RANS-LES methods reduce computational cost by 40-60%", "source_key": "Spalart2009", "source_section": "S4.1", "extraction_type": "direct_quote", "confidence": "high", "reviewer": "deep-reader"}
+{"claim": "IDDES eliminates the grid-induced separation problem", "source_key": "Shur2008", "source_section": "S5", "extraction_type": "paraphrase", "confidence": "high", "reviewer": "deep-reader"}
+{"claim": "Wall-modeled LES may overtake hybrid methods by 2030", "source_key": "Larsson2016", "source_section": "S7", "extraction_type": "inference", "confidence": "low", "reviewer": "deep-reader"}
