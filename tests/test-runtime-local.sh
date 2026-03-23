@@ -2900,6 +2900,26 @@ assert len(records) == 4, f'No filter should yield 4 records, got {len(records)}
 "
 
 rm -rf "$VERIFY_OUT"
+
+# ── 35. verify_cited_claims: registration + integration ────────
+
+check "35a: verify_cited_claims in TOOLS registry" \
+  python3 -c "from tools import TOOLS; assert 'verify_cited_claims' in TOOLS"
+
+check "35b: verify_cited_claims in AGENT_TOOLS for editor" \
+  python3 -c "from tools import AGENT_TOOLS; assert 'verify_cited_claims' in AGENT_TOOLS['editor']"
+
+check "35c: verify_cited_claims in AGENT_TOOLS for critic" \
+  python3 -c "from tools import AGENT_TOOLS; assert 'verify_cited_claims' in AGENT_TOOLS['critic']"
+
+check "35d: editor.md mentions verify_cited_claims" \
+  grep -q "verify_cited_claims" "$RALPH_HOME/.claude/agents/editor.md"
+
+check "35e: critic.md mentions verify_cited_claims" \
+  grep -q "verify_cited_claims" "$RALPH_HOME/.claude/agents/critic.md"
+
+check "35f: critic.md still has deep-reader notes cross-check" \
+  grep -q "notes.md" "$RALPH_HOME/.claude/agents/critic.md"
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────
