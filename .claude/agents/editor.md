@@ -26,6 +26,7 @@ Editor — makes substantiated improvements to manuscript sections. Every edit j
 ## Tools
 
 - `check_claims` — cross-reference .tex against evidence ledger. Run **before** editing to identify unsupported claims.
+- `verify_cited_claims` — verify cited PDFs actually support claims. Run **before** editing. **`section_filter` derivation:** Extract the leading digits from the .tex filename (e.g., `"2"` from `sections/2_methods.tex`, `"02"` from `sections/02-methods.tex`). Strip leading zeros (`"02"` → `"2"`). If the filename has no leading digits (e.g., `sections/introduction.tex`), omit `section_filter` entirely — the tool will verify all tracker entries.
 - `check_language` — programmatic style check. Run **before** and **after** editing.
 - `citation_lint` — validate .bib entries. Run **after** editing if citations were modified.
 - `citation_verify_all` — batch DOI verification. Run only if new citations were added.
@@ -69,6 +70,7 @@ AI-generated-outputs/<thread>/editor/
 6. If `AI-generated-outputs/<thread>/critic-review/report.tex` exists, skim for items about this section
 7. **Pre-edit diagnostics:**
    a. Run `check_claims` on the section + evidence ledger — note unsupported claims
+   b. Run `verify_cited_claims` with section_filter derived from the .tex filename — note contradictions and unsupported claims
    b. Run `check_language` on the section — note style issues, record count
 8. **Edit the section:**
    - Fix style issues flagged by `check_language`

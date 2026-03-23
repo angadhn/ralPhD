@@ -17,6 +17,7 @@ from tools.claims import TOOLS as _claims_tools
 from tools.interact import TOOLS as _interact_tools
 from tools.github import TOOLS as _github_tools
 from tools.latex import TOOLS as _latex_tools
+from tools.verify import TOOLS as _verify_tools
 
 # ── Merged registry ───────────────────────────────────────────
 
@@ -30,6 +31,7 @@ TOOLS.update(_claims_tools)
 TOOLS.update(_interact_tools)
 TOOLS.update(_github_tools)
 TOOLS.update(_latex_tools)
+TOOLS.update(_verify_tools)
 
 # ── Per-agent tool registries ─────────────────────────────────
 # Every agent gets the essentials: read_file, write_file, git_commit, list_files, code_search
@@ -45,12 +47,12 @@ SERVER_TOOLS = {
 
 AGENT_TOOLS = {
     "paper-writer": _ESSENTIALS + ["check_language", "citation_lint", "compile_latex"],
-    "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure", "check_claims", "citation_verify_all"],
+    "critic": _ESSENTIALS + ["check_language", "check_journal", "check_figure", "check_claims", "citation_verify_all", "verify_cited_claims"],
     "scout": _ESSENTIALS + ["web_search", "pdf_metadata", "citation_lookup", "citation_verify", "citation_verify_all", "citation_manifest", "citation_download"],
     "deep-reader": _ESSENTIALS + ["pdf_metadata", "extract_figure", "view_pdf_page"],
     "research-coder": _ESSENTIALS,
     "figure-stylist": _ESSENTIALS + ["check_figure", "view_pdf_page"],
-    "editor": _ESSENTIALS + ["check_claims", "check_language", "citation_lint", "citation_verify_all"],
+    "editor": _ESSENTIALS + ["check_claims", "check_language", "citation_lint", "citation_verify_all", "verify_cited_claims"],
     "coherence-reviewer": _ESSENTIALS + ["check_claims", "check_language"],
     "provocateur": _ESSENTIALS + [],
     "synthesizer": _ESSENTIALS + ["citation_lint", "citation_verify_all"],

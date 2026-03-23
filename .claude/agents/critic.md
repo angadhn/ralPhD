@@ -26,6 +26,7 @@ Each mode **appends** a labeled section to `HUMAN_REVIEW_NEEDED.md`.
 - The section just written by paper-writer (path from checkpoint)
 - `specs/writing-style.md` — the style rules to check against
 - Run `check_language` on the section file — programmatic check
+- Run `verify_cited_claims` on the section — mechanical verification that cited PDFs support claims. Primary check; deep-reader notes cross-check is secondary.
 
 **Journal compliance mode** (conditional: `specs/publication-requirements.md` must exist):
 - Run `check_journal` on sections/ with pub-reqs — word counts, page estimate, bib field checks
@@ -85,6 +86,7 @@ Full `HUMAN_REVIEW_NEEDED.md` templates (all 5 modes): see `specs/critic-output-
 3. **Style check mode:**
    a. Read the section file from checkpoint
    b. Run `check_language` on the section file
+   b2. Run `verify_cited_claims` with section_filter derived from the .tex filename. This is the primary mechanical check. CONTRADICTED → blocking in HUMAN_REVIEW_NEEDED.md. Strong verb + PARTIAL_SUPPORT → blocking. **`section_filter` derivation:** Extract the leading digits from the .tex filename (e.g., `"2"` from `sections/2_methods.tex`). Strip leading zeros. If no leading digits, omit `section_filter`.
    c. Read `specs/writing-style.md`
    d. Check claim calibration: match modal verb strength to evidence
    e. Cross-check `references/cited_tracker.jsonl` claims against deep-reader's `notes.md`: for each `claim` field in cited_tracker entries for this section, verify the claim is supported by the deep-reader's notes. Flag discrepancies as `[CLAIM-SOURCE MISMATCH]` in `HUMAN_REVIEW_NEEDED.md`.
