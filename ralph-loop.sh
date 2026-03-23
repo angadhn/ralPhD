@@ -347,6 +347,10 @@ while true; do
     echo "  Phase not marked (parallel) — running serially"
   fi
 
+  # --- Snapshot plan for single-task enforcement ---
+  PLAN_BEFORE_SNAPSHOT="$RALPH_RUN/plan-before-${ITERATION}.md"
+  cp implementation-plan.md "$PLAN_BEFORE_SNAPSHOT"
+
   # --- Build prompt ---
   PROMPT=$(cat "$PROMPT_FILE")
 
@@ -562,6 +566,17 @@ while true; do
   # Reset backoff and circuit breaker after success
   BACKOFF=60
   cb_record_success
+
+  # --- Single-task enforcement (serial only) ---
+  if [ -f "$PLAN_BEFORE_SNAPSHOT" ]; then
+    if ! validate_single_task_completion "$PLAN_BEFORE_SNAPSHOT" "implementation-plan.md"; then
+      cb_record_failure
+      echo "  Build halted — agent completed multiple tasks in one iteration."
+      rm -f "$PLAN_BEFORE_SNAPSHOT"
+      break
+    fi
+    rm -f "$PLAN_BEFORE_SNAPSHOT"
+  fi
 
   restore_truncated_files
   append_changelog_entry

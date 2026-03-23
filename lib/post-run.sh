@@ -21,6 +21,23 @@ cb_is_open() {
   [ "$CB_CONSECUTIVE_FAILURES" -ge "$CB_THRESHOLD" ]
 }
 
+validate_single_task_completion() {
+  # Compares plan before/after an iteration. Returns 1 if >1 task was newly checked.
+  local before=$1
+  local after=$2
+  local before_count after_count newly_completed
+  
+  before_count=$(grep -c "^\- \[x\]" "$before" 2>/dev/null) || before_count=0
+  after_count=$(grep -c "^\- \[x\]" "$after" 2>/dev/null) || after_count=0
+  newly_completed=$((after_count - before_count))
+  
+  if [ "$newly_completed" -gt 1 ]; then
+    echo "  ✗ Multi-task violation: $newly_completed tasks completed in one iteration (max 1)"
+    return 1
+  fi
+  return 0
+}
+
 restore_circuit_breaker_state() {
   if [ -f "$CB_FILE" ]; then
     CB_CONSECUTIVE_FAILURES=$(cat "$CB_FILE" 2>/dev/null | tr -d '[:space:]')
