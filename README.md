@@ -182,6 +182,15 @@ The richer monitor fields (`max_step`, `steps.read_inputs`, `steps.read_chunk`) 
 
 **Interactive mode:** With Anthropic models, interactive mode uses the `claude` CLI (full TUI) for both plan and build modes. With OpenAI models, interactive mode uses `codex` CLI when installed (full TUI), otherwise falls back to `ralph_agent.py`. Headless mode (`-p`) uses `ralph_agent.py` when `ANTHROPIC_API_KEY` is set. Without an API key (OAuth / Max plan users), it falls back to `claude -p` with ralph's tools exposed via MCP server — no API key needed, just `claude login`.
 
+### How the MCP fallback works
+
+For headless Anthropic runs, Ralph has two different runtime paths:
+
+- **API key present** — `ralph_agent.py` runs the model loop directly. It loads the selected agent prompt, registers that agent's allowed tools, sends tool results back to the model, and logs usage.
+- **OAuth / Max plan (no API key)** — `claude -p` runs the model loop instead. Ralph still provides the same agent prompt and the same per-agent tool boundaries, but it does so through `tools/mcp_server.py`, which exposes only the tools assigned to that agent.
+
+This means the *runtime substrate* differs, but the high-level agent design stays the same: Ralph binds an agent prompt to a model and a restricted tool surface. In other words, the MCP server is not "the agent"; it is the bridge that lets Claude CLI see only the tools that a given Ralph agent is supposed to use.
+
 ## Steering the loop
 
 ### checkpoint.md
