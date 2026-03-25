@@ -1,117 +1,25 @@
-# Implementation Plan — harden-planner-and-fix-runtime
+# Implementation Plan — harden-planner-and-fix-runtime (remaining gaps)
 
-**Thread:** harden-planner-and-fix-runtime
+**Thread:** harden-planner-remaining-gaps
 **Created:** 2026-03-23
 **Architecture:** serial
-**Autonomy:** autopilot
+**Autonomy:** stage-gates
 
-## Phase A: Planner Hardening
+## Tasks
 
-- [x] 1. Add TDD task-format spec to planner prompts — **coder**
-  Changes:
-  - `prompt-plan.md` after line 68: append TDD format spec
-  - `.claude/agents/plan.md` line 84: add commit gate for TDD sub-fields
-  VERIFY: grep -q 'RED:.*test file' prompt-plan.md && grep -q 'RED:.*GREEN:.*VERIFY:' .claude/agents/plan.md
-  Commits: chore: add TDD task-format spec to planner layer
+- [x] 1. Enforce planner placeholder ban in `validate_plan_tdd_structure` (red/green TDD) — **coder**
+    RED: `tests/test_plan_tdd_validation.sh` tests F/G/H: reject `RED: ...`, `GREEN: TBD`, `RED: write a test showing ...`; confirm test C still passes
+    GREEN: `lib/post-run.sh:validate_plan_tdd_structure` — after line 75, grep RED:/GREEN: lines for `\.\.\.|TBD|TODO|write a test showing`, set rc=1 if matched
+    VERIFY: `bash tests/test_plan_tdd_validation.sh`
+    Commits: `test(red): add placeholder rejection tests F/G/H` and `fix(green): reject placeholder content in RED:/GREEN: TDD lines`
 
-- [x] 2. Add validate_plan_tdd_structure and wire into build start (red/green TDD, depends: 1) — **coder**
-  RED: create `tests/test_plan_tdd_validation.sh`
-    Setup: source `lib/post-run.sh`; use `mktemp -d` with cleanup trap; use `pass()`/`fail()` helpers (same pattern as `test_single_task_enforcement.sh`)
-    Test A: plan with coder TDD task missing `RED:` line
-      Plan content: `- [ ] 1. Add feature (red/green TDD) — **coder**\n  GREEN: lib/foo.sh\n  VERIFY: bash tests/test_foo.sh\n  Commits: test(red): x and fix(green): y`
-      Assert: `validate_plan_tdd_structure` returns 1 (reject)
-      Fails because: function does not exist yet
-    Test B: plan with coder TDD task missing `GREEN:` line
-      Plan content: `- [ ] 1. Add feature (red/green TDD) — **coder**\n  RED: tests/test_foo.sh test_a\n  VERIFY: bash tests/test_foo.sh\n  Commits: test(red): x and fix(green): y`
-      Assert: `validate_plan_tdd_structure` returns 1 (reject)
-    Test C: complete coder TDD task (all 4 fields present)
-      Plan content: `- [ ] 1. Add feature (red/green TDD) — **coder**\n  RED: tests/test_foo.sh\n  GREEN: lib/foo.sh\n  VERIFY: bash tests/test_foo.sh\n  Commits: test(red): x and fix(green): y`
-      Assert: `validate_plan_tdd_structure` returns 0 (accept)
-    Test D: non-coder task (`— **critic**`, no TDD annotation)
-      Assert: `validate_plan_tdd_structure` returns 0 (accept)
-    Test E: coder task WITHOUT "red/green TDD" annotation
-      Plan content: `- [ ] 1. Update prompt text — **coder**`
-      Assert: `validate_plan_tdd_structure` returns 0 (accept, not a TDD task)
-  GREEN:
-    `lib/post-run.sh`: add `validate_plan_tdd_structure(plan_path)` after line 39
-      Algorithm:
-      1. grep for unchecked task lines containing both `red/green TDD` and `\*\*coder\*\*` (order-independent)
-      2. for each match, read subsequent indented lines until next `^\- \[` or EOF
-      3. check that at least one line matches each of: `RED:`, `GREEN:`, `VERIFY:`, `Commits:`
-      4. if any field missing, echo which task and field, return 1
-      5. if all tasks pass, return 0
-    `ralph-loop.sh`: insert validation call after argument parsing, before main while loop (around line 200). If `validate_plan_tdd_structure "implementation-plan.md"` returns nonzero, echo error and `exit 1`
-  VERIFY: bash tests/test_plan_tdd_validation.sh
-  Commits: test(red): add plan TDD structure validation tests (A-E) and fix(green): implement validate_plan_tdd_structure in post-run.sh
+- [ ] 2. Add non-numeric section scoping end-to-end regression test (red/green TDD) — **coder**
+    RED: `tests/test_section_filter_scoping.py` `test_filter_nonnumeric_introduction`: sections `"introduction"`, `"methods"`, `"intro"` → filter `"introduction"` → assert `{"introduction"}`
+    GREEN: No production change expected — `tools/verify.py:_section_matches` already handles non-numeric ids. If test fails, fix `_section_matches`.
+    VERIFY: `python -m pytest tests/test_section_filter_scoping.py::test_filter_nonnumeric_introduction -v`
+    Commits: `test(red): add non-numeric section filter regression test` and `fix(green): confirm non-numeric filtering works`
 
-## Phase B: Remaining Fixes
-
-- [x] 3. Exit nonzero on multi-task violation (red/green TDD) — **coder**
-  RED: append test F to `tests/test_single_task_enforcement.sh`
-    Test F: `halt_loop_with_error` sets LOOP_EXIT_CODE
-      Setup: `LOOP_EXIT_CODE=0`
-      Call: `halt_loop_with_error`
-      Assert: `$LOOP_EXIT_CODE -ne 0`
-      Guard: `type halt_loop_with_error &>/dev/null` (same guard pattern as tests A-E)
-      Fails because: `halt_loop_with_error` function does not exist yet
-  GREEN:
-    `lib/post-run.sh`: add `halt_loop_with_error()` function (after `validate_single_task_completion`):
-      ```bash
-      halt_loop_with_error() {
-        LOOP_EXIT_CODE=1
-      }
-      ```
-    `ralph-loop.sh` line 349 (before main while loop): add `LOOP_EXIT_CODE=0`
-    `ralph-loop.sh` line 578: change `break` to `halt_loop_with_error; break`
-    `ralph-loop.sh` after line 618 (`done`): add `exit ${LOOP_EXIT_CODE:-0}`
-  VERIFY: bash tests/test_single_task_enforcement.sh
-  Commits: test(red): add halt_loop_with_error test F and fix(green): propagate nonzero exit on multi-task violation
-
-- [x] 4. Detect actual newly-checked tasks via set diff (red/green TDD, depends: 3) — **coder**
-  RED: append test G to `tests/test_single_task_enforcement.sh`
-    Test G: check+uncheck swap with 2 newly checked tasks
-      before.md via `make_plan`: `"x First task — **coder**" "  Second task — **scout**" "  Third task — **critic**"`
-      after.md via `make_plan`: `"  First task — **coder**" "x Second task — **scout**" "x Third task — **critic**"`
-      Count-based delta: after(2) - before(1) = 1 → current validator says OK (bug)
-      Set-based: newly_checked = {2, 3} → 2 → violation
-      Assert: `! validate_single_task_completion` (returns 1, violation detected)
-      Fails because: count-based implementation computes delta=1 and allows it
-  GREEN:
-    `lib/post-run.sh`: rewrite `validate_single_task_completion` (lines 24-39):
-      ```bash
-      validate_single_task_completion() {
-        local before=$1
-        local after=$2
-        local before_set after_set newly_checked count
-
-        before_set=$(grep '^\- \[x\]' "$before" 2>/dev/null \
-          | sed 's/^- \[x\] \([0-9][0-9]*\)\..*/\1/' | sort -n) || true
-        after_set=$(grep '^\- \[x\]' "$after" 2>/dev/null \
-          | sed 's/^- \[x\] \([0-9][0-9]*\)\..*/\1/' | sort -n) || true
-
-        newly_checked=$(comm -13 <(printf '%s\n' $before_set | grep -v '^$') \
-                                 <(printf '%s\n' $after_set | grep -v '^$')) || true
-        count=$(echo "$newly_checked" | grep -c '[0-9]') || count=0
-
-        if [ "$count" -gt 1 ]; then
-          echo "  ✗ Multi-task violation: tasks $(echo $newly_checked | tr '\n' ',' | sed 's/,$//') completed in one iteration (max 1)"
-          return 1
-        fi
-        return 0
-      }
-      ```
-    Verify existing tests A-E still pass (they do — set-based produces same results for those cases)
-  VERIFY: bash tests/test_single_task_enforcement.sh
-  Commits: test(red): add set-based detection test G and fix(green): detect actual newly-checked tasks via set diff
-
-- [x] 5. Section filter dot-boundary matching (red/green TDD) — **coder**
-  RED: create `tests/test_section_filter_scoping.py`
-    test_filter_1_excludes_10 fails because startswith("1") matches "10" → 3 verdicts not 2
-    test_filter_exact_match fails because startswith("2.1") matches "2.10" → 2 verdicts not 1
-  GREEN:
-    `tools/verify.py`: add `_section_matches(section, filter_val)` helper — exact match or dot-prefixed match
-    `tools/verify.py`: replace `startswith(section_filter)` with `_section_matches()`
-  VERIFY: pytest tests/test_section_filter_scoping.py
-  Commits: test(red): add section filter boundary tests and fix(green): use dot-boundary prefix matching
-
-- [x] 6. Final review — verify all tests pass, no regressions, acceptance criteria met (depends: 1,2,3,4,5) — **critic**
+- [ ] 3. Document build-start validation timing in `ralph-loop.sh` — **coder**
+    Replace comment at line 70 with explanation: planner commit gates are primary, build-start is safety net, fail fast before wasting an iteration.
+    VERIFY: `grep -A3 'safety net' ralph-loop.sh`
+    Commits: `docs: explain build-start TDD validation as safety net`
