@@ -133,6 +133,81 @@ else
   fail "E: validate_plan_tdd_structure function not found"
 fi
 
+# ── Test F: RED: line with placeholder ellipsis → reject ──
+DIR="$TMPDIR_BASE/f"
+mkdir -p "$DIR"
+cat > "$DIR/plan.md" <<'EOF'
+# Implementation Plan
+
+## Tasks
+
+- [ ] 1. Fix bug (red/green TDD) — **coder**
+  RED: ...
+  GREEN: lib/foo.sh — patch the parser
+  VERIFY: bash tests/test_foo.sh
+  Commits: test(red): x and fix(green): y
+EOF
+
+if type validate_plan_tdd_structure &>/dev/null; then
+  if ! validate_plan_tdd_structure "$DIR/plan.md"; then
+    pass "F: RED: with placeholder '...' → rejected"
+  else
+    fail "F: RED: with placeholder '...' → should have been rejected"
+  fi
+else
+  fail "F: validate_plan_tdd_structure function not found"
+fi
+
+# ── Test G: GREEN: line with TBD placeholder → reject ──
+DIR="$TMPDIR_BASE/g"
+mkdir -p "$DIR"
+cat > "$DIR/plan.md" <<'EOF'
+# Implementation Plan
+
+## Tasks
+
+- [ ] 1. Fix bug (red/green TDD) — **coder**
+  RED: tests/test_foo.sh test_regression
+  GREEN: TBD
+  VERIFY: bash tests/test_foo.sh
+  Commits: test(red): x and fix(green): y
+EOF
+
+if type validate_plan_tdd_structure &>/dev/null; then
+  if ! validate_plan_tdd_structure "$DIR/plan.md"; then
+    pass "G: GREEN: with placeholder 'TBD' → rejected"
+  else
+    fail "G: GREEN: with placeholder 'TBD' → should have been rejected"
+  fi
+else
+  fail "G: validate_plan_tdd_structure function not found"
+fi
+
+# ── Test H: RED: line with "write a test showing" placeholder → reject ──
+DIR="$TMPDIR_BASE/h"
+mkdir -p "$DIR"
+cat > "$DIR/plan.md" <<'EOF'
+# Implementation Plan
+
+## Tasks
+
+- [ ] 1. Fix bug (red/green TDD) — **coder**
+  RED: write a test showing the parser crashes on empty input
+  GREEN: lib/parser.sh — handle empty input
+  VERIFY: bash tests/test_parser.sh
+  Commits: test(red): x and fix(green): y
+EOF
+
+if type validate_plan_tdd_structure &>/dev/null; then
+  if ! validate_plan_tdd_structure "$DIR/plan.md"; then
+    pass "H: RED: with 'write a test showing' placeholder → rejected"
+  else
+    fail "H: RED: with 'write a test showing' placeholder → should have been rejected"
+  fi
+else
+  fail "H: validate_plan_tdd_structure function not found"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1
