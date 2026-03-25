@@ -7,3 +7,4 @@ iteration_count
 .env
 *.swp
 run/
+HUMAN_REVIEW_NEEDED.md

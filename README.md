@@ -207,7 +207,7 @@ Drop operator notes here from another terminal while the loop is running. The sh
 
 ### HUMAN_REVIEW_NEEDED.md
 
-When an agent encounters something that needs human judgment, it writes this file and exits. The loop pauses and prints the contents. To resume: review, edit `checkpoint.md` if needed, delete the file, and restart.
+When an agent encounters something that needs human judgment, it writes this file and exits. The loop pauses and prints the contents. To resume: review, edit `checkpoint.md` if needed, delete the file, and restart. This is a runtime gate file and should not be committed.
 
 ### Reflections
 
