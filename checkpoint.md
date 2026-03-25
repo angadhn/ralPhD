@@ -10,7 +10,7 @@
 | Task | Status | Notes |
 |------|--------|-------|
 | 1. Placeholder ban enforcement | done | RED: 76ba5c6, GREEN: 58181c4 — all 8 tests pass |
-| 2. Non-numeric section e2e regression | pending | Regression test in test_section_filter_scoping.py |
+| 2. Non-numeric section e2e regression | done | RED: 4e2bb90 — test passes immediately, no GREEN needed. _section_matches already correct. |
 | 3. Document build-start validation | pending | Comment in ralph-loop.sh line 70 |
 
 ## Last Reflection
@@ -19,4 +19,4 @@
 
 ## Next Task
 
-Task 2 — Add non-numeric section scoping end-to-end regression test (red/green TDD) — **coder**
+Task 3 — Document build-start validation timing in `ralph-loop.sh` — **coder**
