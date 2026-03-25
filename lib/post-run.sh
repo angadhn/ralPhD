@@ -79,6 +79,17 @@ validate_plan_tdd_structure() {
       echo "    Task: $task_line"
       rc=1
     fi
+
+    # Reject placeholder content in RED:/GREEN: lines
+    local placeholder_re='\.\.\.|TBD|TODO|write a test showing'
+    local line
+    while IFS= read -r line; do
+      if echo "$line" | grep -qE "$placeholder_re"; then
+        echo "  ✗ TDD task has placeholder content: $line"
+        echo "    Task: $task_line"
+        rc=1
+      fi
+    done <<< "$(echo "$sub_lines" | grep -E '^  (RED|GREEN):')"
   done < <(grep '^- \[ \]' "$plan_path" | grep 'red/green TDD' | grep '\*\*coder\*\*')
 
   return $rc
