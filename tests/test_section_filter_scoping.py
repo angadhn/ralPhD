@@ -62,3 +62,29 @@ def test_filter_exact_match(tmp_path):
     verdicts = [json.loads(l) for l in (output / "verify_report.jsonl").read_text().strip().split("\n")]
     sections = {v["section"] for v in verdicts}
     assert sections == {"2.1"}, f"Expected {{'2.1'}}, got {sections}"
+
+
+def test_filter_nonnumeric_introduction(tmp_path):
+    """section_filter='introduction' matches 'introduction' but not 'methods' or 'intro'."""
+    tracker = tmp_path / "tracker.jsonl"
+    tracker.write_text(
+        '{"doi":"10.1/a","section":"introduction","claim":"claim a","role":"support"}\n'
+        '{"doi":"10.1/b","section":"methods","claim":"claim b","role":"support"}\n'
+        '{"doi":"10.1/c","section":"intro","claim":"claim c","role":"support"}\n'
+    )
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_text("")
+    papers = tmp_path / "papers"
+    papers.mkdir()
+    output = tmp_path / "output"
+    _handle_verify_cited_claims({
+        "tracker_file": str(tracker),
+        "ledger_file": str(ledger),
+        "bib_file": "",
+        "papers_dir": str(papers),
+        "section_filter": "introduction",
+        "output_dir": str(output),
+    })
+    verdicts = [json.loads(l) for l in (output / "verify_report.jsonl").read_text().strip().split("\n")]
+    sections = {v["section"] for v in verdicts}
+    assert sections == {"introduction"}, f"Expected {{'introduction'}}, got {sections}"
