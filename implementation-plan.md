@@ -19,7 +19,7 @@
     VERIFY: `python -m pytest tests/test_section_filter_scoping.py::test_filter_nonnumeric_introduction -v`
     Commits: `test(red): add non-numeric section filter regression test` and `fix(green): confirm non-numeric filtering works`
 
-- [ ] 3. Document build-start validation timing in `ralph-loop.sh` — **coder**
+- [x] 3. Document build-start validation timing in `ralph-loop.sh` — **coder**
     Replace comment at line 70 with explanation: planner commit gates are primary, build-start is safety net, fail fast before wasting an iteration.
     VERIFY: `grep -A3 'safety net' ralph-loop.sh`
     Commits: `docs: explain build-start TDD validation as safety net`

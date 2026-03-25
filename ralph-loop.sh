@@ -67,7 +67,10 @@ trap 'handle_interrupt_signal' INT
 
 print_loop_banner
 
-# --- Pre-loop plan validation ---
+# --- Pre-loop plan validation (safety net) ---
+# Planner commit gates are the primary enforcement point for TDD structure.
+# This build-start check is a safety net: fail fast before wasting an iteration
+# on a plan that would fail commit gates anyway.
 if [ -f "implementation-plan.md" ]; then
   if ! validate_plan_tdd_structure "implementation-plan.md"; then
     echo "✗ Plan validation failed — fix TDD task structure before running build."
